@@ -42,7 +42,11 @@ from iOpenPod.app.connected.config import (
     TagMatch,
 )
 from iOpenPod.app.connected.secrets import SecretKey
-from iOpenPod.app.connected_controller import ConnectedSource, RefreshOutcome
+from iOpenPod.app.connected_controller import (
+    ConnectedSource,
+    ProgressSent,
+    RefreshOutcome,
+)
 from iOpenPod.app.scrobbling.models import Credentials, Service
 from iOpenPod.GUI.presentation.desktop_services import open_desktop_url
 from iOpenPod.GUI.presentation.theme.tokens import LAYOUT
@@ -53,7 +57,12 @@ from iPodDB.library import TrackFieldEdit
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from iOpenPod.app.connected.grimmory import Audiobook, GrimmoryClient, OpdsShelf
+    from iOpenPod.app.connected.grimmory import (
+        Audiobook,
+        GrimmoryClient,
+        GrimmoryCollection,
+    )
+    from iOpenPod.app.connected.grimmory_progress import ProgressPlan
     from iOpenPod.app.connected.immich import (
         ImmichClient,
         ImmichCollection,
@@ -197,6 +206,12 @@ class _ConnectedPage(QWidget):
                 source=outcome.source.capitalize(), summary=outcome.report.summary
             )
             lines.append(line)
+            if outcome.progress_sent:
+                lines.append(
+                    self.tr("Sent listening progress for {count} audiobooks.").format(
+                        count=outcome.progress_sent
+                    )
+                )
             lines.extend(outcome.notes[:5])
             lines.extend(outcome.report.failed[:5])
         lines.append(self.tr("Run Sync with Host to send them to the iPod."))
@@ -219,7 +234,13 @@ def _thumbnail(client: ImmichClient, asset: str) -> Callable[[], bytes]:
 
 
 def _cover(client: GrimmoryClient, book: Audiobook) -> Callable[[], bytes]:
-    return lambda: client.cover(book)
+    return lambda: client.cover(book.book_id)
+
+
+def _clock(ms: int) -> str:
+    seconds = max(0, ms) // 1000
+    hours, rest = divmod(seconds, 3600)
+    return f"{hours}:{rest // 60:02d}:{rest % 60:02d}"
 
 
 def _checkable(
@@ -1054,9 +1075,13 @@ class ImmichPage(_ConnectedPage):
 
 class GrimmoryPage(_ConnectedPage):
     def __init__(
-        self, controller: ConnectedController, parent: QWidget | None = None
+        self,
+        controller: ConnectedController,
+        workspace: LibraryWorkspace,
+        parent: QWidget | None = None,
     ) -> None:
         self._loading = False
+        self._workspace = workspace
         super().__init__(controller, "Grimmory", parent)
         self.setObjectName("grimmoryPage")
         self._header.set_title(self.tr("Grimmory Audiobooks"))
@@ -1071,22 +1096,26 @@ class GrimmoryPage(_ConnectedPage):
         self._user = QLineEdit(controller.config.grimmory.username, account)
         self._password = QLineEdit(account)
         self._password.setEchoMode(QLineEdit.EchoMode.Password)
-        self._connect = _button(self.tr("Connect"), account, ActionButtonKind.PRIMARY)
+        self._password.returnPressed.connect(self._connect_server)
+        self._connect = _button(self.tr("Sign In"), account, ActionButtonKind.PRIMARY)
         self._connect.clicked.connect(self._connect_server)
+        self._sign_out = _button(self.tr("Sign Out"), account, ActionButtonKind.QUIET)
+        self._sign_out.clicked.connect(self._forget)
+        self._account = QLabel(account)
         form = QFormLayout(account)
         form.addRow(self.tr("Address"), self._url)
-        form.addRow(self.tr("OPDS username"), self._user)
-        form.addRow(self.tr("OPDS password"), self._password)
+        form.addRow(self.tr("Username"), self._user)
+        form.addRow(self.tr("Password"), self._password)
         form.addRow(
             "",
             _description(
                 self.tr(
-                    "Create an OPDS user in Grimmory's settings. iOpenPod never needs your main password."
+                    "Sign in with your Grimmory account. iOpenPod keeps only Grimmory's sign-in token in your system keychain, never your password."
                 ),
                 account,
             ),
         )
-        form.addRow("", _row(self._connect))
+        form.addRow("", _row(self._connect, self._sign_out, self._account))
 
         picker = QGroupBox(self.tr("Choose audiobooks"), self)
         self._shelves = QListWidget(picker)
@@ -1114,23 +1143,57 @@ class GrimmoryPage(_ConnectedPage):
         layout = QVBoxLayout(picker)
         layout.addWidget(split, 1)
         layout.addLayout(_row(self._summary, open_folder))
+
+        progress = QGroupBox(self.tr("Listening progress"), self)
+        self._exchange = _button(self.tr("Sync Progress Now"), progress)
+        self._exchange.clicked.connect(self._plan_progress)
+        self._auto = QCheckBox(
+            self.tr("Send iPod progress to Grimmory before each Sync"), progress
+        )
+        self._auto.setChecked(controller.config.grimmory.sync_progress)
+        self._auto.toggled.connect(controller.set_grimmory_sync_progress)
+        progress_layout = QVBoxLayout(progress)
+        progress_layout.addWidget(
+            _description(
+                self.tr(
+                    "Audiobooks downloaded here remember which Grimmory book they belong to. Sync Progress compares where you are on the iPod with Grimmory: the side you listened on most recently wins, so you can switch between the iPod and Grimmory's player."
+                ),
+                progress,
+            )
+        )
+        progress_layout.addWidget(self._auto)
+        progress_layout.addLayout(_row(self._exchange))
         self.body.addWidget(account)
         self.body.addWidget(picker, 1)
+        self.body.addWidget(progress)
         controller.previewLoaded.connect(self._preview)
         self.refresh()
 
     def refresh(self) -> None:
-        if not hasattr(self, "_download"):
+        if not hasattr(self, "_exchange"):
             return
         busy = self.controller.busy
-        picks = self.controller.config.grimmory.picks
+        config = self.controller.config.grimmory
+        signed_in = bool(config.username)
         self._connect.setEnabled(not busy)
-        self._download.setEnabled(not busy and bool(picks))
+        self._connect.setText(
+            self.tr("Reconnect") if signed_in and config.url else self.tr("Sign In")
+        )
+        self._sign_out.setVisible(signed_in)
+        self._account.setText(
+            self.tr("Signed in as {name}").format(name=config.username)
+            if signed_in
+            else ""
+        )
+        self._download.setEnabled(not busy and bool(config.picks))
+        self._exchange.setEnabled(not busy and signed_in)
         self._summary.setText(
-            self.tr("{count} audiobooks selected").format(count=len(picks))
+            self.tr("{count} audiobooks selected").format(count=len(config.picks))
         )
 
     def _connect_server(self) -> None:
+        if self.controller.busy:
+            return
         self.start("grimmory-connect")
         self.say(self.tr("Connecting to Grimmory…"))
         self.controller.grimmory_connect(
@@ -1138,43 +1201,66 @@ class GrimmoryPage(_ConnectedPage):
         )
         self._password.clear()
 
+    def _forget(self) -> None:
+        self.controller.forget(SecretKey.GRIMMORY)
+        self._shelves.clear()
+        self._books.clear()
+        self.say(self.tr("Signed out of Grimmory."))
+
     def handle(self, operation: str, value: object) -> None:
         if operation == "grimmory-connect":
-            libraries, shelves = cast(
-                "tuple[tuple[OpdsShelf, ...], tuple[OpdsShelf, ...]]", value
-            )
             self._shelves.clear()
             everything = QListWidgetItem(self.tr("All audiobooks"))
-            everything.setData(_ROLE, "/api/v1/opds/catalog")
+            everything.setData(_ROLE, None)
             self._shelves.addItem(everything)
-            for shelf in (*libraries, *shelves):
-                item = QListWidgetItem(shelf.title)
-                item.setData(_ROLE, shelf.href)
+            for collection in cast("tuple[GrimmoryCollection, ...]", value):
+                label = (
+                    self.tr("Library: {name}")
+                    if collection.kind == "library"
+                    else self.tr("Shelf: {name}")
+                ).format(name=collection.name)
+                item = QListWidgetItem(label)
+                item.setData(_ROLE, collection)
                 self._shelves.addItem(item)
             self.say(self.tr("Connected. Choose a library or shelf."))
         elif operation == "grimmory-books":
             self._fill(cast("tuple[Audiobook, ...]", value))
+        elif operation == "grimmory-progress-plan":
+            self._review_progress(cast("ProgressPlan", value))
+        elif operation == "grimmory-progress-send":
+            result = cast("ProgressSent", value)
+            lines = [
+                self.tr(
+                    "Sent {sent} positions to Grimmory and moved {pulled} iPod bookmarks."
+                ).format(sent=result.sent, pulled=result.pulled)
+            ]
+            if result.pulled:
+                lines.append(
+                    self.tr(
+                        "Choose Review Changes in the sidebar to save the bookmarks to the iPod."
+                    )
+                )
+            lines.extend(result.failed[:5])
+            self.say("\n".join(lines))
         elif operation == "refresh":
             self.refresh_outcome(value)
 
     def _shelf_opened(self, current: QListWidgetItem | None, _previous: object) -> None:
         if current is None or self.controller.busy:
             return
-        href = str(current.data(_ROLE))
-        client = self.controller.grimmory()
         self.start("grimmory-books")
         self.say(self.tr("Loading audiobooks…"))
-        self.controller.run(
-            "grimmory-books", lambda job: client.audiobooks(href, job.cancelled)
+        self.controller.grimmory_books(
+            cast("GrimmoryCollection | None", current.data(_ROLE))
         )
 
     def _search(self) -> None:
         text = self._query.text().strip()
         if not text or self.controller.busy:
             return
-        client = self.controller.grimmory()
         self.start("grimmory-books")
-        self.controller.run("grimmory-books", lambda _job: client.search(text))
+        self.say(self.tr("Searching…"))
+        self.controller.grimmory_books(search=text)
 
     def _fill(self, books: tuple[Audiobook, ...]) -> None:
         picked = {pick.book_id for pick in self.controller.config.grimmory.picks}
@@ -1186,10 +1272,7 @@ class GrimmoryPage(_ConnectedPage):
             self._books.addItem(
                 _checkable(book.title, book, book.book_id in picked, detail)
             )
-            if book.cover:
-                self.controller.preview(
-                    f"grimmory:{book.book_id}", _cover(client, book)
-                )
+            self.controller.preview(f"grimmory:{book.book_id}", _cover(client, book))
         self._loading = False
         self.say(self.tr("{count} audiobooks.").format(count=len(books)))
 
@@ -1211,9 +1294,7 @@ class GrimmoryPage(_ConnectedPage):
         book = cast("Audiobook", entry.data(_ROLE))
         picks = {pick.book_id: pick for pick in self.controller.config.grimmory.picks}
         if entry.checkState() == Qt.CheckState.Checked:
-            picks[book.book_id] = GrimmoryPick(
-                book.book_id, book.title, book.author, book.download
-            )
+            picks[book.book_id] = GrimmoryPick(book.book_id, book.title, book.author)
         else:
             picks.pop(book.book_id, None)
         self.controller.set_grimmory_picks(tuple(picks.values()))
@@ -1222,6 +1303,78 @@ class GrimmoryPage(_ConnectedPage):
         self.start("refresh")
         self.controller.register_folder(ConnectedSource.GRIMMORY)
         self.controller.refresh((ConnectedSource.GRIMMORY,))
+
+    def _plan_progress(self) -> None:
+        if self.controller.busy:
+            return
+        self.start("grimmory-progress-plan")
+        self.controller.grimmory_progress_plan(self._workspace.tracks)
+
+    def _review_progress(self, plan: ProgressPlan) -> None:
+        if not plan.to_grimmory and not plan.to_ipod:
+            self.say(
+                self.tr(
+                    "Listening progress already matches for {count} audiobooks."
+                ).format(count=plan.unchanged)
+            )
+            self.start("grimmory-progress-send")
+            self.controller.grimmory_send_progress(plan, pulled=True)
+            return
+        lines = [
+            self.tr("{title}: iPod {position} → Grimmory").format(
+                title=push.title, position=_clock(push.position_ms)
+            )
+            for push in plan.to_grimmory
+        ] + [
+            self.tr("{title}: Grimmory {position} → iPod").format(
+                title=pull.title, position=_clock(pull.position_ms)
+            )
+            for pull in plan.to_ipod
+        ]
+        box = QMessageBox(self)
+        box.setWindowTitle(self.tr("Sync listening progress?"))
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setText(
+            self.tr(
+                "{grimmory} audiobooks get a new position in Grimmory and {ipod} get a new bookmark on the iPod."
+            ).format(grimmory=len(plan.to_grimmory), ipod=len(plan.to_ipod))
+        )
+        details = "\n".join(lines[:12]) + ("\n…" if len(lines) > 12 else "")
+        if plan.to_ipod:
+            details += "\n\n" + self.tr(
+                "iPod bookmarks are applied as Library changes; choose Review Changes in the sidebar to save them to the iPod."
+            )
+        box.setInformativeText(details)
+        box.setStandardButtons(
+            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
+        )
+        if box.exec() != QMessageBox.StandardButton.Ok:
+            self.say(self.tr("Listening progress was left as it is."))
+            return
+        pulled = True
+        if plan.to_ipod:
+            from iOpenPod.app.library_workspace import TrackUpdate
+
+            try:
+                self._workspace.apply_track_edits(
+                    tuple(
+                        TrackUpdate(
+                            change.track_id,
+                            tuple(
+                                TrackFieldEdit(field, value)
+                                for field, value in change.edits
+                            ),
+                        )
+                        for pull in plan.to_ipod
+                        for change in pull.changes
+                    ),
+                    self._workspace.edit_revision,
+                )
+            except ValueError as error:
+                self.say(str(error))
+                pulled = False
+        self.start("grimmory-progress-send")
+        self.controller.grimmory_send_progress(plan, pulled=pulled)
 
 
 # --- Memos → Notes -----------------------------------------------------------------------

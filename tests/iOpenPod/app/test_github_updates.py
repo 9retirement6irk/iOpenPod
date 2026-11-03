@@ -195,9 +195,12 @@ def test_no_trust_key_offers_only_a_manual_release_link(tmp_path: Path) -> None:
     backend.check()
     response = result(backend)
     assert response.outcome is UpdateOutcome.MANUAL
-    assert response.url == "https://github.com/TheRealSavi/iOpenPod/releases/tag/v2.0.2"
+    assert (
+        response.url
+        == "https://github.com/9retirement6irk/iOpenPod/releases/tag/v2.0.2"
+    )
     assert transport.urls == [
-        "https://api.github.com/repos/TheRealSavi/iOpenPod/releases/latest"
+        "https://api.github.com/repos/9retirement6irk/iOpenPod/releases/latest"
     ]
     with pytest.raises(RuntimeError):
         backend.install()

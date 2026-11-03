@@ -2,7 +2,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-ISSUE_TRACKER_URL = "https://github.com/TheRealSavi/iOpenPod/issues"
+ISSUE_TRACKER_URL = "https://github.com/9retirement6irk/iOpenPod/issues"
 _REPORT_ISSUE_MESSAGE = (
     "If this %s indicates a problem with iOpenPod, please report an issue at %s"
 )

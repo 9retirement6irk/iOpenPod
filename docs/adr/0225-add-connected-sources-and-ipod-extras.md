@@ -21,8 +21,8 @@ A Connected Source Manifest (`.iopenpod-connected.json` in each folder) names th
 files iOpenPod wrote with a server revision and size. Refresh downloads missing or
 changed items through temporary files and atomic replacement, and removes owned files
 that are no longer selected only when their size is unchanged. Files a person adds
-are never overwritten or removed. A Grimmory folder-based audiobook arrives as one ZIP
-and is tracked as a bundle of files. Starting Sync with a Connected Source Folder
+are never overwritten or removed. A Grimmory audiobook made of several files is
+downloaded track by track and tracked as one bundle of files. Starting Sync with a Connected Source Folder
 selected refreshes that source first; a download failure is reported and Sync
 continues with the files already present.
 
@@ -30,9 +30,32 @@ Plex files are copied from a mapped Host path when a configured Path Mapping rea
 the server's file with the same size, and otherwise downloaded as originals. Plex
 playlists become relative `.m3u8` files, and album artwork becomes the folder's
 `cover.jpg`, which Host Media Scan already reads. Immich Photos are saved as JPEG.
-Grimmory audiobooks are read over OPDS with a separate OPDS user; `.m4a` files are
-renamed `.m4b` and MP3 files receive an ID3 `media_type` of `audiobook`, the existing
-classification evidence.
+Grimmory audiobooks use Grimmory's own REST API rather than OPDS, because OPDS can
+neither report nor record listening progress. A person signs in once with their
+Grimmory username and password; only the returned access and refresh tokens are kept,
+and an expired access token is renewed once before the person is asked to sign in
+again. Audiobooks are listed through the app API filtered to audiobook files, by
+library, shelf, or search. A single-file audiobook is downloaded as its original file;
+a folder-based one is downloaded through its per-track stream endpoint. `.m4a` files
+are renamed `.m4b` with `stik` 2, and MP3 files receive an ID3 `media_type` of
+`audiobook`, the existing classification evidence.
+
+Each file's comment carries a Grimmory Link,
+`grimmory:<book>:<book file>:<track index>:<track start ms>:<book duration ms>`,
+which survives Sync into the iPod Library. Listening progress is then exchanged per
+book: the iPod's position is the bookmark of its most recently played Track of that
+book plus the Track's start. A Progress Mark in the configuration records the iPod and
+Grimmory positions seen when the two last agreed. The side that moved since then wins;
+when both moved, the more recent listen wins, or the further position when the iPod
+has no listening time. Positions within five seconds count as the same. iPod
+positions are posted to Grimmory as its own player does (whole-book and in-track
+position, track index, percentage). Grimmory positions become ordinary Track edits to
+bookmark, played, and last-played fields, which the person reviews and saves; until
+they are saved the Progress Mark keeps the iPod's old position, so the next exchange
+offers the same move again instead of sending the old position back. Before Sync,
+iPod positions are optionally sent to Grimmory; moving iPod bookmarks always waits for
+an explicit exchange. A Progress Mark is not per iPod, so two iPods listening to the
+same book take turns as the side that moved.
 
 ## iPod Extras are published through Storage
 
@@ -65,9 +88,19 @@ edits that the person reviews and saves.
 
 ## Secrets
 
-Plex tokens, Immich API keys, Memos access tokens, Grimmory OPDS passwords, and
+Plex tokens, Immich API keys, Memos access tokens, Grimmory sign-in tokens, and
 calendar subscription links are kept in the native OS vault beside Scrobbling
 credentials. The Connected Sources configuration file holds only non-secret choices.
+
+## Updates
+
+Fork builds check this fork's GitHub releases, not upstream's, and ship with no
+update trust key. A trusted key would let a build install whatever release the
+matching feed signs, and upstream's key signs upstream builds, which would replace
+Connected Sources. Without a key, the built-in updater reports a newer fork release
+and links to its download page. Automatic installation for fork builds needs a key
+generated with `scripts/update_feed.py`, its private half stored as the
+`IOPENPOD_UPDATE_PRIVATE_KEY` repository secret, and an `update-feed` branch.
 
 ## Consequences
 

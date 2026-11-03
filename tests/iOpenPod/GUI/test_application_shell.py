@@ -725,7 +725,7 @@ def test_settings_show_version_and_open_support_links(
         APPLICATION.processEvents()
 
         assert opened == [
-            "https://github.com/TheRealSavi/iOpenPod/issues",
+            "https://github.com/9retirement6irk/iOpenPod/issues",
             "https://ko-fi.com/johngibbons",
         ]
     finally:

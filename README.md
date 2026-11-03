@@ -38,7 +38,10 @@ servers without exporting anything by hand:
   songs. Optionally send iPod plays to Plex (they show up in Play History as your
   iPod) and sync star ratings both ways.
 * **Immich**: pick Favorites, albums, people, or individual photos, with previews.
-* **Grimmory**: pick audiobooks from your Grimmory library over OPDS.
+* **Grimmory**: sign in with your Grimmory account, pick audiobooks by library,
+  shelf, or search, and keep listening progress in step: where you stopped on the
+  iPod goes to Grimmory, and where you stopped in Grimmory becomes the iPod's
+  bookmark.
 * **Notes**: send Memos notes with chosen tags to Extras → Notes (Memos 26.10 and
   earlier).
 * **Calendars**: send `.ics` files and calendar links to Extras → Calendars.
@@ -47,6 +50,12 @@ Picks are downloaded to `~/Music/iOpenPod Connected` and refreshed automatically
 when you start **Sync with Host**, so they go through the normal Sync Review. Sign-ins
 and keys are kept in your system keychain. See
 [ADR-0225](docs/adr/0225-add-connected-sources-and-ipod-extras.md) for the design.
+
+Builds of this fork check
+[this fork's releases](https://github.com/9retirement6irk/iOpenPod/releases) for
+updates, never upstream iOpenPod's, so an update can't replace them with a version
+without Connected Sources. When a newer fork release is published, **Check for
+updates** links to its download page. The download links below are upstream's.
 
 ## Download and install
 

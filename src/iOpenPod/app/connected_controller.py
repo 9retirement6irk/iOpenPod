@@ -11,7 +11,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal
 
@@ -20,11 +20,24 @@ from iOpenPod.app.connected.config import (
     CalendarFile,
     ConnectedConfig,
     ConnectedConfigStore,
+    GrimmoryMark,
     GrimmoryPick,
     ImmichPick,
     PlexPick,
 )
-from iOpenPod.app.connected.grimmory import GrimmoryClient, plan_grimmory
+from iOpenPod.app.connected.grimmory import (
+    GrimmoryClient,
+    GrimmoryCollection,
+    GrimmoryProgress,
+    GrimmoryTokens,
+    plan_grimmory,
+)
+from iOpenPod.app.connected.grimmory_progress import (
+    IPodBook,
+    ProgressPlan,
+    ipod_books,
+    plan_progress,
+)
 from iOpenPod.app.connected.http import CancelledError, ConnectedError
 from iOpenPod.app.connected.immich import ImmichClient, plan_immich
 from iOpenPod.app.connected.materialize import (
@@ -96,6 +109,17 @@ class RefreshOutcome:
     source: str
     report: RefreshReport
     notes: tuple[str, ...] = ()
+    # Grimmory: listening positions sent before downloading.
+    progress_sent: int = 0
+    marks: tuple[GrimmoryMark, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ProgressSent:
+    sent: int
+    failed: tuple[str, ...]
+    pulled: int
+    failed_books: frozenset[str] = frozenset()
 
 
 class _Signals(QObject):
@@ -173,6 +197,7 @@ class ConnectedController(QObject):
         self._previews = QThreadPool(self)
         self._previews.setMaxThreadCount(4)
         self._job: _Job | None = None
+        self._then: Callable[[object], None] | None = None
         self._operation = ""
         self._exclusive = False
         self._closed = False
@@ -240,6 +265,13 @@ class ConnectedController(QObject):
             self._secrets.remove(key)
         except ConnectedError as error:
             self.message.emit(str(error))
+        if key is SecretKey.GRIMMORY:
+            self.update_config(
+                replace(
+                    self._config,
+                    grimmory=replace(self._config.grimmory, username=""),
+                )
+            )
         if key is SecretKey.PLEX:
             self._plex_server = None
             self.update_config(
@@ -260,6 +292,7 @@ class ConnectedController(QObject):
         work: Callable[[_Job], object],
         *,
         exclusive: bool = False,
+        then: Callable[[object], None] | None = None,
     ) -> bool:
         if self._closed or self._job is not None:
             self.message.emit(
@@ -277,6 +310,7 @@ class ConnectedController(QObject):
         job.signals.done.connect(self._finished, Qt.ConnectionType.QueuedConnection)
         job.signals.progress.connect(self.progress, Qt.ConnectionType.QueuedConnection)
         self._job = job
+        self._then = then
         self._operation = operation
         self.changed.emit()
         self._pool.start(job)
@@ -284,7 +318,9 @@ class ConnectedController(QObject):
 
     def _finished(self, value: object, error: object) -> None:
         operation = self._operation
+        then = self._then
         self._job = None
+        self._then = None
         self._operation = ""
         if self._exclusive:
             self._exclusive = False
@@ -294,6 +330,8 @@ class ConnectedController(QObject):
         if isinstance(error, str) and error:
             self.message.emit(error)
         else:
+            if then is not None:
+                then(value)
             self.result.emit(operation, value)
         self.changed.emit()
 
@@ -475,15 +513,26 @@ class ConnectedController(QObject):
 
     # --- refresh (download selections into Connected Source Folders) --------------------
 
-    def refresh(self, sources: tuple[str, ...]) -> bool:
+    def refresh(self, sources: tuple[str, ...], tracks: tuple[Track, ...] = ()) -> bool:
+        """Download Selections; with ``tracks``, first send iPod audiobook progress."""
+
         config = self._config
+        books = ipod_books(tracks) if config.grimmory.sync_progress else ()
 
         def work(job: _Job) -> tuple[RefreshOutcome, ...]:
             return tuple(
-                self._refresh_source(source, config, job) for source in sources
+                self._refresh_source(source, config, job, books) for source in sources
             )
 
-        return self._start("refresh", work)
+        def then(value: object) -> None:
+            outcomes = (
+                cast("tuple[object, ...]", value) if isinstance(value, tuple) else ()
+            )
+            for outcome in outcomes:
+                if isinstance(outcome, RefreshOutcome) and outcome.marks:
+                    self._save_marks(outcome.marks)
+
+        return self._start("refresh", work, then=then)
 
     def refresh_before_sync(self) -> bool:
         """Refresh every source with a Selection; returns False when nothing to do."""
@@ -500,11 +549,17 @@ class ConnectedController(QObject):
         return bool(sources) and self.refresh(sources)
 
     def _refresh_source(
-        self, source: str, config: ConnectedConfig, job: _Job
+        self,
+        source: str,
+        config: ConnectedConfig,
+        job: _Job,
+        books: tuple[IPodBook, ...] = (),
     ) -> RefreshOutcome:
         emit = job.signals.progress.emit
         folder = config.root() / _FOLDER_TYPES[source][0]
         notes: list[str] = []
+        sent = 0
+        marks: tuple[GrimmoryMark, ...] = ()
         items: tuple[Desired, ...]
         if source == ConnectedSource.PLEX:
             if not self.plex_restore() or self._plex_server is None:
@@ -527,12 +582,19 @@ class ConnectedController(QObject):
             )
             label = "Immich"
         else:
-            secret = self.secret(SecretKey.GRIMMORY)
-            client = GrimmoryClient(
-                config.grimmory.url,
-                config.grimmory.username,
-                secret.get("password", ""),
-            )
+            client = self.grimmory()
+            if books:
+                emit("Grimmory: sending listening progress…")
+                exchange = plan_progress(
+                    books,
+                    self._remote_progress(client, books, job),
+                    {mark.book_id: mark for mark in config.grimmory.marks},
+                    pull=False,
+                )
+                result = self._send_progress(client, exchange, job, pulled=False)
+                sent = result.sent
+                marks = self._kept_marks(exchange, result, pulled=False)
+                notes.extend(result.failed)
             items = plan_grimmory(
                 client, config.grimmory, cancelled=job.cancelled, progress=emit
             )
@@ -545,7 +607,7 @@ class ConnectedController(QObject):
         outcome = refresh_folder(
             folder, items, cancelled=job.cancelled, progress=report
         )
-        return RefreshOutcome(source, outcome, tuple(notes))
+        return RefreshOutcome(source, outcome, tuple(notes), sent, marks)
 
     # --- Immich -------------------------------------------------------------------------
 
@@ -578,36 +640,187 @@ class ConnectedController(QObject):
     # --- Grimmory -----------------------------------------------------------------------
 
     def grimmory(self) -> GrimmoryClient:
+        """A client using the saved sign-in; new tokens are written back to the vault."""
+
+        secret = self.secret(SecretKey.GRIMMORY)
+        tokens = (
+            GrimmoryTokens(secret["access"], secret["refresh"])
+            if secret.get("access") and secret.get("refresh")
+            else None
+        )
         return GrimmoryClient(
-            self._config.grimmory.url,
-            self._config.grimmory.username,
-            self.secret(SecretKey.GRIMMORY).get("password", ""),
+            self._config.grimmory.url, tokens, on_tokens=self._save_grimmory_tokens
+        )
+
+    def _save_grimmory_tokens(self, tokens: GrimmoryTokens) -> None:
+        self.save_secret(
+            SecretKey.GRIMMORY, {"access": tokens.access, "refresh": tokens.refresh}
         )
 
     def grimmory_connect(self, url: str, username: str, password: str) -> None:
+        """Sign in with a password (never stored), or reuse the saved sign-in."""
+
+        url, username = url.strip(), username.strip()
+        same_server = url == self._config.grimmory.url
         self.update_config(
-            replace(
-                self._config,
-                grimmory=replace(
-                    self._config.grimmory, url=url.strip(), username=username.strip()
-                ),
-            )
+            replace(self._config, grimmory=replace(self._config.grimmory, url=url))
         )
-        if password:
-            self.save_secret(SecretKey.GRIMMORY, {"password": password})
         self.register_folder(ConnectedSource.GRIMMORY)
+        client = (
+            self.grimmory()
+            if same_server and not password
+            else GrimmoryClient(url, on_tokens=self._save_grimmory_tokens)
+        )
 
         def work(_job: _Job) -> object:
-            client = self.grimmory()
-            client.check()
-            return (client.shelves("libraries"), client.shelves("shelves"))
+            if password:
+                client.sign_in(username, password)
+            elif client.tokens is None:
+                raise ConnectedError("Enter your Grimmory password to sign in.", 401)
+            return client.collections()
 
-        self._start("grimmory-connect", work)
+        def then(_value: object) -> None:
+            if password:
+                self.update_config(
+                    replace(
+                        self._config,
+                        grimmory=replace(self._config.grimmory, username=username),
+                    )
+                )
+
+        self._start("grimmory-connect", work, then=then)
 
     def set_grimmory_picks(self, picks: tuple[GrimmoryPick, ...]) -> None:
         self.update_config(
             replace(self._config, grimmory=replace(self._config.grimmory, picks=picks))
         )
+
+    def set_grimmory_sync_progress(self, enabled: bool) -> None:
+        self.update_config(
+            replace(
+                self._config,
+                grimmory=replace(self._config.grimmory, sync_progress=enabled),
+            )
+        )
+
+    def grimmory_books(
+        self, collection: GrimmoryCollection | None = None, search: str = ""
+    ) -> None:
+        client = self.grimmory()
+        self._start(
+            "grimmory-books",
+            lambda job: client.audiobooks(collection, search, job.cancelled),
+        )
+
+    @staticmethod
+    def _remote_progress(
+        client: GrimmoryClient, books: tuple[IPodBook, ...], job: _Job
+    ) -> dict[str, GrimmoryProgress | None]:
+        remote: dict[str, GrimmoryProgress | None] = {}
+        for book in books:
+            if job.cancelled.is_set():
+                raise CancelledError
+            try:
+                remote[book.book_id] = client.progress(book.book_id)
+            except ConnectedError as error:
+                if error.status != 404:
+                    raise
+                remote[book.book_id] = None
+        return remote
+
+    @staticmethod
+    def _send_progress(
+        client: GrimmoryClient, plan: ProgressPlan, job: _Job, *, pulled: bool
+    ) -> ProgressSent:
+        sent = 0
+        failed: list[str] = []
+        books: set[str] = set()
+        for index, push in enumerate(plan.to_grimmory, start=1):
+            if job.cancelled.is_set():
+                raise CancelledError
+            job.signals.progress.emit(
+                f"Grimmory: sending progress {index} of {len(plan.to_grimmory)}…"
+            )
+            try:
+                client.save_progress(
+                    push.link,
+                    push.position_ms,
+                    push.track_index,
+                    push.track_position_ms,
+                )
+            except CancelledError:
+                raise
+            except ConnectedError as error:
+                failed.append(f"{push.title}: {error}")
+                books.add(push.link.book_id)
+                continue
+            sent += 1
+        return ProgressSent(
+            sent, tuple(failed), len(plan.to_ipod) if pulled else 0, frozenset(books)
+        )
+
+    @staticmethod
+    def _kept_marks(
+        plan: ProgressPlan, result: ProgressSent, *, pulled: bool
+    ) -> tuple[GrimmoryMark, ...]:
+        failed = result.failed_books
+        skipped: set[str] = set() if pulled else {pull.book_id for pull in plan.to_ipod}
+        return tuple(
+            mark
+            for mark in plan.marks
+            if mark.book_id not in failed and mark.book_id not in skipped
+        )
+
+    def _save_marks(self, marks: tuple[GrimmoryMark, ...]) -> None:
+        merged = {mark.book_id: mark for mark in self._config.grimmory.marks}
+        merged.update((mark.book_id, mark) for mark in marks)
+        self.update_config(
+            replace(
+                self._config,
+                grimmory=replace(
+                    self._config.grimmory,
+                    marks=tuple(merged[k] for k in sorted(merged)),
+                ),
+            )
+        )
+
+    def grimmory_progress_plan(self, tracks: tuple[Track, ...]) -> None:
+        """Compare iPod audiobook bookmarks with Grimmory's listening progress."""
+
+        books = ipod_books(tracks)
+        if not books:
+            self.message.emit(
+                self.tr(
+                    "No audiobooks downloaded from Grimmory are on this iPod yet. Sync them first."
+                )
+            )
+            return
+        marks = {mark.book_id: mark for mark in self._config.grimmory.marks}
+        client = self.grimmory()
+
+        def work(job: _Job) -> ProgressPlan:
+            job.signals.progress.emit(
+                self.tr("Reading listening progress from Grimmory…")
+            )
+            return plan_progress(
+                books, self._remote_progress(client, books, job), marks
+            )
+
+        self._start("grimmory-progress-plan", work)
+
+    def grimmory_send_progress(self, plan: ProgressPlan, *, pulled: bool) -> None:
+        """Send iPod positions; ``pulled`` says the iPod changes were applied."""
+
+        client = self.grimmory()
+
+        def work(job: _Job) -> ProgressSent:
+            return self._send_progress(client, plan, job, pulled=pulled)
+
+        def then(value: object) -> None:
+            if isinstance(value, ProgressSent):
+                self._save_marks(self._kept_marks(plan, value, pulled=pulled))
+
+        self._start("grimmory-progress-send", work, then=then)
 
     # --- Memos → Notes -----------------------------------------------------------------
 

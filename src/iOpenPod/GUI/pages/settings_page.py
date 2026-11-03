@@ -77,7 +77,7 @@ from iOpenPod.GUI.widgets.settings_scope import SettingsScopeSwitcher
 from iOpenPod.GUI.widgets.sync_settings import SyncSettings, TranscodingSettings
 from iOpenPod.GUI.widgets.themed_buttons import ActionButton, ActionButtonKind
 
-_ISSUES_URL = "https://github.com/TheRealSavi/iOpenPod/issues"
+_ISSUES_URL = "https://github.com/9retirement6irk/iOpenPod/issues"
 _DONATION_URL = "https://ko-fi.com/johngibbons"
 
 

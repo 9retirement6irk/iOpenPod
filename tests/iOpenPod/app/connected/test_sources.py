@@ -1,8 +1,7 @@
-"""Immich photos, Grimmory audiobooks, Memos notes, and calendar files."""
+"""Immich photos, Memos notes, and calendar files."""
 
 import io
 import json
-import zipfile
 from pathlib import Path
 from threading import Event
 
@@ -18,15 +17,12 @@ from iOpenPod.app.connected.calendars import (
     trim_calendar,
 )
 from iOpenPod.app.connected.config import (
-    GrimmoryConfig,
-    GrimmoryPick,
     ImmichConfig,
     ImmichPick,
     ImmichPickKind,
     MemosConfig,
     TagMatch,
 )
-from iOpenPod.app.connected.grimmory import GrimmoryClient, plan_grimmory
 from iOpenPod.app.connected.http import ConnectedError, HttpResponse
 from iOpenPod.app.connected.immich import ImmichClient, plan_immich
 from iOpenPod.app.connected.materialize import refresh_folder
@@ -116,77 +112,6 @@ def test_immich_missing_permission_is_named() -> None:
     )
     with pytest.raises(ConnectedError, match=r"person\.read"):
         ImmichClient("http://i", "k", transport).people()
-
-
-# --- Grimmory ------------------------------------------------------------------------
-
-FEED = """<?xml version="1.0" encoding="UTF-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom">
-  <link rel="next" href="/api/v1/opds/catalog?page=2"/>
-  <entry><title>Dune</title><id>urn:booklore:book:7</id><author><name>Frank Herbert</name></author>
-    <link href="/api/v1/opds/7/download?fileId=70" rel="http://opds-spec.org/acquisition" type="audio/mp4" title="AUDIOBOOK"/>
-    <link href="/api/v1/opds/7/download?fileId=71" rel="http://opds-spec.org/acquisition" type="application/epub+zip" title="EPUB"/>
-  </entry>
-  <entry><title>Ebook only</title><id>urn:booklore:book:8</id>
-    <link href="/api/v1/opds/8/download?fileId=80" rel="http://opds-spec.org/acquisition" type="application/epub+zip" title="EPUB"/>
-  </entry>
-</feed>"""
-
-PAGE_TWO = """<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>Folder Book</title><id>urn:booklore:book:9</id>
-  <link href="/api/v1/opds/9/download?fileId=90" rel="http://opds-spec.org/acquisition" type="audio/mp4" title="AUDIOBOOK"/></entry></feed>"""
-
-
-def test_grimmory_lists_only_audiobooks_and_follows_pages() -> None:
-    transport = FakeTransport(
-        {
-            "GET http://g/api/v1/opds/catalog?page=2": reply(
-                body=PAGE_TWO.encode(), content_type="application/atom+xml"
-            ),
-            "GET http://g/api/v1/opds/catalog": reply(
-                body=FEED.encode(), content_type="application/atom+xml"
-            ),
-        }
-    )
-    books = GrimmoryClient("http://g/", "reader", "pw", transport).audiobooks()
-    assert [(b.book_id, b.title, b.download) for b in books] == [
-        ("7", "Dune", "/api/v1/opds/7/download?fileId=70"),
-        ("9", "Folder Book", "/api/v1/opds/9/download?fileId=90"),
-    ]
-    assert transport.calls[0][2]["Authorization"].startswith("Basic ")
-
-
-def test_grimmory_unpacks_folder_audiobooks_and_marks_them(tmp_path: Path) -> None:
-    from mutagen.id3 import ID3
-
-    archive = io.BytesIO()
-    with zipfile.ZipFile(archive, "w") as bundle:
-        bundle.writestr("Folder Book/01.mp3", b"\xff\xfb\x90\x00" + b"\x00" * 400)
-        bundle.writestr("Folder Book/cover.jpg", b"\xff\xd8\xff")
-        bundle.writestr("../evil.mp3", b"x")
-    transport = FakeTransport()
-    transport.files["http://g/api/v1/opds/9/download"] = archive.getvalue()
-    transport.files["http://g/api/v1/opds/7/download"] = b"m4a bytes"
-    client = GrimmoryClient("http://g", "reader", "pw", transport)
-    config = GrimmoryConfig(
-        picks=(
-            GrimmoryPick("9", "Folder Book", "", "/api/v1/opds/9/download?fileId=90"),
-            GrimmoryPick(
-                "7", "Dune", "Frank Herbert", "/api/v1/opds/7/download?fileId=70"
-            ),
-        )
-    )
-    report = refresh_folder(
-        tmp_path, plan_grimmory(client, config, cancelled=Event()), cancelled=Event()
-    )
-    assert report.downloaded == 2, report.failed
-    assert sorted(p.name for p in (tmp_path / "Folder Book").iterdir()) == [
-        "01.mp3",
-        "cover.jpg",
-    ]
-    tag = ID3(tmp_path / "Folder Book" / "01.mp3").getall("TXXX:media_type")  # type: ignore[no-untyped-call]
-    assert tag[0].text == ["audiobook"]
-    assert (tmp_path / "Frank Herbert - Dune" / "Dune.m4b").read_bytes() == b"m4a bytes"
-    assert not any("evil" in p.name for p in tmp_path.rglob("*"))
 
 
 # --- Memos ---------------------------------------------------------------------------

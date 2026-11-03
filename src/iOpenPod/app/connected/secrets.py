@@ -1,6 +1,6 @@
 """Connected Source secrets live in the native OS vault, never in preferences.
 
-Plex tokens, Immich API keys, Memos access tokens, Grimmory OPDS passwords and
+Plex tokens, Immich API keys, Memos access tokens, Grimmory sign-in tokens and
 private calendar subscription links can each grant access to a person's data, so
 they are kept beside the Scrobbling credentials in the platform keyring.
 """

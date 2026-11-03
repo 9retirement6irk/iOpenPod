@@ -85,7 +85,15 @@ class GrimmoryPick:
     book_id: str
     title: str
     author: str = ""
-    download: str = ""  # the audiobook file's OPDS acquisition link
+
+
+@dataclass(frozen=True, slots=True)
+class GrimmoryMark:
+    """Book positions on the iPod and in Grimmory when they last agreed."""
+
+    book_id: str
+    ipod_ms: int = 0
+    grimmory_ms: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +101,9 @@ class GrimmoryConfig:
     url: str = ""
     username: str = ""
     picks: tuple[GrimmoryPick, ...] = ()
+    # Exchange audiobook listening progress with Grimmory before each Sync.
+    sync_progress: bool = True
+    marks: tuple[GrimmoryMark, ...] = ()
 
 
 class TagMatch(StrEnum):
@@ -164,6 +175,7 @@ _ITEM_TYPES: dict[tuple[type, str], type] = {
     (PlexConfig, "mappings"): PathMapping,
     (ImmichConfig, "picks"): ImmichPick,
     (GrimmoryConfig, "picks"): GrimmoryPick,
+    (GrimmoryConfig, "marks"): GrimmoryMark,
     (CalendarsConfig, "files"): CalendarFile,
 }
 
@@ -216,6 +228,11 @@ def _record(cls: type, raw: object) -> object | None:
             try:
                 values[item.name] = enum_type(value)
             except ValueError:
+                return None
+        elif annotation == "int":
+            if isinstance(value, int) and not isinstance(value, bool):
+                values[item.name] = value
+            elif item.default is MISSING:
                 return None
         elif isinstance(value, str):
             values[item.name] = value
@@ -277,6 +294,7 @@ __all__ = [
     "ConnectedConfig",
     "ConnectedConfigStore",
     "GrimmoryConfig",
+    "GrimmoryMark",
     "GrimmoryPick",
     "ImmichConfig",
     "ImmichPick",

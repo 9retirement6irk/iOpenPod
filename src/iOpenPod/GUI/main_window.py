@@ -540,7 +540,9 @@ class MainWindow(QMainWindow):
             self._connected, self._scrobbling, context.library_workspace, self._pages
         )
         self._immich_page = ImmichPage(self._connected, self._pages)
-        self._grimmory_page = GrimmoryPage(self._connected, self._pages)
+        self._grimmory_page = GrimmoryPage(
+            self._connected, context.library_workspace, self._pages
+        )
         self._notes_page = NotesPage(self._connected, self._pages)
         self._calendars_page = CalendarsPage(self._connected, self._pages)
         self._page_widgets: dict[PageId, QWidget] = {
@@ -1739,7 +1741,13 @@ class MainWindow(QMainWindow):
             )
             if picks and source in connected
         )
-        if not sources or not self._connected.refresh(sources):
+        tracks = (
+            self._context.library_workspace.tracks
+            if ConnectedSource.GRIMMORY in sources
+            and self._context.device_controller.active_ipod is not None
+            else ()
+        )
+        if not sources or not self._connected.refresh(sources, tracks):
             return False
         self._pending_sync_folders = folders
         self._context.status.show(

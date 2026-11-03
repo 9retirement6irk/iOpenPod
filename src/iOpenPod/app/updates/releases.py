@@ -13,10 +13,10 @@ from typing import cast
 
 from Crypto.Signature import eddsa
 
-REPOSITORY = "TheRealSavi/iOpenPod"
-FEED_URL = (
-    "https://raw.githubusercontent.com/TheRealSavi/iOpenPod/update-feed/stable.json"
-)
+# This fork publishes and checks its own releases, so its builds are never offered
+# (or replaced by) upstream TheRealSavi/iOpenPod releases.
+REPOSITORY = "9retirement6irk/iOpenPod"
+FEED_URL = f"https://raw.githubusercontent.com/{REPOSITORY}/update-feed/stable.json"
 RELEASES_URL = f"https://github.com/{REPOSITORY}/releases"
 MAX_METADATA = 256 * 1024
 MAX_ARCHIVE = 2 * 1024**3

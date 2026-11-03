@@ -1180,6 +1180,14 @@
         <translation>Plex-Sterne werden gesetzt: {index} von {total}…</translation>
     </message>
     <message>
+        <source>No audiobooks downloaded from Grimmory are on this iPod yet. Sync them first.</source>
+        <translation>Auf diesem iPod sind noch keine Hörbücher aus Grimmory. Synchronisiere sie zuerst.</translation>
+    </message>
+    <message>
+        <source>Reading listening progress from Grimmory…</source>
+        <translation>Hörfortschritt wird aus Grimmory gelesen…</translation>
+    </message>
+    <message>
         <source>Connect an iPod to send notes.</source>
         <translation>Verbinde einen iPod, um Notizen zu senden.</translation>
     </message>
@@ -2252,7 +2260,7 @@
     </message>
     <message>
         <source>Connect</source>
-        <translation>Verbinden</translation>
+        <translation type="vanished">Verbinden</translation>
     </message>
     <message>
         <source>Address</source>
@@ -2260,15 +2268,35 @@
     </message>
     <message>
         <source>OPDS username</source>
-        <translation>OPDS-Benutzername</translation>
+        <translation type="vanished">OPDS-Benutzername</translation>
     </message>
     <message>
         <source>OPDS password</source>
-        <translation>OPDS-Passwort</translation>
+        <translation type="vanished">OPDS-Passwort</translation>
     </message>
     <message>
         <source>Create an OPDS user in Grimmory&apos;s settings. iOpenPod never needs your main password.</source>
-        <translation>Erstelle einen OPDS-Benutzer in den Grimmory-Einstellungen. iOpenPod braucht nie dein Hauptpasswort.</translation>
+        <translation type="vanished">Erstelle einen OPDS-Benutzer in den Grimmory-Einstellungen. iOpenPod braucht nie dein Hauptpasswort.</translation>
+    </message>
+    <message>
+        <source>Sign In</source>
+        <translation>Anmelden</translation>
+    </message>
+    <message>
+        <source>Sign Out</source>
+        <translation>Abmelden</translation>
+    </message>
+    <message>
+        <source>Username</source>
+        <translation>Benutzername</translation>
+    </message>
+    <message>
+        <source>Password</source>
+        <translation>Passwort</translation>
+    </message>
+    <message>
+        <source>Sign in with your Grimmory account. iOpenPod keeps only Grimmory&apos;s sign-in token in your system keychain, never your password.</source>
+        <translation>Melde dich mit deinem Grimmory-Konto an. iOpenPod speichert nur Grimmorys Anmeldetoken im Schlüsselbund deines Systems, nie dein Passwort.</translation>
     </message>
     <message>
         <source>Choose audiobooks</source>
@@ -2283,6 +2311,30 @@
         <translation>Downloads anzeigen</translation>
     </message>
     <message>
+        <source>Listening progress</source>
+        <translation>Hörfortschritt</translation>
+    </message>
+    <message>
+        <source>Sync Progress Now</source>
+        <translation>Fortschritt jetzt abgleichen</translation>
+    </message>
+    <message>
+        <source>Send iPod progress to Grimmory before each Sync</source>
+        <translation>iPod-Fortschritt vor jeder Synchronisation an Grimmory senden</translation>
+    </message>
+    <message>
+        <source>Audiobooks downloaded here remember which Grimmory book they belong to. Sync Progress compares where you are on the iPod with Grimmory: the side you listened on most recently wins, so you can switch between the iPod and Grimmory&apos;s player.</source>
+        <translation>Hier geladene Hörbücher wissen, zu welchem Grimmory-Buch sie gehören. „Fortschritt abgleichen“ vergleicht deine Stelle auf dem iPod mit Grimmory: Die Seite, auf der du zuletzt gehört hast, gewinnt. So kannst du zwischen iPod und Grimmorys Player wechseln.</translation>
+    </message>
+    <message>
+        <source>Reconnect</source>
+        <translation>Erneut verbinden</translation>
+    </message>
+    <message>
+        <source>Signed in as {name}</source>
+        <translation>Angemeldet als {name}</translation>
+    </message>
+    <message>
         <source>{count} audiobooks selected</source>
         <translation>{count} Hörbücher ausgewählt</translation>
     </message>
@@ -2291,20 +2343,72 @@
         <translation>Verbindung zu Grimmory wird hergestellt…</translation>
     </message>
     <message>
+        <source>Signed out of Grimmory.</source>
+        <translation>Von Grimmory abgemeldet.</translation>
+    </message>
+    <message>
         <source>All audiobooks</source>
         <translation>Alle Hörbücher</translation>
+    </message>
+    <message>
+        <source>Library: {name}</source>
+        <translation>Bibliothek: {name}</translation>
+    </message>
+    <message>
+        <source>Shelf: {name}</source>
+        <translation>Regal: {name}</translation>
     </message>
     <message>
         <source>Connected. Choose a library or shelf.</source>
         <translation>Verbunden. Wähle eine Bibliothek oder ein Regal.</translation>
     </message>
     <message>
+        <source>Sent {sent} positions to Grimmory and moved {pulled} iPod bookmarks.</source>
+        <translation>{sent} Positionen an Grimmory gesendet und {pulled} iPod-Lesezeichen verschoben.</translation>
+    </message>
+    <message>
+        <source>Choose Review Changes in the sidebar to save the bookmarks to the iPod.</source>
+        <translation>Wähle in der Seitenleiste „Änderungen prüfen“, um die Lesezeichen auf dem iPod zu speichern.</translation>
+    </message>
+    <message>
         <source>Loading audiobooks…</source>
         <translation>Hörbücher werden geladen…</translation>
     </message>
     <message>
+        <source>Searching…</source>
+        <translation>Suche läuft…</translation>
+    </message>
+    <message>
         <source>{count} audiobooks.</source>
         <translation>{count} Hörbücher.</translation>
+    </message>
+    <message>
+        <source>Listening progress already matches for {count} audiobooks.</source>
+        <translation>Der Hörfortschritt stimmt bei {count} Hörbüchern bereits überein.</translation>
+    </message>
+    <message>
+        <source>{title}: iPod {position} → Grimmory</source>
+        <translation>{title}: iPod {position} → Grimmory</translation>
+    </message>
+    <message>
+        <source>{title}: Grimmory {position} → iPod</source>
+        <translation>{title}: Grimmory {position} → iPod</translation>
+    </message>
+    <message>
+        <source>Sync listening progress?</source>
+        <translation>Hörfortschritt abgleichen?</translation>
+    </message>
+    <message>
+        <source>{grimmory} audiobooks get a new position in Grimmory and {ipod} get a new bookmark on the iPod.</source>
+        <translation>{grimmory} Hörbücher erhalten eine neue Position in Grimmory und {ipod} ein neues Lesezeichen auf dem iPod.</translation>
+    </message>
+    <message>
+        <source>iPod bookmarks are applied as Library changes; choose Review Changes in the sidebar to save them to the iPod.</source>
+        <translation>iPod-Lesezeichen werden als Mediathek-Änderungen übernommen; wähle in der Seitenleiste „Änderungen prüfen“, um sie auf dem iPod zu speichern.</translation>
+    </message>
+    <message>
+        <source>Listening progress was left as it is.</source>
+        <translation>Der Hörfortschritt bleibt unverändert.</translation>
     </message>
 </context>
 <context>
@@ -13143,6 +13247,10 @@ Verifizierte Firmware für Updater-Familie {family}: {firmware}.</translation>
     <message>
         <source>{source}: {summary}.</source>
         <translation>{source}: {summary}.</translation>
+    </message>
+    <message>
+        <source>Sent listening progress for {count} audiobooks.</source>
+        <translation>Hörfortschritt für {count} Hörbücher gesendet.</translation>
     </message>
     <message>
         <source>Run Sync with Host to send them to the iPod.</source>

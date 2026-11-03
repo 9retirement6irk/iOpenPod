@@ -141,6 +141,8 @@ normal lowercase conventions while retaining the same domain term.
 | **Connected Source** | A self-hosted server (Plex, Immich, or Grimmory) whose Selection iOpenPod materializes as Host files for Sync. It never writes to the iPod directly. | integration, plugin, remote library |
 | **Connected Source Folder** | The application-owned Host Media Library folder holding one Connected Source's materialized files, with a Connected Source Manifest naming the files iOpenPod owns there. | download cache, staging folder |
 | **Selection** | The person's saved choice of Connected Source items, such as Plex playlists or Immich people, that defines a Connected Source Folder's contents. | Sync Selection when the Connected Source choice is meant |
+| **Grimmory Link** | The `grimmory:` comment on an audiobook file iOpenPod downloaded from Grimmory, naming its book, book file, track index, track start, and book duration so its iPod Track can exchange listening progress. | book id tag |
+| **Progress Mark** | The iPod and Grimmory positions in one audiobook when the two last agreed; whichever side moved since then wins the next progress exchange. | sync state, last position |
 | **iPod Extras** | Non-Library files the firmware reads from top-level `Notes` and `Calendars` folders. They are published through Storage against an Extras Manifest of owned files. | Library media, iTunesDB content |
 
 ## Application workflows
