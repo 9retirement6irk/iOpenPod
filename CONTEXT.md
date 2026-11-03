@@ -14,12 +14,61 @@ then beyond it.
 
 ## Current stage
 
-Connected Sources (Plex, Immich, Grimmory) materialize Selections as Host Media
-Library folders that Sync refreshes before scanning, and iPod Extras (Memos notes and
+Connected Sources (this fork): Plex music and Grimmory audiobooks are listed in
+Sync's media list as Remote Items and downloaded only when Sync prepares them, kept
+in a size-limited Media Cache; Immich materializes Selections as a Host Media
+Library folder that Sync refreshes before scanning; and iPod Extras (Memos notes and
 calendars) publish through Storage with an ownership manifest. Plex is also a
 Scrobbling service for iPod plays, with two-way star ratings. Virtual-volume and
 scripted-protocol tests cover the work; physical-device acceptance is unverified. See
-[ADR-0225](docs/adr/0225-add-connected-sources-and-ipod-extras.md).
+[ADR-0900](docs/adr/0900-add-connected-sources-and-ipod-extras.md).
+
+Unrelated Library edits reuse Phase charts through persisted source/chart metadata
+and content provenance, without audio scans or retained-media transaction hashes.
+Phase membership and ordering changes update the companion index incrementally;
+new or changed analysis retains full verification. Legacy caches need one content
+validation pass to establish metadata receipts. See
+[ADR-0232](docs/adr/0232-cache-phase-input-metadata-across-library-saves.md).
+
+The sidebar device information opens a Device Summary with a large device portrait,
+observed firmware and serial details, and color-coded capacity estimates from the
+committed Library, plus Games from captured file sizes across Games_RO,
+GameData_RW, and GameStats_WO, and Album artwork from the entire Artwork folder.
+Games is pink and Album artwork is cyan. Other retains unclassified used space; inconsistent metadata
+falls back to observed used/free capacity. Restore iPod remains disabled beside
+“Coming soon”. See
+[ADR-0230](docs/adr/0230-project-device-summary-from-committed-library-state.md).
+
+Phase preparation reports its current method, live CPU/CUDA/MPS backend and GPU
+name when available. A stage ETA beside the status-bar progress indicator learns
+from completed audio duration. See
+[ADR-0229](docs/adr/0229-report-phase-activity-and-stage-eta.md).
+
+Phase can measure whole-mix acoustics while confirmed CUDA source analysis runs
+for the same Track, then combine the evidence using unchanged musical rules.
+Resource limits, live runtime capability and caller-owned cancellation retain the
+serial fallback. See [ADR-0228](docs/adr/0228-overlap-phase-mix-and-source-analysis.md).
+
+Phase preparation copies up to five upcoming compressed songs to bounded Host
+staging while the current Track is analyzed. Captures supply the initial content
+hash; full source checks and transaction preconditions remain required. Large
+inputs and Host capacity failures retain direct device reads. See
+[ADR-0227](docs/adr/0227-prefetch-bounded-phase-audio-inputs.md).
+
+Phase analysis reuses feature calculations and retains the downloaded model for
+one preparation. CUDA inference overlaps bounded CPU feature work; CPU and MPS
+keep the serial path. Preparation exit and parent-process loss release the worker,
+and failures retain acoustic analysis. Musical parameters stay at version 7.
+See [ADR-0226](docs/adr/0226-reuse-phase-analysis-work-without-changing-gameplay.md)
+for lifetime, compatibility and evaluation limits.
+
+Phase can explicitly install an isolated optional analysis runtime from Settings
+without changing the bundled application or its FFmpeg selection. Available GPU
+analysis retries on CPU; optional failures retain acoustic analysis, with cache
+provenance identifying the analyzer that actually succeeded. Unsafe or undecodable
+inputs still stop preparation. See
+[ADR-0225](docs/adr/0225-install-optional-phase-analysis-with-safe-fallbacks.md)
+for Windows evidence and remaining Mac/Linux, Store and gameplay acceptance.
 
 Library preparation now makes dataset 2 agree with authoritative dataset 3.
 Missing, extra, conflicting, and reordered Playlists are reconciled for every
@@ -84,7 +133,7 @@ metadata failures, and clear on Active iPod changes. See
 [IC-Info and Games](docs/ipod-games.md) for the manifest contract and read-only
 device validation.
 
-Gimme Games now allows an explicit Continue anyway attempt for unverified family
+Install Games now allows an explicit Continue anyway attempt for unverified family
 or firmware evidence. The dialog shows reported values, uses the identified model
 when a codec fallback is needed, and scopes confirmation to the current connection
 and identity values. Storage and recovery protections remain mandatory. See
@@ -96,7 +145,7 @@ action merges account/key records, gives bundled entries precedence on conflicts
 and preserves destination-only authorizations through a recoverable Storage
 Transaction. Firmware and emulators remain lab-only verification tools. Game
 executables are installed separately by selecting cards and pressing Add in the
-Available games dialog. Gimme Games first downloads and extracts the complete
+Available games dialog. Install Games first downloads and extracts the complete
 preservation collection onto the Host, showing progress. Later clicks reuse those
 files. The app retains the catalog and artwork while game payloads stay outside
 its assets and source distribution. Selected games publish through Storage

@@ -1,6 +1,7 @@
-# ADR-0225: Add Connected Sources and iPod Extras
+# ADR-0900: Add Connected Sources and iPod Extras
 
 - Status: Accepted
+- Scope: this fork (fork records are numbered from 0900 so upstream merges never collide)
 - Date: 2026-11-02
 
 People keep music in Plex, photos in Immich, audiobooks in Grimmory, notes in Memos,

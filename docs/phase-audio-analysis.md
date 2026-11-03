@@ -1,5 +1,15 @@
 # Phase gameplay analysis
 
+During preparation, the status bar shows the current activity and analysis
+method: FFmpeg decoding, Demucs with its live CPU/CUDA/MPS backend, or librosa
+acoustic analysis on CPU. CUDA also shows the GPU name when available. Concurrent
+model and acoustic work is identified together, and fallback updates the method.
+The ETA appears immediately to the left of the progress bar. It learns from
+completed audio duration after enough timed songs, so startup, cache reuse and
+changes in song complexity can affect it. Hover over the ETA for its range and
+over the progress bar for the current song. The estimate covers Phase preparation;
+the later Library save and verification have their own progress.
+
 Saving the Phase Playlist now analyzes eligible music instead of generating
 regular placeholder events. Eligibility remains the firmware/game rule: music
 with whole-second duration 30 through 1800. Repeated Playlist occurrences share
@@ -27,14 +37,49 @@ The implementation keeps bounded full-song PCM and compact feature vectors;
 large spectrograms, HPSS intermediates and tempograms are block-local. It avoids
 allocating a whole-song tempogram. Two DSP threads process at most two spectral
 blocks at once, sharing read-only PCM. Their feature results are assembled in
-the original order on the coordinator thread. Beat tracking, decoding, device
-reads, hashing and publication remain serial. This bounds extra working memory
-to another block rather than another whole decoded song.
+the original order on the coordinator thread. Beat tracking, decoding and
+publication retain their order. This bounds extra working memory to another block
+rather than another whole decoded song.
+
+One background reader copies up to five upcoming compressed songs to private Host
+staging while the current song is analyzed. The current copy plus queued copies
+share a 256 MiB retained-content limit. Copying computes the initial content hash;
+the original device file is still fully checked after fresh analysis. Matching
+metadata receipts bypass the audio queue entirely. Content-cache candidates without
+matching metadata use a full audio hash before reuse (ADR-0232).
+Full-file checks take priority over starting another copy. Large files and Host
+disk-full/quota errors use the serial device path. Prepared incoming Host audio
+keeps its existing verification. See [ADR-0227](adr/0227-prefetch-bounded-phase-audio-inputs.md)
+for source verification, temporary-space overhead and cleanup.
 
 Only the coordinator invokes the caller's cancellation checkpoint. It checks
 while waiting for workers, signals them to stop on cancellation or failure, and
 joins them before returning. A running native median filter must finish before
 that worker can stop. FFmpeg remains cancellable through Storage's runner.
+
+The acoustic median filters now use contiguous two-dimensional filtering with
+the same reflected boundaries, 31-bin windows and soft-mask policy. On two full
+songs, measured warm acoustic time fell 14.9–16.0%; all 5,832 original-game output
+callbacks matched across four difficulties. This preserves the existing chart
+identity. See the [native output comparison](research/phase-speed-output-comparison.md)
+for timing samples and the numerical effects of other tested optimizations.
+
+Feature measurement also reuses fixed frequency/pitch masks, avoids repeated
+chroma copies, and computes attacks only in the retained frequency bands.
+Downloaded analysis retains its model for one preparation, and CUDA inference
+overlaps a bounded CPU feature block. CPU and MPS stay serial. All section sizes
+and musical parameters are unchanged. See the
+[feature and scheduling experiments](research/phase-speed-reuse-and-scheduling.md)
+for measured timing scope, original-game output checks and memory observations.
+
+Whole-mix measurement can also run while the same Track's CUDA source analysis
+is active. Final chart selection waits for both, preserving the same musical
+rules. This adds no second decoded Track. Managed analysis first confirms CUDA
+through a successful live result; its first Track stays serial. Overlap requires
+at least four available compute threads and at most 256 MiB of decoded input.
+CPU, MPS, unknown backends and larger inputs keep serial execution. See
+[ADR-0228](adr/0228-overlap-phase-mix-and-source-analysis.md) and the
+[stage-overlap measurements](research/phase-stage-overlap.md).
 
 The optional `max_workers=1` argument supports diagnosis and exact serial/parallel
 comparison; normal saves use two workers. The current algorithm version is
@@ -135,15 +180,29 @@ When Demucs and PyTorch are installed, normal Phase saves use the six-source
 `htdemucs_6s` checkpoint, loaded by its fixed signature `5c90dfd2`. Its sources are
 vocals, guitar, bass, drums, piano, and other. These are learned estimates, not
 guaranteed labels; `other` is never relabeled guitar. The existing optional stack
-can be installed with `uv sync --locked --extra synesthesia-gpu`. Restart the
-application after installation. The first analysis downloads the approximately
-52 MiB checkpoint to the provider's Host cache. Provider absence uses acoustic
-analysis and is logged; provider failure stops preparation with its error.
+can be installed in a source checkout with
+`uv sync --locked --extra synesthesia-gpu`, followed by an application restart.
+Packaged applications can instead use **Settings > Media Tools > Set Up Phase
+Analysis > Download and Install**. Setup downloads private Python, platform-specific
+libraries and the model into iOpenPod's user-data folder. It does not change system
+Python, the application bundle, or FFmpeg settings. Setup may use several gigabytes.
+A real inference check must pass before the new environment becomes available
+on the next save or Sync, without restarting the app.
+
+The approximately 52 MiB checkpoint is only the model download; Python and its
+libraries contribute the larger installation. Downloaded inference runs in an
+isolated child process sharing the application's source-measurement code.
+Optional import, model, network, process or inference failures are logged and
+use acoustic analysis for that preparation. Later preparations retry available
+providers. See [ADR-0225](adr/0225-install-optional-phase-analysis-with-safe-fallbacks.md).
 The checkpoint resolves directly through Demucs RemoteRepo, using the published
 hash-bearing filename and Torch cache. No Hugging Face model-alias lookup or
 Hugging Face credentials are required for this model.
 
-Inference runs on CUDA when available, otherwise CPU, with random shifts disabled.
+Inference prefers CUDA or Apple MPS when available, otherwise CPU, with random
+shifts disabled. Failed acceleration restarts the whole Track on CPU; failed
+optional CPU inference uses acoustic analysis. Cancellation and device disconnection
+propagate. Provenance records the backend that actually produced each chart.
 Cores contain 344 Phase frames (about four seconds), with 86 context frames on
 either side. Each block is separated, downmixed and resampled to the common
 22,050 Hz grid, then reduced to band attacks, RMS, and pitch-class evidence.
@@ -225,9 +284,14 @@ cancellation with the selection history transaction. See
 
 Analysis happens during Library preparation, after final Track and Playlist IDs
 exist and before any device writes. New audio imports are analyzed from their
-prepared Host source. Existing audio is fingerprinted through Storage and those
-fingerprints become transaction dependencies. Inputs are checked again after
-analysis; changing inputs fail preparation or invalidate the reviewed save.
+prepared Host source. Audio needing analysis or content validation is fingerprinted
+through Storage and those fingerprints become transaction dependencies. Inputs are
+checked again after analysis; changing inputs fail preparation or invalidate the
+reviewed save. Unchanged retained inputs use persisted metadata receipts and are
+excluded from repeated content reads and transaction hashes. Metadata checks use
+size, modification time, device number and inode; they do not detect external edits
+that preserve all those fields. See
+[ADR-0232](adr/0232-cache-phase-input-metadata-across-library-saves.md).
 
 `iPod_Control/iOpenPod/phase-analysis-v1.json` stores a per-PID provenance string
 containing algorithm version, source-provider identity, source content SHA-256, declared duration and chart
@@ -241,7 +305,23 @@ produce charts under the wrong identity. The metadata file retains only the curr
 bounded to 8 MiB. Charts, provenance, the Phase Library index and database changes
 are published together in the normal recoverable Storage Transaction.
 
+`iPod_Control/iOpenPod/phase-validation-v1.json` binds that provenance to the audio
+and chart filesystem identities. A matching entry needs metadata checks only.
+Old caches receive one content-validation pass; newly published charts receive
+one small chart read on the following save to record their final identity.
+Unrelated Playlist edits and Track-title edits do not invalidate charts. Phase
+selection, membership and ordering rebuild the companion index from reusable
+records. Only inputs needing content work contribute to the analysis progress/ETA.
+
 ## Verification
+
+The [acoustic parameter audit](research/phase-acoustic-parameter-audit.md) checks
+current model-free output through 24 original-ARM conversions at all four
+difficulties. Spectral permutation changes lanes, pulse timing changes conversion,
+and lower-field power changes section behavior; upper beat-field changes leave
+complete output unchanged. Real-DSP fallback and independently decoded wire-field
+regressions retain this contract without claiming the original producer is fully
+recovered.
 
 Version 7 adds regressions for melodic anticipations around drum hits, acoustic
 and separated percussion priority, shared-vector magnitude preference, drum

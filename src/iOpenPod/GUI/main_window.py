@@ -70,6 +70,7 @@ from iOpenPod.app.library_write import WriteProgress
 from iOpenPod.app.library_write_controller import PreparationState
 from iOpenPod.app.media_tools_controller import MediaToolsController
 from iOpenPod.app.models.device import ActiveIPod, DeviceDiscovery
+from iOpenPod.app.phase_runtime_controller import PhaseRuntimeController
 from iOpenPod.app.photo_controller import PhotoLoadFailure
 from iOpenPod.app.playback.backend import PlaybackFailure
 from iOpenPod.app.podcasts.sync import PodcastSyncRequest
@@ -101,6 +102,7 @@ from iOpenPod.GUI.dialogs.media_folders import (
     MediaFolderSettingsDialog,
 )
 from iOpenPod.GUI.dialogs.media_tools_setup import MediaToolsSetupDialog
+from iOpenPod.GUI.dialogs.phase_runtime_setup import PhaseRuntimeSetupDialog
 from iOpenPod.GUI.dialogs.playlist_export import PlaylistExportDialog
 from iOpenPod.GUI.dialogs.scrobble_report import show_scrobble_report
 from iOpenPod.GUI.dialogs.tag_normalizer import TagNormalizerDialog
@@ -114,6 +116,7 @@ from iOpenPod.GUI.pages.connected_pages import (
     NotesPage,
     PlexPage,
 )
+from iOpenPod.GUI.pages.device_summary import DeviceSummaryPage
 from iOpenPod.GUI.pages.games_page import GamesPage
 from iOpenPod.GUI.pages.genius_page import GeniusPage
 from iOpenPod.GUI.pages.library_page import LibraryPage
@@ -459,6 +462,11 @@ class MainWindow(QMainWindow):
             self, find_tool=context.find_media_tool
         )
         self._media_tools_dialog = MediaToolsSetupDialog(self._media_tools, self)
+        self._phase_runtime = PhaseRuntimeController(self)
+        self._phase_runtime_dialog = PhaseRuntimeSetupDialog(self._phase_runtime, self)
+        self._settings_page.phaseAnalysisSetupRequested.connect(
+            self._phase_runtime_dialog.open
+        )
         self._media_tools_prompt_pending = False
         self._media_tools.checked.connect(self._media_tools_checked)
         self._media_tools.changed.connect(self._media_tools_status_changed)
@@ -472,6 +480,12 @@ class MainWindow(QMainWindow):
         self._scrobbling.changed.connect(self._scrobbling_changed)
         self._sidebar.set_scrobble_available(self._scrobbling.can_scrobble)
         self._settings_page.set_active_ipod(context.device_controller.active_ipod)
+        self._device_summary_page = DeviceSummaryPage(
+            self._pages, theme=context.theme_manager
+        )
+        self._device_summary_page.set_active_ipod(context.device_controller.active_ipod)
+        self._refresh_device_summary()
+        context.library_workspace.changed.connect(self._refresh_device_summary)
         self._backup_page = BackupPage(
             context.backup_controller,
             context.device_controller,
@@ -557,6 +571,7 @@ class MainWindow(QMainWindow):
         self._notes_page = NotesPage(self._connected, self._pages)
         self._calendars_page = CalendarsPage(self._connected, self._pages)
         self._page_widgets: dict[PageId, QWidget] = {
+            PageId.DEVICE_SUMMARY: self._device_summary_page,
             PageId.ALBUMS: self._library_page,
             PageId.ARTISTS: artists_page,
             PageId.GENRES: genres_page,
@@ -602,6 +617,7 @@ class MainWindow(QMainWindow):
         self._pages.addWidget(self._backup_page)
         self._pages.addWidget(self._synesthesia_page)
         self._pages.addWidget(self._settings_page)
+        self._pages.addWidget(self._device_summary_page)
         for connected_page in (
             self._plex_page,
             self._immich_page,
@@ -1258,6 +1274,7 @@ class MainWindow(QMainWindow):
         self.close_app_updates()
         self._host_drop.shutdown()
         self._media_tools.shutdown()
+        self._phase_runtime.shutdown()
         self._scrobbling.shutdown()
         self._connected.shutdown()
         self._exit_synesthesia_fullscreen()
@@ -1692,6 +1709,10 @@ class MainWindow(QMainWindow):
         )
         self.retranslate_ui()
 
+    def _refresh_device_summary(self) -> None:
+        workspace = self._context.library_workspace
+        self._device_summary_page.set_device_name(workspace.device_name)
+
     def _library_replaced(self) -> None:
         self._context.playback_controller.clear_session()
         self.retranslate_ui()
@@ -1848,6 +1869,7 @@ class MainWindow(QMainWindow):
             self._workspaces.currentWidget() is self._library_browser
             and self._current_page_id()
             not in (
+                PageId.DEVICE_SUMMARY,
                 PageId.SETTINGS,
                 PageId.BACKUPS,
                 PageId.SYNESTHESIA,
@@ -2308,6 +2330,8 @@ class MainWindow(QMainWindow):
     def _active_ipod_changed(self, value: object) -> None:
         active_ipod = value if isinstance(value, ActiveIPod) else None
         self._settings_page.set_active_ipod(active_ipod)
+        self._device_summary_page.set_active_ipod(active_ipod)
+        self._refresh_device_summary()
         self._genius_page.set_active_ipod(active_ipod)
         sync_was_visible = self._workspaces.currentWidget() is self._sync_workspace
         retain_sync = (

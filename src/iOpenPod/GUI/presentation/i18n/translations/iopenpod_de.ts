@@ -1168,20 +1168,20 @@
         <translation>Wähle zuerst einen Plex-Server.</translation>
     </message>
     <message>
-        <source>Connect an iPod to sync star ratings.</source>
-        <translation>Verbinde einen iPod, um Sternbewertungen abzugleichen.</translation>
-    </message>
-    <message>
-        <source>Reading your Plex music library…</source>
-        <translation>Deine Plex-Musikmediathek wird gelesen…</translation>
+        <source>Comparing star ratings with Plex…</source>
+        <translation>Sternbewertungen werden mit Plex verglichen…</translation>
     </message>
     <message>
         <source>Setting Plex stars {index} of {total}…</source>
         <translation>Plex-Sterne werden gesetzt: {index} von {total}…</translation>
     </message>
     <message>
-        <source>Comparing star ratings with Plex…</source>
-        <translation>Sternbewertungen werden mit Plex verglichen…</translation>
+        <source>Connect an iPod to sync star ratings.</source>
+        <translation>Verbinde einen iPod, um Sternbewertungen abzugleichen.</translation>
+    </message>
+    <message>
+        <source>Reading your Plex music library…</source>
+        <translation>Deine Plex-Musikmediathek wird gelesen…</translation>
     </message>
     <message>
         <source>Finish signing in with {provider} in your browser…</source>
@@ -1390,6 +1390,10 @@
     <message>
         <source>No Active iPod is loaded.</source>
         <translation>Kein aktiver iPod geladen.</translation>
+    </message>
+    <message>
+        <source>Open device summary</source>
+        <translation>Geräteübersicht öffnen</translation>
     </message>
     <message>
         <source>Storage</source>
@@ -1615,6 +1619,77 @@
     </message>
 </context>
 <context>
+    <name>DeviceSummaryPage</name>
+    <message>
+        <source>Summary</source>
+        <translation>Übersicht</translation>
+    </message>
+    <message>
+        <source>Restore iPod</source>
+        <translation>iPod wiederherstellen</translation>
+    </message>
+    <message>
+        <source>Coming soon</source>
+        <translation>Demnächst verfügbar</translation>
+    </message>
+    <message>
+        <source>Name</source>
+        <translation>Name</translation>
+    </message>
+    <message>
+        <source>Capacity</source>
+        <translation>Kapazität</translation>
+    </message>
+    <message>
+        <source>Software version</source>
+        <translation>Softwareversion</translation>
+    </message>
+    <message>
+        <source>Serial number</source>
+        <translation>Seriennummer</translation>
+    </message>
+    <message>
+        <source>Model number</source>
+        <translation>Modellnummer</translation>
+    </message>
+    <message>
+        <source>Model</source>
+        <translation>Modell</translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation>Farbe</translation>
+    </message>
+    <message>
+        <source>Tracks</source>
+        <translation type="vanished">Titel</translation>
+    </message>
+    <message>
+        <source>Playlists</source>
+        <translation type="vanished">Wiedergabelisten</translation>
+    </message>
+    <message>
+        <source>Library format</source>
+        <translation type="vanished">Mediatheksformat</translation>
+    </message>
+    <message>
+        <source>No Active iPod</source>
+        <translation>Kein aktiver iPod</translation>
+    </message>
+    <message>
+        <source>Choose an iPod from the sidebar to see its details.</source>
+        <translation>Wählen Sie einen iPod in der Seitenleiste aus, um seine Details anzuzeigen.</translation>
+    </message>
+    <message>
+        <source>Unavailable</source>
+        <translation>Nicht verfügbar</translation>
+    </message>
+    <message>
+        <source>iPod</source>
+        <translation>iPod</translation>
+    </message>
+</context>
+<context>
     <name>EditorLabels</name>
     <message>
         <source>Technical details</source>
@@ -1674,6 +1749,18 @@
     <message>
         <source>{hours}h {minutes}m</source>
         <translation>{hours} Std. {minutes} Min.</translation>
+    </message>
+    <message>
+        <source>ETA: ~{duration}</source>
+        <translation>Restzeit: ~{duration}</translation>
+    </message>
+    <message>
+        <source>Finishing…</source>
+        <translation>Wird abgeschlossen…</translation>
+    </message>
+    <message>
+        <source>ETA: estimating…</source>
+        <translation>Restzeit wird geschätzt…</translation>
     </message>
 </context>
 <context>
@@ -1987,8 +2074,8 @@
         <translation>Spiele</translation>
     </message>
     <message>
-        <source>Gimme Games</source>
-        <translation>Her mit den Spielen</translation>
+        <source>Install Games</source>
+        <translation>Spiele installieren</translation>
     </message>
     <message>
         <source>No games on this iPod</source>
@@ -2263,32 +2350,8 @@
         <translation>Grimmory-Hörbücher</translation>
     </message>
     <message>
-        <source>Download for Sync</source>
-        <translation type="vanished">Für Synchronisation laden</translation>
-    </message>
-    <message>
         <source>Server</source>
         <translation>Server</translation>
-    </message>
-    <message>
-        <source>Connect</source>
-        <translation type="vanished">Verbinden</translation>
-    </message>
-    <message>
-        <source>Address</source>
-        <translation>Adresse</translation>
-    </message>
-    <message>
-        <source>OPDS username</source>
-        <translation type="vanished">OPDS-Benutzername</translation>
-    </message>
-    <message>
-        <source>OPDS password</source>
-        <translation type="vanished">OPDS-Passwort</translation>
-    </message>
-    <message>
-        <source>Create an OPDS user in Grimmory&apos;s settings. iOpenPod never needs your main password.</source>
-        <translation type="vanished">Erstelle einen OPDS-Benutzer in den Grimmory-Einstellungen. iOpenPod braucht nie dein Hauptpasswort.</translation>
     </message>
     <message>
         <source>Sign In</source>
@@ -2303,6 +2366,10 @@
         <translation>Abmelden</translation>
     </message>
     <message>
+        <source>Address</source>
+        <translation>Adresse</translation>
+    </message>
+    <message>
         <source>Username</source>
         <translation>Benutzername</translation>
     </message>
@@ -2315,8 +2382,8 @@
         <translation>Melde dich mit deinem Grimmory-Konto an. iOpenPod speichert nur Grimmorys Anmeldetoken im Schlüsselbund deines Systems, nie dein Passwort.</translation>
     </message>
     <message>
-        <source>Sign In with SSO opens your identity provider in the browser, like Grimmory&apos;s own sign-in page. It needs {address} added as an allowed redirect (callback) address for Grimmory&apos;s client in your identity provider.</source>
-        <translation type="vanished">„Mit SSO anmelden“ öffnet deinen Identitätsanbieter im Browser, wie Grimmorys eigene Anmeldeseite. Dazu muss {address} bei deinem Identitätsanbieter als erlaubte Weiterleitungsadresse (Callback) für Grimmorys Client eingetragen sein.</translation>
+        <source>Sign In with SSO opens your identity provider in the browser, the way Grimmory&apos;s mobile apps do, and the browser returns to iOpenPod through {address}. Add that address once in Grimmory (Settings → Authentication → Mobile Redirect URIs) and as an allowed redirect for Grimmory&apos;s client in your identity provider.</source>
+        <translation>„Mit SSO anmelden“ öffnet deinen Identitätsanbieter im Browser, wie es die Grimmory-Apps für Mobilgeräte tun, und der Browser kehrt über {address} zu iOpenPod zurück. Trage diese Adresse einmalig in Grimmory ein (Einstellungen → Authentifizierung → Mobile Redirect URIs) und bei deinem Identitätsanbieter als erlaubte Weiterleitung für Grimmorys Client.</translation>
     </message>
     <message>
         <source>Audiobooks</source>
@@ -2329,22 +2396,6 @@
     <message>
         <source>All your Grimmory audiobooks appear in Sync with Host&apos;s media list. Check what goes on the iPod there; they download only when Sync copies them, and are kept within the media cache limit in Settings → Sync.</source>
         <translation>Alle deine Grimmory-Hörbücher erscheinen in der Medienliste von „Mit Computer synchronisieren“. Wähle dort aus, was auf den iPod kommt; sie werden erst geladen, wenn die Synchronisation sie kopiert, und im Rahmen des Medien-Cache-Limits unter Einstellungen → Synchronisieren behalten.</translation>
-    </message>
-    <message>
-        <source>Connected. Your audiobooks appear in Sync with Host&apos;s media list.</source>
-        <translation>Verbunden. Deine Hörbücher erscheinen in der Medienliste von „Mit Computer synchronisieren“.</translation>
-    </message>
-    <message>
-        <source>Choose audiobooks</source>
-        <translation type="vanished">Hörbücher auswählen</translation>
-    </message>
-    <message>
-        <source>Search audiobooks</source>
-        <translation type="vanished">Hörbücher suchen</translation>
-    </message>
-    <message>
-        <source>Show downloads</source>
-        <translation type="vanished">Downloads anzeigen</translation>
     </message>
     <message>
         <source>Listening progress</source>
@@ -2371,10 +2422,6 @@
         <translation>Angemeldet als {name}</translation>
     </message>
     <message>
-        <source>{count} audiobooks selected</source>
-        <translation type="vanished">{count} Hörbücher ausgewählt</translation>
-    </message>
-    <message>
         <source>Connecting to Grimmory…</source>
         <translation>Verbindung zu Grimmory wird hergestellt…</translation>
     </message>
@@ -2387,20 +2434,8 @@
         <translation>Von Grimmory abgemeldet.</translation>
     </message>
     <message>
-        <source>All audiobooks</source>
-        <translation type="vanished">Alle Hörbücher</translation>
-    </message>
-    <message>
-        <source>Library: {name}</source>
-        <translation type="vanished">Bibliothek: {name}</translation>
-    </message>
-    <message>
-        <source>Shelf: {name}</source>
-        <translation type="vanished">Regal: {name}</translation>
-    </message>
-    <message>
-        <source>Connected. Choose a library or shelf.</source>
-        <translation type="vanished">Verbunden. Wähle eine Bibliothek oder ein Regal.</translation>
+        <source>Connected. Your audiobooks appear in Sync with Host&apos;s media list.</source>
+        <translation>Verbunden. Deine Hörbücher erscheinen in der Medienliste von „Mit Computer synchronisieren“.</translation>
     </message>
     <message>
         <source>Sent {sent} positions to Grimmory and moved {pulled} iPod bookmarks.</source>
@@ -2409,22 +2444,6 @@
     <message>
         <source>Choose Review Changes in the sidebar to save the bookmarks to the iPod.</source>
         <translation>Wähle in der Seitenleiste „Änderungen prüfen“, um die Lesezeichen auf dem iPod zu speichern.</translation>
-    </message>
-    <message>
-        <source>Loading audiobooks…</source>
-        <translation type="vanished">Hörbücher werden geladen…</translation>
-    </message>
-    <message>
-        <source>Searching…</source>
-        <translation type="vanished">Suche läuft…</translation>
-    </message>
-    <message>
-        <source>{count} audiobooks.</source>
-        <translation type="vanished">{count} Hörbücher.</translation>
-    </message>
-    <message>
-        <source>Sign In with SSO opens your identity provider in the browser, the way Grimmory&apos;s mobile apps do, and the browser returns to iOpenPod through {address}. Add that address once in Grimmory (Settings → Authentication → Mobile Redirect URIs) and as an allowed redirect for Grimmory&apos;s client in your identity provider.</source>
-        <translation>„Mit SSO anmelden“ öffnet deinen Identitätsanbieter im Browser, wie es die Grimmory-Apps für Mobilgeräte tun, und der Browser kehrt über {address} zu iOpenPod zurück. Trage diese Adresse einmalig in Grimmory ein (Einstellungen → Authentifizierung → Mobile Redirect URIs) und bei deinem Identitätsanbieter als erlaubte Weiterleitung für Grimmorys Client.</translation>
     </message>
     <message>
         <source>Listening progress already matches for {count} audiobooks.</source>
@@ -3551,6 +3570,10 @@
         <translation>Alle Dateien (*)</translation>
     </message>
     <message>
+        <source>Set Up Phase Analysis…</source>
+        <translation>Phase-Analyse einrichten…</translation>
+    </message>
+    <message>
         <source>Media Tools</source>
         <translation>Medienwerkzeuge</translation>
     </message>
@@ -4169,6 +4192,10 @@
 <context>
     <name>Navigation</name>
     <message>
+        <source>Device Summary</source>
+        <translation>Geräteübersicht</translation>
+    </message>
+    <message>
         <source>Albums</source>
         <translation>Alben</translation>
     </message>
@@ -4316,18 +4343,6 @@
         <translation>Wenn du #work wählst, werden auch verschachtelte Tags wie #work/meetings einbezogen. Jedes Memo wird eine Notiz mit seiner ersten Zeile als Titel, direkt in der Notizenliste des iPod; lange Memos werden in Teile aufgeteilt, da der iPod 4 KB pro Notiz und bis zu 1000 Notizen anzeigt.</translation>
     </message>
     <message>
-        <source>A folder for each tag</source>
-        <translation type="vanished">Ein Ordner pro Tag</translation>
-    </message>
-    <message>
-        <source>Picking #work also includes nested tags like #work/meetings. Each memo becomes a note titled by its first line; long memos are split into parts because the iPod shows 4 KB per note and up to 1,000 notes.</source>
-        <translation type="vanished">Wenn du #work auswählst, sind auch verschachtelte Tags wie #work/meetings enthalten. Jedes Memo wird zu einer Notiz, benannt nach seiner ersten Zeile; lange Memos werden in Teile aufgeteilt, da der iPod 4 KB pro Notiz und bis zu 1.000 Notizen anzeigt.</translation>
-    </message>
-    <message>
-        <source>Folder on the iPod: Notes /</source>
-        <translation type="vanished">Ordner auf dem iPod: Notizen /</translation>
-    </message>
-    <message>
         <source>Reading your memos…</source>
         <translation>Deine Memos werden gelesen…</translation>
     </message>
@@ -4346,6 +4361,45 @@
     <message>
         <source>Eject the iPod, then look in Extras → Notes.</source>
         <translation>Wirf den iPod aus und sieh unter Extras → Notizen nach.</translation>
+    </message>
+</context>
+<context>
+    <name>PhaseRuntimeSetupDialog</name>
+    <message>
+        <source>Set Up Phase Analysis</source>
+        <translation>Phase-Analyse einrichten</translation>
+    </message>
+    <message>
+        <source>Acoustic analysis is included with iOpenPod. Optional instrument analysis can help Phase follow vocals, instruments, and recurring musical phrases.
+
+Download it here to use it on this computer. Setup needs internet access, and the download and installed files can use several gigabytes of disk space. Acoustic analysis remains available if you skip or cancel setup.</source>
+        <translation>Die akustische Analyse ist in iOpenPod enthalten. Die optionale Instrumentenanalyse kann Phase dabei helfen, Gesang, Instrumenten und wiederkehrenden musikalischen Phrasen zu folgen.
+
+Laden Sie sie hier herunter, um sie auf diesem Computer zu verwenden. Die Einrichtung benötigt einen Internetzugang. Der Download und die installierten Dateien können mehrere Gigabyte Speicherplatz belegen. Die akustische Analyse bleibt verfügbar, wenn Sie die Einrichtung überspringen oder abbrechen.</translation>
+    </message>
+    <message>
+        <source>Setup error details</source>
+        <translation>Details zum Einrichtungsfehler</translation>
+    </message>
+    <message>
+        <source>Download and Reinstall</source>
+        <translation>Herunterladen und neu installieren</translation>
+    </message>
+    <message>
+        <source>Acoustic analysis is included with iOpenPod. Optional instrument analysis can help Phase follow vocals, instruments, and recurring musical phrases.
+
+Choose Download and Install to download Python, analysis libraries, and the model into iOpenPod&apos;s user-data folder. Downloads and installed files can use several gigabytes. Setup does not replace your system Python or change FFmpeg settings. The existing analyzer remains available if you skip or cancel setup.</source>
+        <translation type="vanished">Die akustische Analyse ist in iOpenPod enthalten. Die optionale Instrumentenanalyse kann Phase helfen, Gesang, Instrumente und wiederkehrende musikalische Phrasen zu verfolgen.
+
+Wählen Sie „Herunterladen und installieren“, um Python, Analysebibliotheken und das Modell in den Benutzerdatenordner von iOpenPod herunterzuladen. Downloads und installierte Dateien können mehrere Gigabyte belegen. Die Einrichtung ersetzt Ihr System-Python nicht und ändert keine FFmpeg-Einstellungen. Wenn Sie die Einrichtung überspringen oder abbrechen, bleibt die vorhandene Analyse verfügbar.</translation>
+    </message>
+    <message>
+        <source>Download and Install</source>
+        <translation>Herunterladen und installieren</translation>
+    </message>
+    <message>
+        <source>Cancel Setup</source>
+        <translation>Einrichtung abbrechen</translation>
     </message>
 </context>
 <context>
@@ -5087,6 +5141,25 @@
     <message>
         <source>Hide Queue, History, and Lyrics</source>
         <translation>Warteschlange, Verlauf und Liedtext ausblenden</translation>
+    </message>
+</context>
+<context>
+    <name>PlaylistDuplicates</name>
+    <message>
+        <source>Songs already in playlist</source>
+        <translation>Titel bereits in der Wiedergabeliste</translation>
+    </message>
+    <message>
+        <source>Some songs are already in this playlist, would you like to add those again, or skip them?</source>
+        <translation>Einige Titel sind bereits in dieser Wiedergabeliste. Möchten Sie diese erneut hinzufügen oder überspringen?</translation>
+    </message>
+    <message>
+        <source>Add Again</source>
+        <translation>Erneut hinzufügen</translation>
+    </message>
+    <message>
+        <source>Skip</source>
+        <translation>Überspringen</translation>
     </message>
 </context>
 <context>
@@ -5913,10 +5986,6 @@ Prüfen Sie ihre Regeln mit „Bearbeiten“.</translation>
         <translation>Plex</translation>
     </message>
     <message>
-        <source>Download for Sync</source>
-        <translation type="vanished">Für Synchronisation laden</translation>
-    </message>
-    <message>
         <source>Account and server</source>
         <translation>Konto und Server</translation>
     </message>
@@ -5939,14 +6008,6 @@ Prüfen Sie ihre Regeln mit „Bearbeiten“.</translation>
     <message>
         <source>Plays and ratings</source>
         <translation>Wiedergaben und Bewertungen</translation>
-    </message>
-    <message>
-        <source>Send iPod plays to Plex during Sync</source>
-        <translation type="vanished">iPod-Wiedergaben bei der Synchronisation an Plex senden</translation>
-    </message>
-    <message>
-        <source>Each play is reported as a finished listen from a player named after your iPod (platform iPod), so it appears in Plex Play History.</source>
-        <translation type="vanished">Jede Wiedergabe wird als vollständig gehörter Titel von einem Player mit dem Namen deines iPods (Plattform iPod) gemeldet und erscheint so im Plex-Wiedergabeverlauf.</translation>
     </message>
     <message>
         <source>Sync star ratings now…</source>
@@ -5997,46 +6058,6 @@ Prüfen Sie ihre Regeln mit „Bearbeiten“.</translation>
         <translation>Deine gesamte Plex-Musik und alle Wiedergabelisten erscheinen in der Medienliste von „Mit Computer synchronisieren“, neben der Musik deines Computers. Wähle dort aus, was auf den iPod kommt; Titel werden erst geladen, wenn die Synchronisation sie kopiert. Downloads werden im Rahmen des Medien-Cache-Limits unter Einstellungen → Synchronisieren behalten.</translation>
     </message>
     <message>
-        <source>Connected to {name}. Its music appears in Sync with Host.</source>
-        <translation>Mit {name} verbunden. Die Musik erscheint in „Mit Computer synchronisieren“.</translation>
-    </message>
-    <message>
-        <source>Choose music</source>
-        <translation type="vanished">Musik auswählen</translation>
-    </message>
-    <message>
-        <source>Search artists, albums and songs</source>
-        <translation type="vanished">Künstler, Alben und Titel suchen</translation>
-    </message>
-    <message>
-        <source>Playlists</source>
-        <translation type="vanished">Wiedergabelisten</translation>
-    </message>
-    <message>
-        <source>Artists and albums</source>
-        <translation type="vanished">Künstler und Alben</translation>
-    </message>
-    <message>
-        <source>Search</source>
-        <translation type="vanished">Suchen</translation>
-    </message>
-    <message>
-        <source>Remove from selection</source>
-        <translation type="vanished">Aus Auswahl entfernen</translation>
-    </message>
-    <message>
-        <source>Reload Plex library</source>
-        <translation type="vanished">Plex-Mediathek neu laden</translation>
-    </message>
-    <message>
-        <source>Show downloads</source>
-        <translation type="vanished">Downloads anzeigen</translation>
-    </message>
-    <message>
-        <source>Selected for the iPod</source>
-        <translation type="vanished">Für den iPod ausgewählt</translation>
-    </message>
-    <message>
         <source>Signed in as {name} · {server}</source>
         <translation>Angemeldet als {name} · {server}</translation>
     </message>
@@ -6065,16 +6086,8 @@ Prüfen Sie ihre Regeln mit „Bearbeiten“.</translation>
         <translation>Angemeldet. Wähle einen Server.</translation>
     </message>
     <message>
-        <source>Connected to {name}.</source>
-        <translation type="vanished">Mit {name} verbunden.</translation>
-    </message>
-    <message>
-        <source>{playlists} playlists and {artists} artists.</source>
-        <translation type="vanished">{playlists} Wiedergabelisten und {artists} Künstler.</translation>
-    </message>
-    <message>
-        <source>{count} results.</source>
-        <translation type="vanished">{count} Ergebnisse.</translation>
+        <source>Connected to {name}. Its music appears in Sync with Host.</source>
+        <translation>Mit {name} verbunden. Die Musik erscheint in „Mit Computer synchronisieren“.</translation>
     </message>
     <message>
         <source>Set stars on {count} Plex songs.</source>
@@ -6091,30 +6104,6 @@ Prüfen Sie ihre Regeln mit „Bearbeiten“.</translation>
     <message>
         <source>Address, for example http://192.168.1.10:32400</source>
         <translation>Adresse, zum Beispiel http://192.168.1.10:32400</translation>
-    </message>
-    <message>
-        <source>Reading your Plex library…</source>
-        <translation type="vanished">Deine Plex-Mediathek wird gelesen…</translation>
-    </message>
-    <message>
-        <source>Playlist</source>
-        <translation type="vanished">Wiedergabeliste</translation>
-    </message>
-    <message>
-        <source>Artist</source>
-        <translation type="vanished">Künstler</translation>
-    </message>
-    <message>
-        <source>Album</source>
-        <translation type="vanished">Album</translation>
-    </message>
-    <message>
-        <source>Song</source>
-        <translation type="vanished">Titel</translation>
-    </message>
-    <message>
-        <source>Choose a Plex server first.</source>
-        <translation type="vanished">Wähle zuerst einen Plex-Server.</translation>
     </message>
     <message>
         <source>Star ratings already match. {unmatched} songs weren&apos;t found in Plex.</source>
@@ -6670,15 +6659,15 @@ Prüfen Sie ihre Regeln mit „Bearbeiten“.</translation>
     </message>
     <message>
         <source>Override for this iPod · Host: %1</source>
-        <translation>Eigener Wert für diesen iPod · Host: %1</translation>
+        <translation type="vanished">Eigener Wert für diesen iPod · Host: %1</translation>
     </message>
     <message>
         <source>Following Host changes automatically</source>
         <translation>Übernimmt Änderungen am Host automatisch</translation>
     </message>
     <message>
-        <source>The Active iPod has its own override.</source>
-        <translation>Der aktive iPod hat einen eigenen Wert.</translation>
+        <source>The Active iPod has its own override. Set to: %1.</source>
+        <translation>Der aktive iPod hat einen eigenen Wert. Eingestellt auf: %1.</translation>
     </message>
 </context>
 <context>
@@ -6698,10 +6687,6 @@ Prüfen Sie ihre Regeln mit „Bearbeiten“.</translation>
     <message>
         <source>Connect Last.fm or ListenBrainz in Settings → Sync to scrobble.</source>
         <translation type="vanished">Verbinden Sie Last.fm oder ListenBrainz unter Einstellungen → Synchronisieren, um zu scrobbeln.</translation>
-    </message>
-    <message>
-        <source>Connect Last.fm or ListenBrainz in Settings → Sync, or turn on Send plays to Plex in the Plex page.</source>
-        <translation type="vanished">Verbinde Last.fm oder ListenBrainz unter Einstellungen → Synchronisieren oder aktiviere auf der Plex-Seite „iPod-Wiedergaben an Plex senden“.</translation>
     </message>
     <message>
         <source>Could not save the Plex preference. Check Host storage.</source>
@@ -7450,6 +7435,17 @@ Prüfen Sie ihre Regeln mit „Bearbeiten“.</translation>
     </message>
 </context>
 <context>
+    <name>StarRating</name>
+    <message>
+        <source>Click a star to set the rating; click the selected star to clear</source>
+        <translation>Klicken Sie auf einen Stern, um die Bewertung festzulegen; klicken Sie zum Löschen erneut auf den ausgewählten Stern</translation>
+    </message>
+    <message>
+        <source>%1 of 5 stars</source>
+        <translation>%1 von 5 Sternen</translation>
+    </message>
+</context>
+<context>
     <name>StatusListButton</name>
     <message>
         <source>Active statuses (%1)</source>
@@ -7466,6 +7462,89 @@ Prüfen Sie ihre Regeln mit „Bearbeiten“.</translation>
     <message>
         <source>Close statuses</source>
         <translation>Statusmeldungen schließen</translation>
+    </message>
+</context>
+<context>
+    <name>StorageBreakdown</name>
+    <message>
+        <source>Storage</source>
+        <translation>Speicher</translation>
+    </message>
+    <message>
+        <source>Storage by category</source>
+        <translation>Speicher nach Kategorie</translation>
+    </message>
+    <message>
+        <source>Capacity unavailable</source>
+        <translation>Kapazität nicht verfügbar</translation>
+    </message>
+    <message>
+        <source>Storage details appear when an iPod is loaded.</source>
+        <translation>Die Speicherdetails erscheinen, sobald ein iPod geladen ist.</translation>
+    </message>
+    <message>
+        <source>This iPod&apos;s storage capacity is unavailable.</source>
+        <translation>Die Speicherkapazität dieses iPod ist nicht verfügbar.</translation>
+    </message>
+    <message>
+        <source>%1 free of %2</source>
+        <translation>%1 von %2 frei</translation>
+    </message>
+    <message>
+        <source>Music</source>
+        <translation>Musik</translation>
+    </message>
+    <message>
+        <source>Videos</source>
+        <translation>Videos</translation>
+    </message>
+    <message>
+        <source>Podcasts</source>
+        <translation>Podcasts</translation>
+    </message>
+    <message>
+        <source>Audiobooks</source>
+        <translation>Hörbücher</translation>
+    </message>
+    <message>
+        <source>Photos</source>
+        <translation>Fotos</translation>
+    </message>
+    <message>
+        <source>Games</source>
+        <translation>Spiele</translation>
+    </message>
+    <message>
+        <source>Album artwork</source>
+        <translation>Albumcover</translation>
+    </message>
+    <message>
+        <source>Other</source>
+        <translation>Sonstiges</translation>
+    </message>
+    <message>
+        <source>Free</source>
+        <translation>Frei</translation>
+    </message>
+    <message>
+        <source>Category sizes are unavailable because content sizes exceed used storage.</source>
+        <translation>Die Größen der Kategorien sind nicht verfügbar, weil die erfassten Dateigrößen den belegten Speicherplatz überschreiten.</translation>
+    </message>
+    <message>
+        <source>Media sizes are estimated from the saved library. Games and Album artwork use captured folder sizes. Other includes remaining databases and unclassified files.</source>
+        <translation>Die Mediengrößen werden anhand der gespeicherten Mediathek geschätzt. Spiele und Albumcover verwenden erfasste Ordnergrößen. Sonstiges umfasst die übrigen Datenbanken und nicht zugeordnete Dateien.</translation>
+    </message>
+    <message>
+        <source>Media sizes are estimated from the saved library; Games uses captured file sizes. Other includes artwork, databases, and unclassified files.</source>
+        <translation type="vanished">Die Mediengrößen werden anhand der gespeicherten Mediathek geschätzt; Spiele verwendet erfasste Dateigrößen. Sonstiges umfasst Cover, Datenbanken und nicht zugeordnete Dateien.</translation>
+    </message>
+    <message>
+        <source>Category sizes are unavailable because library sizes exceed used storage.</source>
+        <translation type="vanished">Die Größen der Kategorien sind nicht verfügbar, weil die in der Mediathek erfassten Dateigrößen den belegten Speicherplatz überschreiten.</translation>
+    </message>
+    <message>
+        <source>Category sizes are estimated from the saved library. Other includes artwork, databases, and unclassified files.</source>
+        <translation type="vanished">Die Größen der Kategorien werden anhand der gespeicherten Mediathek geschätzt. Sonstiges umfasst Cover, Datenbanken und nicht zugeordnete Dateien.</translation>
     </message>
 </context>
 <context>
@@ -10417,12 +10496,20 @@ Playlists: %3</translation>
         <translation>Ja/Nein-Bedingungen akzeptieren keinen zusätzlichen Wert.</translation>
     </message>
     <message>
+        <source>Building gameplay analysis · CPU</source>
+        <translation>Spielanalyse wird erstellt · CPU</translation>
+    </message>
+    <message>
         <source>Building the Host Media Library…</source>
         <translation>Mediathek auf dem Computer wird erstellt…</translation>
     </message>
     <message>
         <source>Cancellation arrived after publication began. Sync finished and verified the selected changes to keep the iPod Library consistent.</source>
         <translation>Der Abbruch wurde angefordert, nachdem die Übertragung begonnen hatte. Die Synchronisierung hat die ausgewählten Änderungen abgeschlossen und geprüft, um die iPod-Mediathek konsistent zu halten.</translation>
+    </message>
+    <message>
+        <source>Cancelling setup…</source>
+        <translation>Einrichtung wird abgebrochen…</translation>
     </message>
     <message>
         <source>Caption alarm controls may not work on this iPod. Original caption commands are retained.</source>
@@ -10593,6 +10680,10 @@ Playlists: %3</translation>
         <translation>Geprüfte Wiederherstellungsdateien der Synchronisierung werden entfernt…</translation>
     </message>
     <message>
+        <source>Combining musical evidence · CPU</source>
+        <translation>Musikalische Merkmale werden zusammengeführt · CPU</translation>
+    </message>
+    <message>
         <source>Committed Library files: {completed} of {total}</source>
         <translation>Gespeicherte Mediathek-Dateien: {completed} von {total}</translation>
     </message>
@@ -10721,8 +10812,16 @@ Playlists: %3</translation>
         <translation>Sommerzeitumschaltung</translation>
     </message>
     <message>
+        <source>Decoding audio with FFmpeg · CPU</source>
+        <translation>Audio wird mit FFmpeg dekodiert · CPU</translation>
+    </message>
+    <message>
         <source>Deleting obsolete Track files.</source>
         <translation>Nicht mehr benötigte Titeldateien werden gelöscht.</translation>
+    </message>
+    <message>
+        <source>Demucs htdemucs_6s</source>
+        <translation>Demucs htdemucs_6s</translation>
     </message>
     <message>
         <source>Derive firmware membership, flags, or representable values from the requested edit.</source>
@@ -10747,6 +10846,18 @@ Playlists: %3</translation>
     <message>
         <source>Downloading Podcast Episode…</source>
         <translation>Podcast-Folge wird heruntergeladen…</translation>
+    </message>
+    <message>
+        <source>Downloading and installing the analysis libraries…</source>
+        <translation>Analysebibliotheken werden heruntergeladen und installiert…</translation>
+    </message>
+    <message>
+        <source>Downloading the model and testing instrument analysis…</source>
+        <translation>Modell wird heruntergeladen und Instrumentenanalyse wird getestet…</translation>
+    </message>
+    <message>
+        <source>Downloading the verified setup tool…</source>
+        <translation>Verifiziertes Einrichtungswerkzeug wird heruntergeladen…</translation>
     </message>
     <message>
         <source>Downloading {title}…</source>
@@ -10849,6 +10960,10 @@ Playlists: %3</translation>
         <translation>Fingerabdruck für iPod-Bild {index} von {total} wird berechnet…</translation>
     </message>
     <message>
+        <source>Finishing analysis</source>
+        <translation>Analyse wird abgeschlossen</translation>
+    </message>
+    <message>
         <source>Flatpak</source>
         <translation>Flatpak</translation>
     </message>
@@ -10871,6 +10986,10 @@ Playlists: %3</translation>
     <message>
         <source>Free space at the reported location and retry.</source>
         <translation>Geben Sie am angegebenen Speicherort Platz frei und versuchen Sie es erneut.</translation>
+    </message>
+    <message>
+        <source>GPU setup could not finish. Retrying with CPU analysis…</source>
+        <translation>Die GPU-Einrichtung konnte nicht abgeschlossen werden. Neuer Versuch mit CPU-Analyse…</translation>
     </message>
     <message>
         <source>Game authorization is not supported for this firmware release.</source>
@@ -10911,6 +11030,26 @@ Playlists: %3</translation>
     <message>
         <source>Inspecting the converted media</source>
         <translation>Konvertierte Medien werden geprüft</translation>
+    </message>
+    <message>
+        <source>Installing a private Python runtime…</source>
+        <translation>Private Python-Laufzeit wird installiert…</translation>
+    </message>
+    <message>
+        <source>Instrument analysis is installed. Acoustic analysis remains available as a fallback.</source>
+        <translation>Die Instrumentenanalyse ist installiert. Die akustische Analyse bleibt als Ersatz verfügbar.</translation>
+    </message>
+    <message>
+        <source>Instrument analysis is ready for the next Phase save or Sync.</source>
+        <translation>Die Instrumentenanalyse ist für das nächste Speichern der Phase-Wiedergabeliste oder den nächsten Sync bereit.</translation>
+    </message>
+    <message>
+        <source>Instrument analysis is ready. Acoustic analysis remains available as a fallback.</source>
+        <translation>Die Instrumentenanalyse ist bereit. Die akustische Analyse bleibt als Rückfalloption verfügbar.</translation>
+    </message>
+    <message>
+        <source>Instrument analysis setup is unavailable on this system. Acoustic analysis remains available.</source>
+        <translation>Die Instrumentenanalyse kann auf diesem System nicht eingerichtet werden. Die akustische Analyse bleibt verfügbar.</translation>
     </message>
     <message>
         <source>Keep in iTunes source list</source>
@@ -10983,6 +11122,10 @@ Playlists: %3</translation>
     <message>
         <source>Listing Plex and Grimmory, and updating Immich, before Sync…</source>
         <translation>Plex und Grimmory werden aufgelistet und Immich wird aktualisiert, bevor synchronisiert wird…</translation>
+    </message>
+    <message>
+        <source>Loading Demucs htdemucs_6s</source>
+        <translation>Demucs htdemucs_6s wird geladen</translation>
     </message>
     <message>
         <source>Lyrics cannot be verified for this iPod&apos;s native player: {reason} The full lyrics and source file were not truncated.</source>
@@ -11685,6 +11828,10 @@ Playlists: %3</translation>
         <translation>Unveränderte Datei {index} von {total} wird wiederverwendet…</translation>
     </message>
     <message>
+        <source>Reusing verified analysis</source>
+        <translation>Geprüfte Analyse wird wiederverwendet</translation>
+    </message>
+    <message>
         <source>Review the application log, then try again.</source>
         <translation>Prüfen Sie das Anwendungsprotokoll und versuchen Sie es erneut.</translation>
     </message>
@@ -11829,12 +11976,20 @@ Playlists: %3</translation>
         <translation>Ausgewählte Podcasts</translation>
     </message>
     <message>
+        <source>Selecting hardware</source>
+        <translation>Hardware wird ausgewählt</translation>
+    </message>
+    <message>
         <source>Serializing database artifacts</source>
         <translation>Datenbankdateien werden serialisiert</translation>
     </message>
     <message>
         <source>Settings were verified, but the device flush was incomplete. Safe-eject the iPod before unplugging.</source>
         <translation>Die Einstellungen wurden überprüft, aber das vollständige Schreiben auf das Gerät wurde nicht bestätigt. Wirf den iPod sicher aus, bevor du ihn trennst.</translation>
+    </message>
+    <message>
+        <source>Setup could not finish. Acoustic analysis remains available.</source>
+        <translation>Die Einrichtung konnte nicht abgeschlossen werden. Die akustische Analyse bleibt verfügbar.</translation>
     </message>
     <message>
         <source>Shared Photo files have conflicting captured content.</source>
@@ -12219,6 +12374,18 @@ Playlists: %3</translation>
     <message>
         <source>The existing helper could not be read and was left unchanged; media analysis will continue without its cached Sync history: {error}</source>
         <translation>Die vorhandene Datei mit Synchronisierungsinformationen konnte nicht gelesen werden und wurde unverändert gelassen. Die Medienanalyse wird ohne ihren zwischengespeicherten Synchronisierungsverlauf fortgesetzt: {error}</translation>
+    </message>
+    <message>
+        <source>Acoustic analysis · librosa · CPU</source>
+        <translation>Akustische Analyse · librosa · CPU</translation>
+    </message>
+    <message>
+        <source>Phase · {detail} · {completed}/{total} tracks</source>
+        <translation>Phase · {detail} · {completed}/{total} Titel</translation>
+    </message>
+    <message>
+        <source>Reading and checking audio</source>
+        <translation>Audio wird gelesen und geprüft</translation>
     </message>
     <message>
         <source>The existing helper is invalid: {error}</source>
@@ -12713,6 +12880,10 @@ Playlists: %3</translation>
         <translation>Ein Videobild für {name} konnte nicht vorbereitet werden. Die Folge kann weiterhin ohne Cover synchronisiert werden.</translation>
     </message>
     <message>
+        <source>Acoustic analysis is included. Optional instrument analysis can be installed here.</source>
+        <translation>Die akustische Analyse ist enthalten. Hier können Sie die optionale Instrumentenanalyse installieren.</translation>
+    </message>
+    <message>
         <source>Album index rebuilding requires complete, unambiguous Master Playlist membership.</source>
         <translation>Zum Neuaufbau des Albumindex sind vollständige, eindeutige Einträge in der Hauptwiedergabeliste erforderlich.</translation>
     </message>
@@ -12738,7 +12909,7 @@ Playlists: %3</translation>
     </message>
     <message>
         <source>Analyzing Phase playlist audio</source>
-        <translation>Audio der Phase-Wiedergabeliste wird analysiert</translation>
+        <translation type="vanished">Audio der Phase-Wiedergabeliste wird analysiert</translation>
     </message>
     <message>
         <source>Another selected Host Playlist uses this iPod Playlist. Choose a different target or uncheck one.</source>
@@ -12805,8 +12976,22 @@ Playlists: %3</translation>
         <translation>Die Podcast-Einstellungen wurden weder beibehalten noch anhand der erfassten Standardwerte initialisiert.</translation>
     </message>
     <message>
+        <source>Preparing optional analysis setup…</source>
+        <translation>Optionale Analyseeinrichtung wird vorbereitet…</translation>
+    </message>
+    <message>
         <source>Remove the Genius Playlist emptied by Track deletion.</source>
         <translation>Entfernen Sie die Genius-Wiedergabeliste, die durch das Löschen von Titeln leer geworden ist.</translation>
+    </message>
+    <message>
+        <source>Setup cancelled. Acoustic analysis remains available.</source>
+        <translation>Einrichtung abgebrochen. Die akustische Analyse bleibt verfügbar.</translation>
+    </message>
+    <message>
+        <source>Setup could not finish: {error}
+Acoustic analysis remains available.</source>
+        <translation type="vanished">Die Einrichtung konnte nicht abgeschlossen werden: {error}
+Die akustische Analyse bleibt verfügbar.</translation>
     </message>
     <message>
         <source>The Phase Playlist producer marker is missing.</source>
@@ -12823,6 +13008,10 @@ Playlists: %3</translation>
     <message>
         <source>The native Chapter index selects the last eligible duplicate start. Editable Chapter metadata is retained.</source>
         <translation>Der native Kapitelindex wählt den letzten passenden Eintrag mit gleicher Startposition aus. Bearbeitbare Kapitelmetadaten bleiben erhalten.</translation>
+    </message>
+    <message>
+        <source>The previous instrument analysis setup needs attention. Acoustic analysis remains available.</source>
+        <translation>Die bisherige Einrichtung der Instrumentenanalyse muss überprüft werden. Die akustische Analyse bleibt verfügbar.</translation>
     </message>
     <message>
         <source>The referenced artwork item is absent. A reverse-owner image is not substituted; the raw artwork reference is preserved.</source>
@@ -12909,10 +13098,6 @@ Playlists: %3</translation>
         <translation>Nicht unterstützte Regeln intelligenter Wiedergabelisten sind schreibgeschützt.</translation>
     </message>
     <message>
-        <source>Updating Plex, Immich and Grimmory downloads before Sync…</source>
-        <translation type="vanished">Plex-, Immich- und Grimmory-Downloads werden vor der Synchronisation aktualisiert…</translation>
-    </message>
-    <message>
         <source>Use a finite number.</source>
         <translation>Verwenden Sie eine endliche Zahl.</translation>
     </message>
@@ -12951,6 +13136,10 @@ Playlists: %3</translation>
     <message>
         <source>Verifying Library files and recovery copies…</source>
         <translation>Mediathek-Dateien und Wiederherstellungskopien werden geprüft…</translation>
+    </message>
+    <message>
+        <source>Verifying audio</source>
+        <translation>Audio wird überprüft</translation>
     </message>
     <message>
         <source>Verifying files on the iPod before completing recovery…</source>
@@ -13185,6 +13374,14 @@ Beim Fortfahren wird das Autorisierungsformat für {model} versucht.</translatio
     <message>
         <source>{device_name} requires confirmation before restore.</source>
         <translation>{device_name} erfordert vor der Wiederherstellung eine Bestätigung.</translation>
+    </message>
+    <message>
+        <source>{method} + librosa · CPU</source>
+        <translation>{method} + librosa · CPU</translation>
+    </message>
+    <message>
+        <source>{method} · {hardware}</source>
+        <translation>{method} · {hardware}</translation>
     </message>
     <message>
         <source>{name} changed during preparation and was skipped. Rescan this source before retrying.</source>
@@ -13675,6 +13872,14 @@ Ein Neustart von iOpenPod entfernt keine bereits von udev zwischengespeicherten 
         <translation>Oberer Wert</translation>
     </message>
     <message>
+        <source>Rule rating</source>
+        <translation>Bewertung der Regel</translation>
+    </message>
+    <message>
+        <source>Upper rule rating</source>
+        <translation>Obere Bewertung der Regel</translation>
+    </message>
+    <message>
         <source>Rule time unit</source>
         <translation>Zeiteinheit der Regel</translation>
     </message>
@@ -13716,7 +13921,7 @@ Ein Neustart von iOpenPod entfernt keine bereits von udev zwischengespeicherten 
     </message>
     <message>
         <source>Use a rating between 0 and 5 stars, in steps of 0.05.</source>
-        <translation>Verwenden Sie eine Bewertung zwischen 0 und 5 Sternen in Schritten von 0,05.</translation>
+        <translation type="vanished">Verwenden Sie eine Bewertung zwischen 0 und 5 Sternen in Schritten von 0,05.</translation>
     </message>
 </context>
 <context>

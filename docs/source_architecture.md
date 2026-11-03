@@ -795,7 +795,7 @@ See [ADR-0219](adr/0219-confirm-unverified-game-compatibility.md).
 
 The Games Application Layer downloads and verifies the pinned preservation
 release, then extracts its complete collection into persistent Host storage.
-Gimme Games opens the bundled catalog only after that collection and authorization
+Install Games opens the bundled catalog only after that collection and authorization
 preparation are ready. Subsequent clicks reuse the extracted files; Add validates
 selected contents and publishes them through a Storage Transaction. Game payloads
 are excluded from application assets and release sources. See
@@ -807,6 +807,36 @@ to generate typed events, with content-checked reuse (ADR-0210). Full-mix pitche
 and percussive attacks remain available for native difficulty selection. An
 optional six-source provider adds estimated vocal/guitar and other Phase Parts,
 with recurring Phase Hooks guiding melodic preferences (ADR-0215, ADR-0217).
+An explicit Settings setup can install an isolated optional Python runtime in
+Host user data. Its child worker consumes temporary PCM and returns validated
+Phase Parts, without device access. Optional failures retry on CPU or retain
+acoustic analysis; provenance records the actual producer after analysis.
+Cancellation and Storage failures still stop preparation. See ADR-0225.
+One preparation retains its isolated worker and loaded model until completion or
+failure; standalone calls still release their worker after one request. Storage
+owns the process and its stdin lifetime pipe, which also ends a worker after
+parent-process loss. CUDA inference can overlap one bounded CPU feature block,
+while CPU and MPS remain serial. See ADR-0226.
+One preparation-owned reader captures up to five upcoming compressed inputs on
+the Host while the current Track is analyzed. Count and retained-byte limits bound
+staging; oversized inputs and Host capacity failures retain direct device reads.
+The capture supplies the initial source fingerprint. Persisted Phase metadata
+receipts bind content provenance to source/chart paths and filesystem identities.
+Matching receipts exclude retained inputs from audio reads, analysis and transaction
+content dependencies. Membership or ordering changes rebuild only the companion
+index; fresh analysis retains full source hashes and transaction preconditions.
+Legacy or damaged receipts fall back to content verification. Device reads stay
+serialized and caller callbacks stay on the coordinator. See ADR-0227 and ADR-0232.
+Whole-mix measurement can run concurrently with confirmed CUDA source analysis
+for the same Track. Immutable compact evidence meets source Parts only in final
+chart selection. CPU/PCM bounds retain serial execution on constrained inputs;
+managed capability comes from validated live responses, not installation receipts.
+Only the preparation caller invokes application callbacks or changes fallback
+identity. Cancellation joins all mix work. See ADR-0228.
+Phase activity and audio-duration ETA snapshots follow the preparation caller
+through Library write progress to shared status controls. Optional request-scoped
+worker telemetry identifies the live backend without granting scheduling or
+publication authority. The estimate covers this preparation stage only. See ADR-0229.
 Audible percussion anchors competing attacks and receives a bounded magnitude
 preference; melodic evidence remains available through drum breaks (ADR-0222).
 Pulse tracking and full-mix energy remain independent of those preferences.
@@ -2847,12 +2877,29 @@ PhotoPage
 TracksPage
 PlaylistsPage
 PodcastsPage
-DevicePage
+DeviceSummaryPage
 BackupPage
 SettingsPage
 ```
 
 Pages should primarily compose reusable widgets and connect them to application models/services.
+
+`DeviceSummaryPage` projects the Active iPod's profile, committed Library Snapshot,
+captured firmware and product serial, and Volume capacity without device I/O.
+Firmware and serial fields prefer current hardware evidence and withhold equally
+authoritative conflicts or missing observations. The sidebar device information
+opens it while its existing buttons retain their actions. A shared storage widget
+presents typed Application Layer category estimates, keeps unclassified usage in
+Other, and falls back to used/free capacity when metadata is inconsistent. Photo
+estimates count stored representation ranges rather than source sizes. Games uses
+the regular-file sizes captured through Storage at selection from Games_RO,
+GameData_RW, and GameStats_WO; missing folders are empty and failed measurements
+leave usage in Other. Album artwork similarly counts the entire Artwork folder,
+including its database and unused thumbnail bytes. Games uses pink and Album
+artwork uses cyan through shared theme tokens. No file-content reads or
+page-triggered scans occur. The page
+uses the shared theme and device artwork; Restore iPod remains disabled with no
+operation attached. See ADR-0230.
 
 Avoid rebuilding the same visual patterns independently on every page.
 

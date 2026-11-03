@@ -58,7 +58,7 @@ media cache limit in Settings → Sync (or removed after each Sync when the cach
 off). Immich picks are downloaded there and refreshed when you start **Sync with
 Host**. Everything goes through the normal Sync Review. Sign-ins
 and keys are kept in your system keychain. See
-[ADR-0225](docs/adr/0225-add-connected-sources-and-ipod-extras.md) for the design.
+[ADR-0900](docs/adr/0900-add-connected-sources-and-ipod-extras.md) for the design.
 
 Builds of this fork check
 [this fork's releases](https://github.com/9retirement6irk/iOpenPod/releases) for
@@ -213,7 +213,7 @@ and save those edits together. Sync always has its own selection and review flow
 
 ### Install click wheel games without a virtual machine
 
-Start with one click on **Gimme Games** in the Games page. iOpenPod downloads
+Start with one click on **Install Games** in the Games page. iOpenPod downloads
 the full preserved click wheel game collection and prepares game authorization
 for your iPod. Choose **Select all → Add** to install the collection, or pick
 individual games. No virtual machine is required.
@@ -221,7 +221,7 @@ individual games. No virtual machine is required.
 The first download needs an internet connection; later visits reuse the files
 on your computer. Game compatibility depends on your iPod model and firmware.
 
-![Games page showing installed click wheel games and the Gimme Games button](https://raw.githubusercontent.com/TheRealSavi/iOpenPod/main/website/screenshots/iop2/click-wheel-games.webp)
+![Games page showing installed click wheel games and the Install Games button](https://raw.githubusercontent.com/TheRealSavi/iOpenPod/main/website/screenshots/iop2/click-wheel-games.webp)
 
 ### Make a Phase Playlist from your music
 
@@ -234,7 +234,10 @@ The analyzer detects beats and musical attacks, with an emphasis on audible
 percussion. With the optional music analysis model installed, it also separates
 estimated vocals, drums, guitar, bass, piano, and other sounds, and recognizes
 recurring musical phrases. These help it follow the rhythm and prominent parts
-of a song. Acoustic analysis works without the optional model. Audio decoding requires FFmpeg and FFprobe.
+of a song. Acoustic analysis works without the optional model. Use **Settings →
+Media Tools → Set Up Phase Analysis** to download optional instrument analysis;
+setup can use several gigabytes. If optional analysis cannot run, iOpenPod uses
+acoustic analysis. Audio decoding uses your configured FFmpeg executable.
 
 ![Phase Playlist with its game icon, track list, and Phase banner](https://raw.githubusercontent.com/TheRealSavi/iOpenPod/main/website/screenshots/iop2/phase-playlist.webp)
 
