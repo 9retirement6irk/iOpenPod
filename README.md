@@ -29,6 +29,25 @@ See [iPod compatibility](#ipod-compatibility) before getting started.
 
 ![iOpenPod album library with album artwork and the selected album track list](https://raw.githubusercontent.com/TheRealSavi/iOpenPod/main/website/screenshots/iop2/album-library.webp)
 
+## This fork: Connected Sources
+
+This fork adds pages under **Connected** in the sidebar. They sync from your own
+servers without exporting anything by hand:
+
+* **Plex**: sign in with your Plex account and pick playlists, artists, albums, or
+  songs. Optionally send iPod plays to Plex (they show up in Play History as your
+  iPod) and sync star ratings both ways.
+* **Immich**: pick Favorites, albums, people, or individual photos, with previews.
+* **Grimmory**: pick audiobooks from your Grimmory library over OPDS.
+* **Notes**: send Memos notes with chosen tags to Extras → Notes (Memos 26.10 and
+  earlier).
+* **Calendars**: send `.ics` files and calendar links to Extras → Calendars.
+
+Picks are downloaded to `~/Music/iOpenPod Connected` and refreshed automatically
+when you start **Sync with Host**, so they go through the normal Sync Review. Sign-ins
+and keys are kept in your system keychain. See
+[ADR-0225](docs/adr/0225-add-connected-sources-and-ipod-extras.md) for the design.
+
 ## Download and install
 
 <!-- markdownlint-disable MD033 -->

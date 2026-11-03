@@ -12,7 +12,7 @@ from storage import Storage
 
 from .clients import LastFmClient, ListenBrainzClient
 from .credentials import SystemCredentialStore
-from .models import ScrobbleError, ScrobbleResult, Service
+from .models import Credentials, ScrobbleError, ScrobbleResult, Service
 from .queue import ScrobbleQueue
 from .service import ScrobbleService
 from .settings import account_setting, configured_accounts
@@ -187,6 +187,18 @@ class ScrobbleController(QObject):
 
         self._start(connect)
 
+    def connect_plex(self, credentials: Credentials) -> None:
+        """Send this Plex server's plays from the Plex page's connection."""
+
+        if not self.available:
+            return
+
+        def connect() -> _AccountChange:
+            self._credentials.save(Service.PLEX, credentials)
+            return _AccountChange(Service.PLEX, credentials.username)
+
+        self._start(connect)
+
     def disconnect_service(self, service: Service) -> None:
         if not self.available:
             return
@@ -205,7 +217,7 @@ class ScrobbleController(QObject):
         if not accounts:
             self.message.emit(
                 self.tr(
-                    "Connect Last.fm or ListenBrainz in Settings → Sync to scrobble."
+                    "Connect Last.fm or ListenBrainz in Settings → Sync, or turn on Send plays to Plex in the Plex page."
                 )
             )
             return False

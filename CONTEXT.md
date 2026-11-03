@@ -14,6 +14,13 @@ then beyond it.
 
 ## Current stage
 
+Connected Sources (Plex, Immich, Grimmory) materialize Selections as Host Media
+Library folders that Sync refreshes before scanning, and iPod Extras (Memos notes and
+calendars) publish through Storage with an ownership manifest. Plex is also a
+Scrobbling service for iPod plays, with two-way star ratings. Virtual-volume and
+scripted-protocol tests cover the work; physical-device acceptance is unverified. See
+[ADR-0225](docs/adr/0225-add-connected-sources-and-ipod-extras.md).
+
 Library preparation now makes dataset 2 agree with authoritative dataset 3.
 Missing, extra, conflicting, and reordered Playlists are reconciled for every
 write, including repair-only preparations. Podcast Episodes remain grouped in

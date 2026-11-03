@@ -10,10 +10,15 @@ SCROBBLE_DURING_SYNC = SettingDefinition(
 )
 LASTFM_USERNAME = SettingDefinition("scrobbling/lastfm-username", str, "")
 LISTENBRAINZ_USERNAME = SettingDefinition("scrobbling/listenbrainz-username", str, "")
+PLEX_USERNAME = SettingDefinition("scrobbling/plex-username", str, "")
 
 
 def account_setting(service: Service) -> SettingDefinition[str]:
-    return LASTFM_USERNAME if service is Service.LASTFM else LISTENBRAINZ_USERNAME
+    return {
+        Service.LASTFM: LASTFM_USERNAME,
+        Service.LISTENBRAINZ: LISTENBRAINZ_USERNAME,
+        Service.PLEX: PLEX_USERNAME,
+    }[service]
 
 
 def configured_accounts(settings: SettingsService) -> tuple[Account, ...]:

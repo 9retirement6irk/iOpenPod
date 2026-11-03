@@ -24,6 +24,11 @@ class PageId(StrEnum):
     MUSIC_VIDEOS = "music-videos"
     VIDEOS = "videos"
     SYNESTHESIA = "synesthesia"
+    PLEX = "plex"
+    IMMICH = "immich"
+    GRIMMORY = "grimmory"
+    NOTES = "notes"
+    CALENDARS = "calendars"
     BACKUPS = "backups"
     NORMALIZE_TAGS = "normalize-tags"
     SETTINGS = "settings"
@@ -47,6 +52,11 @@ _PAGE_LABEL_SOURCES = cast(
         PageId.MUSIC_VIDEOS: QT_TRANSLATE_NOOP("Navigation", "Music Videos"),
         PageId.VIDEOS: QT_TRANSLATE_NOOP("Navigation", "Videos"),
         PageId.SYNESTHESIA: QT_TRANSLATE_NOOP("Navigation", "Synesthesia"),
+        PageId.PLEX: QT_TRANSLATE_NOOP("Navigation", "Plex"),
+        PageId.IMMICH: QT_TRANSLATE_NOOP("Navigation", "Immich"),
+        PageId.GRIMMORY: QT_TRANSLATE_NOOP("Navigation", "Grimmory"),
+        PageId.NOTES: QT_TRANSLATE_NOOP("Navigation", "Notes"),
+        PageId.CALENDARS: QT_TRANSLATE_NOOP("Navigation", "Calendars"),
         PageId.BACKUPS: QT_TRANSLATE_NOOP("Navigation", "Backups"),
         PageId.NORMALIZE_TAGS: QT_TRANSLATE_NOOP("Navigation", "Normalize Tags"),
         PageId.SETTINGS: QT_TRANSLATE_NOOP("Navigation", "Settings"),

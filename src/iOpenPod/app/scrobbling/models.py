@@ -9,10 +9,15 @@ LASTFM_MAX_AGE = 14 * 86400
 class Service(StrEnum):
     LASTFM = "lastfm"
     LISTENBRAINZ = "listenbrainz"
+    PLEX = "plex"
 
     @property
     def label(self) -> str:
-        return "Last.fm" if self is Service.LASTFM else "ListenBrainz"
+        return {
+            Service.LASTFM: "Last.fm",
+            Service.LISTENBRAINZ: "ListenBrainz",
+            Service.PLEX: "Plex",
+        }[self]
 
 
 class ScrobbleError(Exception):

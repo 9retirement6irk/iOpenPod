@@ -358,6 +358,10 @@ class Submitter(Protocol):
 
 
 def client_for(service: Service) -> Submitter:
+    if service is Service.PLEX:
+        from .plex import PlexScrobbleClient
+
+        return PlexScrobbleClient()
     return LastFmClient() if service is Service.LASTFM else ListenBrainzClient()
 
 

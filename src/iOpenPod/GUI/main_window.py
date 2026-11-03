@@ -1,6 +1,7 @@
 """Main application-shell composition for the QWidget prototype."""
 
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -27,6 +28,8 @@ from iOpenPod.app.artwork_controller import ArtworkLoadFailure
 from iOpenPod.app.artwork_policy import rockbox_tag_policy
 from iOpenPod.app.backups import BackupProgress
 from iOpenPod.app.chaptered_conversion_controller import ChapteredConversionController
+from iOpenPod.app.connected.config import ConnectedConfigStore
+from iOpenPod.app.connected_controller import ConnectedController, ConnectedSource
 from iOpenPod.app.context import AppContext
 from iOpenPod.app.core.settings.definitions import (
     PLAYER_POSITION,
@@ -98,6 +101,13 @@ from iOpenPod.GUI.dialogs.tag_normalizer import TagNormalizerDialog
 from iOpenPod.GUI.navigation import PageId
 from iOpenPod.GUI.pages.backup_page import BackupPage
 from iOpenPod.GUI.pages.collection_page import CollectionPage
+from iOpenPod.GUI.pages.connected_pages import (
+    CalendarsPage,
+    GrimmoryPage,
+    ImmichPage,
+    NotesPage,
+    PlexPage,
+)
 from iOpenPod.GUI.pages.games_page import GamesPage
 from iOpenPod.GUI.pages.genius_page import GeniusPage
 from iOpenPod.GUI.pages.library_page import LibraryPage
@@ -133,7 +143,7 @@ from iOpenPod.GUI.widgets.status_controls import StatusBarControls
 from iOpenPod.GUI.widgets.status_list import StatusListButton
 from iOpenPod.GUI.widgets.track_actions import TrackActions
 from iPodDB.library import MediaKind, Photo, Track, TrackFieldEdit
-from storage import HostPath
+from storage import HostPath, Storage
 
 logger = logging.getLogger(__name__)
 
@@ -220,6 +230,20 @@ class MainWindow(QMainWindow):
             self,
         )
         self._scrobbling.message.connect(self._scrobble_message)
+        self._connected = ConnectedController(
+            context.settings,
+            ConnectedConfigStore(
+                Storage().host_config_file("iOpenPod", "connected-sources.json")
+            ),
+            context.device_controller,
+            context.device_coordinator,
+            self,
+        )
+        self._connected.result.connect(self._connected_result)
+        self._connected.message.connect(self._connected_message)
+        self._connected.progress.connect(self._connected_progress)
+        self._connected.signInUrl.connect(self._open_sign_in_url)
+        self._pending_sync_folders: tuple[HostMediaFolder, ...] | None = None
         self._scrobbling.finished.connect(self._scrobble_finished)
         self._sync_controller = SyncController(
             SyncExecutor(
@@ -512,6 +536,13 @@ class MainWindow(QMainWindow):
         )
         exit_fullscreen.setAutoRepeat(False)
         exit_fullscreen.activated.connect(self._exit_synesthesia_fullscreen)
+        self._plex_page = PlexPage(
+            self._connected, self._scrobbling, context.library_workspace, self._pages
+        )
+        self._immich_page = ImmichPage(self._connected, self._pages)
+        self._grimmory_page = GrimmoryPage(self._connected, self._pages)
+        self._notes_page = NotesPage(self._connected, self._pages)
+        self._calendars_page = CalendarsPage(self._connected, self._pages)
         self._page_widgets: dict[PageId, QWidget] = {
             PageId.ALBUMS: self._library_page,
             PageId.ARTISTS: artists_page,
@@ -530,6 +561,11 @@ class MainWindow(QMainWindow):
             PageId.PODCASTS: self._podcast_page,
             PageId.PHOTOS: self._photo_page,
             PageId.SYNESTHESIA: self._synesthesia_page,
+            PageId.PLEX: self._plex_page,
+            PageId.IMMICH: self._immich_page,
+            PageId.GRIMMORY: self._grimmory_page,
+            PageId.NOTES: self._notes_page,
+            PageId.CALENDARS: self._calendars_page,
         }
         self._library_pages = (
             self._library_page,
@@ -553,6 +589,14 @@ class MainWindow(QMainWindow):
         self._pages.addWidget(self._backup_page)
         self._pages.addWidget(self._synesthesia_page)
         self._pages.addWidget(self._settings_page)
+        for connected_page in (
+            self._plex_page,
+            self._immich_page,
+            self._grimmory_page,
+            self._notes_page,
+            self._calendars_page,
+        ):
+            self._pages.addWidget(connected_page)
 
         library_layout.addWidget(self._sidebar)
         library_layout.addWidget(self._pages, stretch=1)
@@ -1202,6 +1246,7 @@ class MainWindow(QMainWindow):
         self._host_drop.shutdown()
         self._media_tools.shutdown()
         self._scrobbling.shutdown()
+        self._connected.shutdown()
         self._exit_synesthesia_fullscreen()
         self._sync_controller.shutdown()
         self._normalization.shutdown()
@@ -1662,7 +1707,69 @@ class MainWindow(QMainWindow):
             folders = dialog.folders
         finally:
             dialog.deleteLater()
+        if self._refresh_connected_sources(folders):
+            return
         self._start_host_sync(folders)
+
+    def _refresh_connected_sources(self, folders: tuple[HostMediaFolder, ...]) -> bool:
+        """Download Connected Source Selections first when Sync includes their folders."""
+
+        connected = {
+            source
+            for source in (
+                ConnectedSource.PLEX,
+                ConnectedSource.IMMICH,
+                ConnectedSource.GRIMMORY,
+            )
+            if any(
+                os.path.normcase(os.path.normpath(os.fspath(folder.path)))
+                == os.path.normcase(
+                    os.path.normpath(os.fspath(self._connected.folder(source)))
+                )
+                for folder in folders
+            )
+        }
+        config = self._connected.config
+        sources = tuple(
+            source
+            for source, picks in (
+                (ConnectedSource.PLEX, config.plex.picks),
+                (ConnectedSource.IMMICH, config.immich.picks),
+                (ConnectedSource.GRIMMORY, config.grimmory.picks),
+            )
+            if picks and source in connected
+        )
+        if not sources or not self._connected.refresh(sources):
+            return False
+        self._pending_sync_folders = folders
+        self._context.status.show(
+            "connected.refresh",
+            source_text("Updating Plex, Immich and Grimmory downloads before Sync…"),
+        )
+        return True
+
+    def _open_sign_in_url(self, url: str) -> None:
+        open_desktop_url(QUrl(url))
+
+    def _connected_result(self, operation: str, _value: object) -> None:
+        folders = self._pending_sync_folders
+        if operation == "refresh" and folders is not None:
+            self._pending_sync_folders = None
+            self._context.status.clear("connected.refresh")
+            self._start_host_sync(folders)
+
+    def _connected_message(self, text: str) -> None:
+        if self._pending_sync_folders is not None:
+            folders = self._pending_sync_folders
+            self._pending_sync_folders = None
+            self._context.status.show("connected.refresh", text, timeout_ms=15_000)
+            if text != "Cancelled.":
+                # A download problem should not block syncing what is already here.
+                self._start_host_sync(folders)
+
+    def _connected_progress(self, text: str) -> None:
+        if self._pending_sync_folders is not None and text:
+            self._context.status.show("connected.refresh", text)
 
     def _can_drop_host_media(self) -> bool:
         return (
@@ -1675,6 +1782,11 @@ class MainWindow(QMainWindow):
                 PageId.PODCASTS,
                 PageId.GENIUS,
                 PageId.GAMES,
+                PageId.PLEX,
+                PageId.IMMICH,
+                PageId.GRIMMORY,
+                PageId.NOTES,
+                PageId.CALENDARS,
             )
             and self._context.device_controller.active_ipod is not None
             and not self._context.device_controller.busy

@@ -64,6 +64,13 @@ _LIBRARY = (
     _NavigationDefinition(PageId.MUSIC_VIDEOS, "video"),
     _NavigationDefinition(PageId.VIDEOS, "video"),
 )
+_CONNECTED = (
+    _NavigationDefinition(PageId.PLEX, "server"),
+    _NavigationDefinition(PageId.IMMICH, "photo"),
+    _NavigationDefinition(PageId.GRIMMORY, "book"),
+    _NavigationDefinition(PageId.NOTES, "note"),
+    _NavigationDefinition(PageId.CALENDARS, "calendar"),
+)
 _VIDEO_PAGES = frozenset(
     {
         PageId.MOVIES,
@@ -492,7 +499,7 @@ class Sidebar(QFrame):
         self.setObjectName("appSidebar")
         self.setFixedWidth(LAYOUT.sidebar_width)
         self._buttons: dict[PageId, NavigationButton] = {}
-        self._definitions = (*_MAINTENANCE, *_LIBRARY)
+        self._definitions = (*_MAINTENANCE, *_LIBRARY, *_CONNECTED)
         self._button_group = QButtonGroup(self)
         self._button_group.setExclusive(True)
         self._active_profile: DeviceProfile | None = None
@@ -518,6 +525,8 @@ class Sidebar(QFrame):
         self._maintenance_label.setObjectName("sidebarSectionLabel")
         self._library_label = QLabel(self)
         self._library_label.setObjectName("sidebarSectionLabel")
+        self._connected_label = QLabel(self)
+        self._connected_label.setObjectName("sidebarSectionLabel")
 
         navigation = QWidget(self)
         navigation.setObjectName("sidebarNavigation")
@@ -562,6 +571,10 @@ class Sidebar(QFrame):
             navigation_layout.addWidget(self._make_button(definition))
             if definition.page_id is PageId.TRACKS and self.playlist_tree is not None:
                 navigation_layout.addWidget(self.playlist_tree)
+        navigation_layout.addSpacing(LAYOUT.space_sm)
+        navigation_layout.addWidget(self._connected_label)
+        for definition in _CONNECTED:
+            navigation_layout.addWidget(self._make_button(definition))
         navigation_layout.addStretch(1)
 
         scroll = QScrollArea(self)
@@ -639,13 +652,14 @@ class Sidebar(QFrame):
         self._sync.setText(self.tr("Sync with Host"))
         self._scrobble.setText(self.tr("Scrobble now"))
         self._scrobble.setToolTip(
-            self.tr("Submit pending iPod plays to Last.fm and ListenBrainz.")
+            self.tr("Submit pending iPod plays to Last.fm, ListenBrainz and Plex.")
         )
         if not self._sync.isEnabled():
             self._sync.setToolTip(self.tr("Select an Active iPod before Sync."))
         self._review.setText(self.tr("Review Changes"))
         self._maintenance_label.setText(self.tr("Maintenance"))
         self._library_label.setText(self.tr("Library"))
+        self._connected_label.setText(self.tr("Connected"))
         for definition in self._definitions:
             self._buttons[definition.page_id].setText(page_label(definition.page_id))
         self._settings.setText(page_label(PageId.SETTINGS))

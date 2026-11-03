@@ -855,6 +855,101 @@
     </message>
 </context>
 <context>
+    <name>CalendarsPage</name>
+    <message>
+        <source>Calendars</source>
+        <translation>Calendarios</translation>
+    </message>
+    <message>
+        <source>Send calendars to iPod</source>
+        <translation>Enviar calendarios al iPod</translation>
+    </message>
+    <message>
+        <source>Calendar files</source>
+        <translation>Archivos de calendario</translation>
+    </message>
+    <message>
+        <source>Add .ics file…</source>
+        <translation>Añadir archivo .ics…</translation>
+    </message>
+    <message>
+        <source>Rename</source>
+        <translation>Renombrar</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>Quitar</translation>
+    </message>
+    <message>
+        <source>Calendar links</source>
+        <translation>Enlaces de calendario</translation>
+    </message>
+    <message>
+        <source>Add link…</source>
+        <translation>Añadir enlace…</translation>
+    </message>
+    <message>
+        <source>Subscription links (https:// or webcal://, such as Google Calendar&apos;s secret iCal address) are downloaded fresh each time and kept in your system keychain because they can contain private tokens.</source>
+        <translation>Los enlaces de suscripción (https:// o webcal://, como la dirección secreta en formato iCal de Google Calendar) se descargan de nuevo cada vez y se guardan en el llavero del sistema porque pueden contener tokens privados.</translation>
+    </message>
+    <message>
+        <source>Keep everything</source>
+        <translation>Conservar todo</translation>
+    </message>
+    <message>
+        <source>Leave out events that ended over a week ago</source>
+        <translation>Omitir eventos que terminaron hace más de una semana</translation>
+    </message>
+    <message>
+        <source>Leave out events that ended over a month ago</source>
+        <translation>Omitir eventos que terminaron hace más de un mes</translation>
+    </message>
+    <message>
+        <source>Leave out events that ended over 3 months ago</source>
+        <translation>Omitir eventos que terminaron hace más de 3 meses</translation>
+    </message>
+    <message>
+        <source>Leave out events that ended over a year ago</source>
+        <translation>Omitir eventos que terminaron hace más de un año</translation>
+    </message>
+    <message>
+        <source>Calendars appear in Extras → Calendars on iPods that have it. Each send replaces only the calendars iOpenPod put there.</source>
+        <translation>Los calendarios aparecen en Extras → Calendarios en los iPod que lo tienen. Cada envío solo reemplaza los calendarios que iOpenPod puso allí.</translation>
+    </message>
+    <message>
+        <source>{count} calendars on the iPod ({dropped} old events left out).</source>
+        <translation>{count} calendarios en el iPod ({dropped} eventos antiguos omitidos).</translation>
+    </message>
+    <message>
+        <source>Eject the iPod, then look in Extras → Calendars.</source>
+        <translation>Expulsa el iPod y busca en Extras → Calendarios.</translation>
+    </message>
+    <message>
+        <source>Add calendars</source>
+        <translation>Añadir calendarios</translation>
+    </message>
+    <message>
+        <source>Calendar name</source>
+        <translation>Nombre del calendario</translation>
+    </message>
+    <message>
+        <source>Name on the iPod</source>
+        <translation>Nombre en el iPod</translation>
+    </message>
+    <message>
+        <source>Calendar link</source>
+        <translation>Enlace de calendario</translation>
+    </message>
+    <message>
+        <source>Link (https:// or webcal://)</source>
+        <translation>Enlace (https:// o webcal://)</translation>
+    </message>
+    <message>
+        <source>Name on the iPod (optional)</source>
+        <translation>Nombre en el iPod (opcional)</translation>
+    </message>
+</context>
+<context>
     <name>ChapterEditor</name>
     <message>
         <source>Start (ms)</source>
@@ -1048,6 +1143,69 @@
     <message>
         <source>Deselect All</source>
         <translation>Deseleccionar todo</translation>
+    </message>
+</context>
+<context>
+    <name>ConnectedController</name>
+    <message>
+        <source>Could not save Connected Source choices: {error}</source>
+        <translation>No se pudieron guardar las opciones de las fuentes conectadas: {error}</translation>
+    </message>
+    <message>
+        <source>Another Connected Source task is still running.</source>
+        <translation>Otra tarea de fuentes conectadas sigue en curso.</translation>
+    </message>
+    <message>
+        <source>The iPod is busy. Try again when it&apos;s idle.</source>
+        <translation>El iPod está ocupado. Vuelve a intentarlo cuando esté libre.</translation>
+    </message>
+    <message>
+        <source>Sign in to Plex first.</source>
+        <translation>Inicia sesión en Plex primero.</translation>
+    </message>
+    <message>
+        <source>Choose a Plex server first.</source>
+        <translation>Elige primero un servidor de Plex.</translation>
+    </message>
+    <message>
+        <source>Connect an iPod to sync star ratings.</source>
+        <translation>Conecta un iPod para sincronizar las valoraciones.</translation>
+    </message>
+    <message>
+        <source>Reading your Plex music library…</source>
+        <translation>Leyendo tu biblioteca de música de Plex…</translation>
+    </message>
+    <message>
+        <source>Setting Plex stars {index} of {total}…</source>
+        <translation>Poniendo estrellas en Plex: {index} de {total}…</translation>
+    </message>
+    <message>
+        <source>Connect an iPod to send notes.</source>
+        <translation>Conecta un iPod para enviar notas.</translation>
+    </message>
+    <message>
+        <source>Reading memos…</source>
+        <translation>Leyendo memos…</translation>
+    </message>
+    <message>
+        <source>Writing notes to the iPod…</source>
+        <translation>Escribiendo notas en el iPod…</translation>
+    </message>
+    <message>
+        <source>That calendar is larger than 50 MB.</source>
+        <translation>Ese calendario ocupa más de 50 MB.</translation>
+    </message>
+    <message>
+        <source>Connect an iPod to send calendars.</source>
+        <translation>Conecta un iPod para enviar calendarios.</translation>
+    </message>
+    <message>
+        <source>Downloading calendar {index} of {total}…</source>
+        <translation>Descargando calendario {index} de {total}…</translation>
+    </message>
+    <message>
+        <source>Writing calendars to the iPod…</source>
+        <translation>Escribiendo calendarios en el iPod…</translation>
     </message>
 </context>
 <context>
@@ -2079,6 +2237,77 @@
     </message>
 </context>
 <context>
+    <name>GrimmoryPage</name>
+    <message>
+        <source>Grimmory Audiobooks</source>
+        <translation>Audiolibros de Grimmory</translation>
+    </message>
+    <message>
+        <source>Download for Sync</source>
+        <translation>Descargar para sincronizar</translation>
+    </message>
+    <message>
+        <source>Server</source>
+        <translation>Servidor</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Conectar</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>Dirección</translation>
+    </message>
+    <message>
+        <source>OPDS username</source>
+        <translation>Usuario OPDS</translation>
+    </message>
+    <message>
+        <source>OPDS password</source>
+        <translation>Contraseña OPDS</translation>
+    </message>
+    <message>
+        <source>Create an OPDS user in Grimmory&apos;s settings. iOpenPod never needs your main password.</source>
+        <translation>Crea un usuario OPDS en los ajustes de Grimmory. iOpenPod nunca necesita tu contraseña principal.</translation>
+    </message>
+    <message>
+        <source>Choose audiobooks</source>
+        <translation>Elegir audiolibros</translation>
+    </message>
+    <message>
+        <source>Search audiobooks</source>
+        <translation>Buscar audiolibros</translation>
+    </message>
+    <message>
+        <source>Show downloads</source>
+        <translation>Mostrar descargas</translation>
+    </message>
+    <message>
+        <source>{count} audiobooks selected</source>
+        <translation>{count} audiolibros seleccionados</translation>
+    </message>
+    <message>
+        <source>Connecting to Grimmory…</source>
+        <translation>Conectando con Grimmory…</translation>
+    </message>
+    <message>
+        <source>All audiobooks</source>
+        <translation>Todos los audiolibros</translation>
+    </message>
+    <message>
+        <source>Connected. Choose a library or shelf.</source>
+        <translation>Conectado. Elige una biblioteca o estantería.</translation>
+    </message>
+    <message>
+        <source>Loading audiobooks…</source>
+        <translation>Cargando audiolibros…</translation>
+    </message>
+    <message>
+        <source>{count} audiobooks.</source>
+        <translation>{count} audiolibros.</translation>
+    </message>
+</context>
+<context>
     <name>HostMediaDropTarget</name>
     <message>
         <source>Drop to Sync with Host</source>
@@ -2128,6 +2357,97 @@
     <message>
         <source>Preferences have not been loaded for this iPod.</source>
         <translation>No se han cargado las preferencias de este iPod.</translation>
+    </message>
+</context>
+<context>
+    <name>ImmichPage</name>
+    <message>
+        <source>Immich</source>
+        <translation>Immich</translation>
+    </message>
+    <message>
+        <source>Download for Sync</source>
+        <translation>Descargar para sincronizar</translation>
+    </message>
+    <message>
+        <source>Server</source>
+        <translation>Servidor</translation>
+    </message>
+    <message>
+        <source>API key</source>
+        <translation>Clave de API</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Conectar</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>Dirección</translation>
+    </message>
+    <message>
+        <source>Create a key in Immich → Account Settings → API Keys with album.read, asset.read, asset.view, person.read and (for Full size) asset.download.</source>
+        <translation>Crea una clave en Immich → Ajustes de la cuenta → Claves de API con album.read, asset.read, asset.view, person.read y (para tamaño completo) asset.download.</translation>
+    </message>
+    <message>
+        <source>Choose photos</source>
+        <translation>Elegir fotos</translation>
+    </message>
+    <message>
+        <source>iPod size (smaller, faster)</source>
+        <translation>Tamaño para iPod (más pequeño y rápido)</translation>
+    </message>
+    <message>
+        <source>Full size JPEG</source>
+        <translation>JPEG a tamaño completo</translation>
+    </message>
+    <message>
+        <source>Show downloads</source>
+        <translation>Mostrar descargas</translation>
+    </message>
+    <message>
+        <source>Tick Favorites, albums or people to sync all of their photos, or open one and tick individual photos. Videos are skipped. Photos are saved as JPEG for the iPod.</source>
+        <translation>Marca Favoritos, álbumes o personas para sincronizar todas sus fotos, o abre uno y marca fotos individuales. Los vídeos se omiten. Las fotos se guardan como JPEG para el iPod.</translation>
+    </message>
+    <message>
+        <source>Photo size</source>
+        <translation>Tamaño de foto</translation>
+    </message>
+    <message>
+        <source>{count} selected</source>
+        <translation>{count} seleccionados</translation>
+    </message>
+    <message>
+        <source>Connecting to Immich…</source>
+        <translation>Conectando con Immich…</translation>
+    </message>
+    <message>
+        <source>Connected as {user}: {albums} albums, {people} people.</source>
+        <translation>Conectado como {user}: {albums} álbumes, {people} personas.</translation>
+    </message>
+    <message>
+        <source>★ Favorites</source>
+        <translation>★ Favoritos</translation>
+    </message>
+    <message>
+        <source>{count} items</source>
+        <translation>{count} elementos</translation>
+    </message>
+    <message>
+        <source>Person</source>
+        <translation>Persona</translation>
+    </message>
+    <message>
+        <source>Loading {title}…</source>
+        <translation>Cargando {title}…</translation>
+    </message>
+    <message>
+        <source>{count} photos</source>
+        <translation>{count} fotos</translation>
+    </message>
+    <message>
+        <source> (showing the first 2,000; tick the collection to sync all)</source>
+        <translation> (se muestran las primeras 2000; marca la colección para sincronizarlas todas)</translation>
     </message>
 </context>
 <context>
@@ -3698,6 +4018,26 @@
         <translation>Sinestesia</translation>
     </message>
     <message>
+        <source>Plex</source>
+        <translation>Plex</translation>
+    </message>
+    <message>
+        <source>Immich</source>
+        <translation>Immich</translation>
+    </message>
+    <message>
+        <source>Grimmory</source>
+        <translation>Grimmory</translation>
+    </message>
+    <message>
+        <source>Notes</source>
+        <translation>Notas</translation>
+    </message>
+    <message>
+        <source>Calendars</source>
+        <translation>Calendarios</translation>
+    </message>
+    <message>
         <source>Backups</source>
         <translation>Copias de seguridad</translation>
     </message>
@@ -3712,6 +4052,89 @@
     <message>
         <source>Genius</source>
         <translation>Genius</translation>
+    </message>
+</context>
+<context>
+    <name>NotesPage</name>
+    <message>
+        <source>Notes from Memos</source>
+        <translation>Notas de Memos</translation>
+    </message>
+    <message>
+        <source>Send notes to iPod</source>
+        <translation>Enviar notas al iPod</translation>
+    </message>
+    <message>
+        <source>Memos server</source>
+        <translation>Servidor de Memos</translation>
+    </message>
+    <message>
+        <source>Access token</source>
+        <translation>Token de acceso</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Conectar</translation>
+    </message>
+    <message>
+        <source>Only my memos</source>
+        <translation>Solo mis memos</translation>
+    </message>
+    <message>
+        <source>Include archived memos</source>
+        <translation>Incluir memos archivados</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>Dirección</translation>
+    </message>
+    <message>
+        <source>Create one in Memos → Settings → My Account → Access Tokens. Works with Memos 26.10 and earlier versions.</source>
+        <translation>Crea uno en Memos → Ajustes → Mi cuenta → Tokens de acceso. Funciona con Memos 26.10 y versiones anteriores.</translation>
+    </message>
+    <message>
+        <source>Tags to sync</source>
+        <translation>Etiquetas para sincronizar</translation>
+    </message>
+    <message>
+        <source>Memos with any of these tags</source>
+        <translation>Memos con cualquiera de estas etiquetas</translation>
+    </message>
+    <message>
+        <source>Memos with all of these tags</source>
+        <translation>Memos con todas estas etiquetas</translation>
+    </message>
+    <message>
+        <source>A folder for each tag</source>
+        <translation>Una carpeta por etiqueta</translation>
+    </message>
+    <message>
+        <source>Picking #work also includes nested tags like #work/meetings. Each memo becomes a note titled by its first line; long memos are split into parts because the iPod shows 4 KB per note and up to 1,000 notes.</source>
+        <translation>Elegir #work también incluye etiquetas anidadas como #work/meetings. Cada memo se convierte en una nota con el título de su primera línea; los memos largos se dividen en partes porque el iPod muestra 4 KB por nota y hasta 1000 notas.</translation>
+    </message>
+    <message>
+        <source>Folder on the iPod: Notes /</source>
+        <translation>Carpeta en el iPod: Notas /</translation>
+    </message>
+    <message>
+        <source>Reading your memos…</source>
+        <translation>Leyendo tus memos…</translation>
+    </message>
+    <message>
+        <source>Connected as {user}: {memos} memos, {tags} tags ({untagged} memos have no tags).</source>
+        <translation>Conectado como {user}: {memos} memos, {tags} etiquetas ({untagged} memos no tienen etiquetas).</translation>
+    </message>
+    <message>
+        <source>{notes} notes on the iPod from {matched} of {total} memos ({written} files written, {removed} removed).</source>
+        <translation>{notes} notas en el iPod de {matched} de {total} memos ({written} archivos escritos, {removed} quitados).</translation>
+    </message>
+    <message>
+        <source>{count} memos didn&apos;t fit: the iPod shows at most 1,000 notes.</source>
+        <translation>{count} memos no cupieron: el iPod muestra como máximo 1000 notas.</translation>
+    </message>
+    <message>
+        <source>Eject the iPod, then look in Extras → Notes.</source>
+        <translation>Expulsa el iPod y busca en Extras → Notas.</translation>
     </message>
 </context>
 <context>
@@ -5273,6 +5696,217 @@ Usa Editar para revisar sus reglas.</translation>
     </message>
 </context>
 <context>
+    <name>PlexPage</name>
+    <message>
+        <source>Plex</source>
+        <translation>Plex</translation>
+    </message>
+    <message>
+        <source>Download for Sync</source>
+        <translation>Descargar para sincronizar</translation>
+    </message>
+    <message>
+        <source>Account and server</source>
+        <translation>Cuenta y servidor</translation>
+    </message>
+    <message>
+        <source>Sign in with Plex</source>
+        <translation>Iniciar sesión con Plex</translation>
+    </message>
+    <message>
+        <source>Use this server</source>
+        <translation>Usar este servidor</translation>
+    </message>
+    <message>
+        <source>Server address…</source>
+        <translation>Dirección del servidor…</translation>
+    </message>
+    <message>
+        <source>Sign out</source>
+        <translation>Cerrar sesión</translation>
+    </message>
+    <message>
+        <source>Plays and ratings</source>
+        <translation>Reproducciones y valoraciones</translation>
+    </message>
+    <message>
+        <source>Send iPod plays to Plex during Sync</source>
+        <translation>Enviar reproducciones del iPod a Plex al sincronizar</translation>
+    </message>
+    <message>
+        <source>Each play is reported as a finished listen from a player named after your iPod (platform iPod), so it appears in Plex Play History.</source>
+        <translation>Cada reproducción se registra como escuchada por completo desde un reproductor con el nombre de tu iPod (plataforma iPod), así que aparece en el historial de reproducción de Plex.</translation>
+    </message>
+    <message>
+        <source>Sync star ratings now…</source>
+        <translation>Sincronizar valoraciones ahora…</translation>
+    </message>
+    <message>
+        <source>Star ratings: songs rated on the iPod set Plex&apos;s stars (the iPod wins when they differ); songs rated only in Plex get those stars on the iPod. Whole stars are compared, so Plex half-stars are kept.</source>
+        <translation>Valoraciones: las canciones valoradas en el iPod fijan las estrellas de Plex (gana el iPod si difieren); las canciones valoradas solo en Plex reciben esas estrellas en el iPod. Se comparan estrellas enteras, así que se conservan las medias estrellas de Plex.</translation>
+    </message>
+    <message>
+        <source>Shared folders (optional)</source>
+        <translation>Carpetas compartidas (opcional)</translation>
+    </message>
+    <message>
+        <source>Path on the Plex server</source>
+        <translation>Ruta en el servidor de Plex</translation>
+    </message>
+    <message>
+        <source>Same folder on this computer</source>
+        <translation>La misma carpeta en este equipo</translation>
+    </message>
+    <message>
+        <source>Add</source>
+        <translation>Añadir</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>Quitar</translation>
+    </message>
+    <message>
+        <source>If your music share is mounted here, iOpenPod copies files from it instead of downloading through Plex. Example: /mnt/media/music → /Volumes/Media/music.</source>
+        <translation>Si tu recurso compartido de música está montado aquí, iOpenPod copia los archivos desde él en lugar de descargarlos a través de Plex. Ejemplo: /mnt/media/music → /Volumes/Media/music.</translation>
+    </message>
+    <message>
+        <source>Choose music</source>
+        <translation>Elegir música</translation>
+    </message>
+    <message>
+        <source>Search artists, albums and songs</source>
+        <translation>Buscar artistas, álbumes y canciones</translation>
+    </message>
+    <message>
+        <source>Playlists</source>
+        <translation>Listas de reproducción</translation>
+    </message>
+    <message>
+        <source>Artists and albums</source>
+        <translation>Artistas y álbumes</translation>
+    </message>
+    <message>
+        <source>Search</source>
+        <translation>Buscar</translation>
+    </message>
+    <message>
+        <source>Remove from selection</source>
+        <translation>Quitar de la selección</translation>
+    </message>
+    <message>
+        <source>Reload Plex library</source>
+        <translation>Recargar biblioteca de Plex</translation>
+    </message>
+    <message>
+        <source>Show downloads</source>
+        <translation>Mostrar descargas</translation>
+    </message>
+    <message>
+        <source>Selected for the iPod</source>
+        <translation>Seleccionado para el iPod</translation>
+    </message>
+    <message>
+        <source>Signed in as {name} · {server}</source>
+        <translation>Sesión iniciada como {name} · {server}</translation>
+    </message>
+    <message>
+        <source>no server chosen</source>
+        <translation>ningún servidor elegido</translation>
+    </message>
+    <message>
+        <source>Not signed in to Plex.</source>
+        <translation>No has iniciado sesión en Plex.</translation>
+    </message>
+    <message>
+        <source> (shared with you)</source>
+        <translation> (compartido contigo)</translation>
+    </message>
+    <message>
+        <source>A Plex sign-in page is opening in your browser…</source>
+        <translation>Se está abriendo una página de inicio de sesión de Plex en tu navegador…</translation>
+    </message>
+    <message>
+        <source>Signed in. Connecting to {name}…</source>
+        <translation>Sesión iniciada. Conectando con {name}…</translation>
+    </message>
+    <message>
+        <source>Signed in. Choose a server.</source>
+        <translation>Sesión iniciada. Elige un servidor.</translation>
+    </message>
+    <message>
+        <source>Connected to {name}.</source>
+        <translation>Conectado a {name}.</translation>
+    </message>
+    <message>
+        <source>{playlists} playlists and {artists} artists.</source>
+        <translation>{playlists} listas de reproducción y {artists} artistas.</translation>
+    </message>
+    <message>
+        <source>{count} results.</source>
+        <translation>{count} resultados.</translation>
+    </message>
+    <message>
+        <source>Set stars on {count} Plex songs.</source>
+        <translation>Estrellas puestas en {count} canciones de Plex.</translation>
+    </message>
+    <message>
+        <source>Connecting…</source>
+        <translation>Conectando…</translation>
+    </message>
+    <message>
+        <source>Plex server address</source>
+        <translation>Dirección del servidor de Plex</translation>
+    </message>
+    <message>
+        <source>Address, for example http://192.168.1.10:32400</source>
+        <translation>Dirección, por ejemplo http://192.168.1.10:32400</translation>
+    </message>
+    <message>
+        <source>Reading your Plex library…</source>
+        <translation>Leyendo tu biblioteca de Plex…</translation>
+    </message>
+    <message>
+        <source>Playlist</source>
+        <translation>Lista de reproducción</translation>
+    </message>
+    <message>
+        <source>Artist</source>
+        <translation>Artista</translation>
+    </message>
+    <message>
+        <source>Album</source>
+        <translation>Álbum</translation>
+    </message>
+    <message>
+        <source>Song</source>
+        <translation>Canción</translation>
+    </message>
+    <message>
+        <source>Choose a Plex server first.</source>
+        <translation>Elige primero un servidor de Plex.</translation>
+    </message>
+    <message>
+        <source>Star ratings already match. {unmatched} songs weren&apos;t found in Plex.</source>
+        <translation>Las valoraciones ya coinciden. {unmatched} canciones no se encontraron en Plex.</translation>
+    </message>
+    <message>
+        <source>Sync star ratings?</source>
+        <translation>¿Sincronizar valoraciones?</translation>
+    </message>
+    <message>
+        <source>{plex} songs get new stars in Plex and {ipod} songs get new stars on the iPod.</source>
+        <translation>{plex} canciones reciben nuevas estrellas en Plex y {ipod} canciones nuevas estrellas en el iPod.</translation>
+    </message>
+    <message>
+        <source>iPod stars are applied as Library changes; choose Review Changes in the sidebar to save them to the iPod. {unmatched} songs weren&apos;t found in Plex and {ambiguous} matched more than one song.</source>
+        <translation>Las estrellas del iPod se aplican como cambios en la biblioteca; elige «Revisar cambios» en la barra lateral para guardarlas en el iPod. {unmatched} canciones no se encontraron en Plex y {ambiguous} coincidieron con más de una canción.</translation>
+    </message>
+    <message>
+        <source>Stars are ready; choose Review Changes to save them to the iPod.</source>
+        <translation>Las estrellas están listas; elige «Revisar cambios» para guardarlas en el iPod.</translation>
+    </message>
+</context>
+<context>
     <name>PodcastPage</name>
     <message>
         <source>Podcasts</source>
@@ -5832,7 +6466,11 @@ Usa Editar para revisar sus reglas.</translation>
     </message>
     <message>
         <source>Connect Last.fm or ListenBrainz in Settings → Sync to scrobble.</source>
-        <translation>Conecta Last.fm o ListenBrainz en Ajustes → Sincronización para enviar reproducciones.</translation>
+        <translation type="vanished">Conecta Last.fm o ListenBrainz en Ajustes → Sincronización para enviar reproducciones.</translation>
+    </message>
+    <message>
+        <source>Connect Last.fm or ListenBrainz in Settings → Sync, or turn on Send plays to Plex in the Plex page.</source>
+        <translation>Conecta Last.fm o ListenBrainz en Ajustes → Sincronizar, o activa «Enviar reproducciones del iPod a Plex» en la página de Plex.</translation>
     </message>
     <message>
         <source>Authorize iOpenPod in your browser, then click Finish signing in.</source>
@@ -6524,6 +7162,10 @@ Usa Editar para revisar sus reglas.</translation>
         <translation>Sincronizar con el equipo</translation>
     </message>
     <message>
+        <source>Submit pending iPod plays to Last.fm, ListenBrainz and Plex.</source>
+        <translation>Enviar reproducciones pendientes del iPod a Last.fm, ListenBrainz y Plex.</translation>
+    </message>
+    <message>
         <source>Review Changes</source>
         <translation>Revisar cambios</translation>
     </message>
@@ -6536,6 +7178,10 @@ Usa Editar para revisar sus reglas.</translation>
         <translation>Biblioteca</translation>
     </message>
     <message>
+        <source>Connected</source>
+        <translation>Conectado</translation>
+    </message>
+    <message>
         <source>Check your Library for more consistent tags.</source>
         <translation>Revisa tu biblioteca para que las etiquetas sean más uniformes.</translation>
     </message>
@@ -6545,7 +7191,7 @@ Usa Editar para revisar sus reglas.</translation>
     </message>
     <message>
         <source>Submit pending iPod plays to Last.fm and ListenBrainz.</source>
-        <translation>Envía las reproducciones pendientes del iPod a Last.fm y ListenBrainz.</translation>
+        <translation type="vanished">Envía las reproducciones pendientes del iPod a Last.fm y ListenBrainz.</translation>
     </message>
 </context>
 <context>
@@ -12004,6 +12650,10 @@ Playlists: %3</translation>
         <translation>Las reglas no compatibles de listas inteligentes son de solo lectura.</translation>
     </message>
     <message>
+        <source>Updating Plex, Immich and Grimmory downloads before Sync…</source>
+        <translation>Actualizando las descargas de Plex, Immich y Grimmory antes de sincronizar…</translation>
+    </message>
+    <message>
         <source>Use a finite number.</source>
         <translation>Usa un número finito.</translation>
     </message>
@@ -12486,6 +13136,17 @@ Firmware verificado para la familia de actualización {family}: {firmware}.</tra
     <message>
         <source>tracks</source>
         <translation>pistas</translation>
+    </message>
+</context>
+<context>
+    <name>_ConnectedPage</name>
+    <message>
+        <source>{source}: {summary}.</source>
+        <translation>{source}: {summary}.</translation>
+    </message>
+    <message>
+        <source>Run Sync with Host to send them to the iPod.</source>
+        <translation>Elige «Sincronizar con el equipo» para enviarlas al iPod.</translation>
     </message>
 </context>
 <context>

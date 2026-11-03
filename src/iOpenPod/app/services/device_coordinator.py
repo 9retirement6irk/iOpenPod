@@ -85,6 +85,7 @@ from iOpenPod.app.services import (
     game_library,
     game_uninstallation,
     games,
+    ipod_extras,
     library_initialization,
     library_resources,
     photo_shard_resources,
@@ -1384,6 +1385,74 @@ class DeviceCoordinator:
                         session, committed.recovery.journal_path
                     )
                 return game_library.read_game_catalog(session, checkpoint)
+        except RecoverableWriteError as error:
+            raise SyncRecoveryRequiredError(error.recovery_path) from error
+        except (MountInspectionError, SessionClosedError, SessionInvalidatedError):
+            with self._lock:
+                if self._active is active:
+                    self._deactivate_locked()
+            raise
+
+    def count_foreign_extras(
+        self, expected: ActiveIPod, section: ipod_extras.ExtrasSection
+    ) -> int:
+        """Count Extras files iOpenPod did not write, for the iPod's Notes limit."""
+
+        with self.sync_session(expected) as session:
+            return ipod_extras.count_foreign_files(session, section)
+
+    def publish_extras(
+        self,
+        expected: ActiveIPod,
+        section: ipod_extras.ExtrasSection,
+        files: tuple[ipod_extras.ExtrasFile, ...],
+        cancelled: threading.Event,
+    ) -> ipod_extras.ExtrasResult:
+        """Write Notes or Calendars through one recoverable Storage Transaction."""
+
+        with self._lock:
+            active = self._active
+            if active is None or active.active_ipod is not expected:
+                raise DeviceChangedError(
+                    "The Active iPod changed before updating its Extras."
+                )
+
+        def checkpoint() -> None:
+            if cancelled.is_set():
+                raise DeviceAccessError("Updating the iPod Extras was cancelled.")
+            with self._lock:
+                if self._active is not active or not active.session.is_active:
+                    raise DeviceChangedError(
+                        "The iPod disconnected while updating its Extras."
+                    )
+
+        try:
+            with self.sync_session(expected, access=AccessMode.READ_WRITE) as session:
+                checkpoint()
+                prepared = ipod_extras.prepare_extras(
+                    session, section, files, checkpoint=checkpoint
+                )
+                if prepared.transaction is not None:
+                    for directory in prepared.directories:
+                        checkpoint()
+                        session.create_directory(directory)
+                    committed = session.execute_transaction(
+                        prepared.transaction, checkpoint=checkpoint
+                    )
+                    if not committed.flush.complete:
+                        raise SyncRecoveryRequiredError(
+                            str(committed.recovery.journal_path)
+                        )
+                    _finalize_committed_transaction(
+                        session, committed.recovery.journal_path
+                    )
+                    ipod_extras.remove_empty_folders(session, prepared.emptied)
+                return ipod_extras.ExtrasResult(
+                    prepared.written,
+                    prepared.unchanged,
+                    prepared.removed,
+                    tuple(prepared.issues),
+                )
         except RecoverableWriteError as error:
             raise SyncRecoveryRequiredError(error.recovery_path) from error
         except (MountInspectionError, SessionClosedError, SessionInvalidatedError):

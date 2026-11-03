@@ -9,3 +9,6 @@ than embedding theme colors or adding page-local rendering code.
 `a4ce1404bc6d24d3c365afe7b258d6bf6f48d62d`, matching the
 [Genius Mix icon collection](genius-mixes/README.md). It uses the same
 [MIT license](genius-mixes/LICENSE).
+
+`server.svg`, `calendar.svg`, and `note.svg` are original outline glyphs drawn for the
+Connected Source pages in the same `24 × 24`, `1.5` stroke style.

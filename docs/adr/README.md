@@ -289,3 +289,4 @@ What becomes easier, harder, required, or prohibited?
 - [ADR-0222: Anchor Phase attacks to percussion](0222-anchor-phase-attacks-to-percussion.md)
 - [ADR-0223: Reconcile Playlist datasets from dataset 3](0223-reconcile-playlist-datasets-from-dataset3.md)
 - [ADR-0224: Rebuild undersized Phase indexes](0224-rebuild-undersized-phase-indexes.md)
+- [ADR-0225: Add Connected Sources and iPod Extras](0225-add-connected-sources-and-ipod-extras.md)

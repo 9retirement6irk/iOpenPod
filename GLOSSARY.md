@@ -138,6 +138,10 @@ normal lowercase conventions while retaining the same domain term.
 | **Chunk Selection** | A root-and-header-typed location and Chunk within one Database Document state. It lets a consumer replace a nested Chunk without reconstructing its ancestors. | cursor, loose path, node reference |
 | **Header Marker** | The four-character tag that identifies a Chunk's binary record type. | magic, header, chunk name |
 | **Unknown Data** | Fields, Chunks, flags, padding, or bytes that iPodDB can retain but does not yet understand. Unknown Data is expected and is not synonymous with malformed data. | garbage, corruption |
+| **Connected Source** | A self-hosted server (Plex, Immich, or Grimmory) whose Selection iOpenPod materializes as Host files for Sync. It never writes to the iPod directly. | integration, plugin, remote library |
+| **Connected Source Folder** | The application-owned Host Media Library folder holding one Connected Source's materialized files, with a Connected Source Manifest naming the files iOpenPod owns there. | download cache, staging folder |
+| **Selection** | The person's saved choice of Connected Source items, such as Plex playlists or Immich people, that defines a Connected Source Folder's contents. | Sync Selection when the Connected Source choice is meant |
+| **iPod Extras** | Non-Library files the firmware reads from top-level `Notes` and `Calendars` folders. They are published through Storage against an Extras Manifest of owned files. | Library media, iTunesDB content |
 
 ## Application workflows
 

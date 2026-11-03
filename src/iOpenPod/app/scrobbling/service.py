@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from threading import Lock
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, cast
 
 from .clients import client_for, wait_between_batches
 from .models import LASTFM_MAX_AGE, ScrobbleError, ScrobbleResult, Service
@@ -22,6 +22,12 @@ if TYPE_CHECKING:
     from .credentials import CredentialStore
     from .models import Account, RejectedListen
     from .queue import ScrobbleQueue
+
+
+class DeviceAwareSubmitter(Protocol):
+    """A Submitter that attributes plays to the iPod that recorded them."""
+
+    def for_device(self, identity: str, name: str) -> Submitter: ...
 
 
 class ScrobbleSource(Protocol):
@@ -57,7 +63,7 @@ class ScrobbleService:
         if not accounts:
             return ScrobbleResult(
                 issues=(
-                    "Connect Last.fm or ListenBrainz in Settings → Sync to scrobble.",
+                    "Connect Last.fm or ListenBrainz in Settings → Sync, or turn on Send plays to Plex in the Plex page.",
                 )
             )
         if not self._lock.acquire(blocking=False):
@@ -132,6 +138,11 @@ class ScrobbleService:
                 ):
                     raise ScrobbleError("Reconnect this account in Settings → Sync.")
                 client = self._clients(account.service)
+                for_device = getattr(client, "for_device", None)
+                if callable(for_device):
+                    client = cast("DeviceAwareSubmitter", client).for_device(
+                        device, active.library.device_name
+                    )
                 for offset in range(0, len(entries), client.batch_size):
                     if cancelled.is_set():
                         break
