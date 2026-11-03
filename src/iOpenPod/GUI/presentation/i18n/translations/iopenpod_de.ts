@@ -1180,6 +1180,10 @@
         <translation>Plex-Sterne werden gesetzt: {index} von {total}…</translation>
     </message>
     <message>
+        <source>Finish signing in with {provider} in your browser…</source>
+        <translation>Schließe die Anmeldung bei {provider} in deinem Browser ab…</translation>
+    </message>
+    <message>
         <source>No audiobooks downloaded from Grimmory are on this iPod yet. Sync them first.</source>
         <translation>Auf diesem iPod sind noch keine Hörbücher aus Grimmory. Synchronisiere sie zuerst.</translation>
     </message>
@@ -2283,6 +2287,10 @@
         <translation>Anmelden</translation>
     </message>
     <message>
+        <source>Sign In with SSO</source>
+        <translation>Mit SSO anmelden</translation>
+    </message>
+    <message>
         <source>Sign Out</source>
         <translation>Abmelden</translation>
     </message>
@@ -2297,6 +2305,10 @@
     <message>
         <source>Sign in with your Grimmory account. iOpenPod keeps only Grimmory&apos;s sign-in token in your system keychain, never your password.</source>
         <translation>Melde dich mit deinem Grimmory-Konto an. iOpenPod speichert nur Grimmorys Anmeldetoken im Schlüsselbund deines Systems, nie dein Passwort.</translation>
+    </message>
+    <message>
+        <source>Sign In with SSO opens your identity provider in the browser, like Grimmory&apos;s own sign-in page. It needs {address} added as an allowed redirect (callback) address for Grimmory&apos;s client in your identity provider.</source>
+        <translation>„Mit SSO anmelden“ öffnet deinen Identitätsanbieter im Browser, wie Grimmorys eigene Anmeldeseite. Dazu muss {address} bei deinem Identitätsanbieter als erlaubte Weiterleitungsadresse (Callback) für Grimmorys Client eingetragen sein.</translation>
     </message>
     <message>
         <source>Choose audiobooks</source>
@@ -2341,6 +2353,10 @@
     <message>
         <source>Connecting to Grimmory…</source>
         <translation>Verbindung zu Grimmory wird hergestellt…</translation>
+    </message>
+    <message>
+        <source>Opening single sign-on…</source>
+        <translation>Einmalige Anmeldung wird geöffnet…</translation>
     </message>
     <message>
         <source>Signed out of Grimmory.</source>

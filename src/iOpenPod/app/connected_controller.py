@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, cast
 from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal
 
 from iOpenPod.app.connected import calendars as calendar_files
+from iOpenPod.app.connected import grimmory_sso
 from iOpenPod.app.connected.config import (
     CalendarFile,
     ConnectedConfig,
@@ -125,6 +126,7 @@ class ProgressSent:
 class _Signals(QObject):
     done = Signal(object, object)  # result, error
     progress = Signal(str)
+    link = Signal(str)  # a sign-in page to open in the browser
 
 
 class _Job(QRunnable):
@@ -309,6 +311,7 @@ class ConnectedController(QObject):
         job = _Job(work)
         job.signals.done.connect(self._finished, Qt.ConnectionType.QueuedConnection)
         job.signals.progress.connect(self.progress, Qt.ConnectionType.QueuedConnection)
+        job.signals.link.connect(self.signInUrl, Qt.ConnectionType.QueuedConnection)
         self._job = job
         self._then = then
         self._operation = operation
@@ -689,6 +692,41 @@ class ConnectedController(QObject):
                 )
 
         self._start("grimmory-connect", work, then=then)
+
+    def grimmory_sso(self, url: str) -> None:
+        """Sign in through Grimmory's single sign-on in the browser."""
+
+        url = url.strip()
+        self.update_config(
+            replace(self._config, grimmory=replace(self._config.grimmory, url=url))
+        )
+        self.register_folder(ConnectedSource.GRIMMORY)
+        client = GrimmoryClient(url, on_tokens=self._save_grimmory_tokens)
+
+        def work(job: _Job) -> object:
+            sso = grimmory_sso.provider(client)
+            if sso is None:
+                raise ConnectedError(
+                    "This Grimmory doesn't have single sign-on turned on. Sign in with your username and password."
+                )
+            job.signals.progress.emit(
+                self.tr("Finish signing in with {provider} in your browser…").format(
+                    provider=sso.name
+                )
+            )
+            grimmory_sso.sign_in(client, sso, job.cancelled, job.signals.link.emit)
+            return (client.username(), client.collections())
+
+        def then(value: object) -> None:
+            username = cast("tuple[str, object]", value)[0]
+            self.update_config(
+                replace(
+                    self._config,
+                    grimmory=replace(self._config.grimmory, username=username or "SSO"),
+                )
+            )
+
+        self._start("grimmory-sso", work, then=then)
 
     def set_grimmory_picks(self, picks: tuple[GrimmoryPick, ...]) -> None:
         self.update_config(

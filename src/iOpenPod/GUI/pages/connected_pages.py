@@ -41,6 +41,7 @@ from iOpenPod.app.connected.config import (
     PlexPickKind,
     TagMatch,
 )
+from iOpenPod.app.connected.grimmory_sso import redirect_uri
 from iOpenPod.app.connected.secrets import SecretKey
 from iOpenPod.app.connected_controller import (
     ConnectedSource,
@@ -1099,9 +1100,14 @@ class GrimmoryPage(_ConnectedPage):
         self._password.returnPressed.connect(self._connect_server)
         self._connect = _button(self.tr("Sign In"), account, ActionButtonKind.PRIMARY)
         self._connect.clicked.connect(self._connect_server)
+        self._sso = _button(self.tr("Sign In with SSO"), account)
+        self._sso.clicked.connect(self._sign_in_sso)
         self._sign_out = _button(self.tr("Sign Out"), account, ActionButtonKind.QUIET)
         self._sign_out.clicked.connect(self._forget)
         self._account = QLabel(account)
+        self._account.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
         form = QFormLayout(account)
         form.addRow(self.tr("Address"), self._url)
         form.addRow(self.tr("Username"), self._user)
@@ -1115,7 +1121,16 @@ class GrimmoryPage(_ConnectedPage):
                 account,
             ),
         )
-        form.addRow("", _row(self._connect, self._sign_out, self._account))
+        form.addRow("", _row(self._connect, self._sso, self._sign_out, self._account))
+        form.addRow(
+            "",
+            _description(
+                self.tr(
+                    "Sign In with SSO opens your identity provider in the browser, like Grimmory's own sign-in page. It needs {address} added as an allowed redirect (callback) address for Grimmory's client in your identity provider."
+                ).format(address=redirect_uri()),
+                account,
+            ),
+        )
 
         picker = QGroupBox(self.tr("Choose audiobooks"), self)
         self._shelves = QListWidget(picker)
@@ -1176,6 +1191,7 @@ class GrimmoryPage(_ConnectedPage):
         config = self.controller.config.grimmory
         signed_in = bool(config.username)
         self._connect.setEnabled(not busy)
+        self._sso.setEnabled(not busy)
         self._connect.setText(
             self.tr("Reconnect") if signed_in and config.url else self.tr("Sign In")
         )
@@ -1201,6 +1217,14 @@ class GrimmoryPage(_ConnectedPage):
         )
         self._password.clear()
 
+    def _sign_in_sso(self) -> None:
+        if self.controller.busy:
+            return
+        self.start("grimmory-sso")
+        self.say(self.tr("Opening single sign-on…"))
+        self.controller.grimmory_sso(self._url.text())
+        self._password.clear()
+
     def _forget(self) -> None:
         self.controller.forget(SecretKey.GRIMMORY)
         self._shelves.clear()
@@ -1208,7 +1232,11 @@ class GrimmoryPage(_ConnectedPage):
         self.say(self.tr("Signed out of Grimmory."))
 
     def handle(self, operation: str, value: object) -> None:
-        if operation == "grimmory-connect":
+        if operation == "grimmory-sso":
+            username, collections = cast("tuple[str, object]", value)
+            self._user.setText(username)
+            self.handle("grimmory-connect", collections)
+        elif operation == "grimmory-connect":
             self._shelves.clear()
             everything = QListWidgetItem(self.tr("All audiobooks"))
             everything.setData(_ROLE, None)

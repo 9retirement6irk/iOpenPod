@@ -194,6 +194,24 @@ class GrimmoryClient:
         self._on_tokens(self.tokens)
         return self.tokens
 
+    @property
+    def transport(self) -> Transport:
+        return self._transport
+
+    def accept_tokens(self, data: dict[str, object]) -> GrimmoryTokens:
+        """Keep Grimmory tokens issued outside :meth:`sign_in`, such as by SSO."""
+
+        return self._tokens_from(data)
+
+    def public(self, path: str) -> object:
+        """GET an endpoint that needs no sign-in."""
+
+        return json_body(
+            self._transport.send(
+                "GET", f"{self.base}{path}", {"Accept": "application/json"}
+            )
+        )
+
     def sign_in(self, username: str, password: str) -> GrimmoryTokens:
         if not username.strip() or not password:
             raise ConnectedError("Enter your Grimmory username and password.")
@@ -209,7 +227,7 @@ class GrimmoryClient:
         except ConnectedError as error:
             if error.status in (400, 401, 403):
                 raise ConnectedError(
-                    "Grimmory didn't accept that username and password. Accounts that sign in only through single sign-on (OIDC) need a local password in Grimmory.",
+                    "Grimmory didn't accept that username and password. If you sign in to Grimmory through single sign-on, use Sign In with SSO instead.",
                     401,
                 ) from None
             raise
@@ -281,6 +299,12 @@ class GrimmoryClient:
                     continue
                 raise
         raise ConnectedError("Your Grimmory sign-in expired. Sign in again.", 401)
+
+    def username(self) -> str:
+        """The signed-in account's username."""
+
+        data = _object(self._call("GET", "/api/v1/users/me"))
+        return _str(data.get("username")) or _str(data.get("name"))
 
     # --- browsing ---------------------------------------------------------------------
 

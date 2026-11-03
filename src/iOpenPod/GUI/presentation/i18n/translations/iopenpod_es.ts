@@ -1180,6 +1180,10 @@
         <translation>Poniendo estrellas en Plex: {index} de {total}…</translation>
     </message>
     <message>
+        <source>Finish signing in with {provider} in your browser…</source>
+        <translation>Termina de iniciar sesión con {provider} en tu navegador…</translation>
+    </message>
+    <message>
         <source>No audiobooks downloaded from Grimmory are on this iPod yet. Sync them first.</source>
         <translation>Todavía no hay audiolibros de Grimmory en este iPod. Sincronízalos primero.</translation>
     </message>
@@ -2283,6 +2287,10 @@
         <translation>Iniciar sesión</translation>
     </message>
     <message>
+        <source>Sign In with SSO</source>
+        <translation>Iniciar sesión con SSO</translation>
+    </message>
+    <message>
         <source>Sign Out</source>
         <translation>Cerrar sesión</translation>
     </message>
@@ -2297,6 +2305,10 @@
     <message>
         <source>Sign in with your Grimmory account. iOpenPod keeps only Grimmory&apos;s sign-in token in your system keychain, never your password.</source>
         <translation>Inicia sesión con tu cuenta de Grimmory. iOpenPod solo guarda el token de sesión de Grimmory en el llavero del sistema, nunca tu contraseña.</translation>
+    </message>
+    <message>
+        <source>Sign In with SSO opens your identity provider in the browser, like Grimmory&apos;s own sign-in page. It needs {address} added as an allowed redirect (callback) address for Grimmory&apos;s client in your identity provider.</source>
+        <translation>«Iniciar sesión con SSO» abre tu proveedor de identidad en el navegador, como la página de inicio de sesión de Grimmory. Necesita que {address} esté añadida en tu proveedor de identidad como dirección de redirección (callback) permitida para el cliente de Grimmory.</translation>
     </message>
     <message>
         <source>Choose audiobooks</source>
@@ -2341,6 +2353,10 @@
     <message>
         <source>Connecting to Grimmory…</source>
         <translation>Conectando con Grimmory…</translation>
+    </message>
+    <message>
+        <source>Opening single sign-on…</source>
+        <translation>Abriendo el inicio de sesión único…</translation>
     </message>
     <message>
         <source>Signed out of Grimmory.</source>

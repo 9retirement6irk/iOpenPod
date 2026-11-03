@@ -38,7 +38,9 @@ servers without exporting anything by hand:
   songs. Optionally send iPod plays to Plex (they show up in Play History as your
   iPod) and sync star ratings both ways.
 * **Immich**: pick Favorites, albums, people, or individual photos, with previews.
-* **Grimmory**: sign in with your Grimmory account, pick audiobooks by library,
+* **Grimmory**: sign in with your Grimmory account (or with single sign-on, after
+  adding `http://127.0.0.1:53817/oauth2-callback` as a redirect address for
+  Grimmory in your identity provider), pick audiobooks by library,
   shelf, or search, and keep listening progress in step: where you stopped on the
   iPod goes to Grimmory, and where you stopped in Grimmory becomes the iPod's
   bookmark.

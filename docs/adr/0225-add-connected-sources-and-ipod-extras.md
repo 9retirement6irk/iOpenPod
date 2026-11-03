@@ -34,7 +34,18 @@ Grimmory audiobooks use Grimmory's own REST API rather than OPDS, because OPDS c
 neither report nor record listening progress. A person signs in once with their
 Grimmory username and password; only the returned access and refresh tokens are kept,
 and an expired access token is renewed once before the person is asked to sign in
-again. Audiobooks are listed through the app API filtered to audiobook files, by
+again. A person whose Grimmory account uses single sign-on signs in the
+way Grimmory's web app does: iOpenPod reads the provider from Grimmory's public
+settings, gets a one-time state from Grimmory, and opens the provider's
+authorization page with PKCE (S256) and a nonce. The provider redirects to a
+loopback address, `http://127.0.0.1:53817/oauth2-callback` (RFC 8252), where
+iOpenPod accepts exactly one answer carrying that state, then posts the code to
+Grimmory's OIDC callback, which exchanges it and returns ordinary Grimmory tokens.
+Grimmory accepts an http redirect only when its origin matches the request's
+`Origin`, so iOpenPod sends the loopback origin. The port is fixed because many
+self-hosted identity providers match redirect addresses exactly; a provider admin
+adds that one address to Grimmory's client, and a Grimmory that limits
+`app.cors.allowed-origins` must also allow `http://127.0.0.1:53817`. Audiobooks are listed through the app API filtered to audiobook files, by
 library, shelf, or search. A single-file audiobook is downloaded as its original file;
 a folder-based one is downloaded through its per-track stream endpoint. `.m4a` files
 are renamed `.m4b` with `stik` 2, and MP3 files receive an ID3 `media_type` of
