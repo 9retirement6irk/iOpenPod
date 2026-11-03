@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QEvent, Qt, QUrl
-from PySide6.QtWidgets import QLabel, QLineEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QCheckBox, QLabel, QLineEdit, QVBoxLayout, QWidget
 
 from iOpenPod.app.scrobbling.models import Service
 from iOpenPod.app.scrobbling.settings import account_setting
@@ -80,6 +80,10 @@ class ScrobblingSettings(QWidget):
             self._buttons(self._lb, self._lb_disconnect, self._lb_help),
             self,
         )
+        self._plex = QCheckBox(self)
+        self._plex.setObjectName("plexScrobbling")
+        self._plex.toggled.connect(controller.set_plex_sync)
+        self._plex_row = SettingRow("Plex", "", self._plex, self)
         group = SettingGroup(self)
         group.setMaximumWidth(960)
         for row in (
@@ -88,6 +92,7 @@ class ScrobblingSettings(QWidget):
             self._lf_row,
             self._token_row,
             self._lb_row,
+            self._plex_row,
         ):
             group.add_row(row)
         layout = QVBoxLayout(self)
@@ -171,6 +176,20 @@ class ScrobblingSettings(QWidget):
                 self._token_row.setVisible(not bool(username))
                 if username:
                     self._token.clear()
+        self._plex.blockSignals(True)
+        self._plex.setChecked(self._controller.plex_sync)
+        self._plex.blockSignals(False)
+        self._plex.setEnabled(available)
+        self._plex_row.set_copy(
+            self.tr("Send plays and stars to Plex"),
+            self.tr(
+                "Sync and Scrobble now send iPod plays to the Plex server chosen on the Plex page; Scrobble now also sets Plex stars from the iPod's."
+            )
+            if self._controller.plex_connected or not self._plex.isChecked()
+            else self.tr(
+                "Sync and Scrobble now send iPod plays to Plex, and Scrobble now sets Plex stars from the iPod's, once you choose a server on the Plex page."
+            ),
+        )
         self._finish.setVisible(self._controller.awaiting_authorization)
         self._finish.setEnabled(available)
         for field in (self._key, self._secret, self._token):
@@ -200,6 +219,8 @@ class ScrobblingSettings(QWidget):
         self._lb_disconnect.setText(self.tr("Disconnect"))
         self._lastfm_help.setText(self.tr("Get API key"))
         self._lb_help.setText(self.tr("Get user token"))
+        self._plex.setText(self.tr("On"))
+        self._plex.setAccessibleName(self.tr("Send plays and stars to Plex"))
         self._refresh()
 
     def changeEvent(self, event: QEvent) -> None:

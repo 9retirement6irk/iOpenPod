@@ -162,3 +162,59 @@ def test_service_sign_in_credentials_are_masked_validated_and_disconnected(
         widget.close()
         context.shutdown()
         APPLICATION.processEvents()
+
+
+def test_plex_plays_and_stars_switch_follows_the_chosen_server(tmp_path: Path) -> None:
+    from PySide6.QtWidgets import QCheckBox
+
+    from iOpenPod.app.scrobbling.models import Account, Credentials
+    from iOpenPod.app.scrobbling.settings import (
+        PLEX_SYNC,
+        PLEX_USERNAME,
+        configured_accounts,
+    )
+
+    context = build_context()
+    credentials = MemoryCredentials()
+    credentials.values.clear()
+    service = ScrobbleService(
+        context.device_coordinator,
+        ScrobbleQueue(AtomicHostFile(tmp_path / "queue.json")),
+        credentials,
+    )
+    controller = ScrobbleController(
+        service, credentials, context.settings, context.device_controller
+    )
+    plex = Credentials("will", "server-token", "http://plex:32400", "srv")
+    chosen: list[Credentials | None] = [None]
+    controller.set_plex_source(lambda: chosen[0])
+    widget = ScrobblingSettings(context.settings, controller)
+    widget.show()
+    try:
+        switch = widget.findChild(QCheckBox, "plexScrobbling")
+        assert switch is not None and switch.isChecked()  # on by default
+        # No server chosen yet: nothing to send to.
+        controller.ensure_plex()
+        assert configured_accounts(context.settings) == ()
+
+        # A server chosen on the Plex page is picked up for plays.
+        chosen[0] = plex
+        controller.ensure_plex()
+        assert credentials.values[Service.PLEX] == plex
+        assert configured_accounts(context.settings) == (Account(Service.PLEX, "will"),)
+
+        # Switching it off in Settings → Sync leaves Plex out of every run.
+        switch.click()
+        wait_for(lambda: not controller.busy)
+        assert context.settings.get(PLEX_SYNC) is False
+        assert configured_accounts(context.settings) == ()
+        assert context.settings.get(PLEX_USERNAME) == "will"
+
+        # On again: back in, without signing in to Plex again.
+        switch.click()
+        wait_for(lambda: not controller.busy)
+        assert configured_accounts(context.settings) == (Account(Service.PLEX, "will"),)
+    finally:
+        widget.close()
+        controller.shutdown()
+        context.shutdown()

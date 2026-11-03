@@ -29,7 +29,11 @@ from iOpenPod.app.artwork_policy import rockbox_tag_policy
 from iOpenPod.app.backups import BackupProgress
 from iOpenPod.app.chaptered_conversion_controller import ChapteredConversionController
 from iOpenPod.app.connected.config import ConnectedConfigStore
-from iOpenPod.app.connected_controller import ConnectedController, ConnectedSource
+from iOpenPod.app.connected_controller import (
+    ConnectedController,
+    ConnectedSource,
+    StarsSent,
+)
 from iOpenPod.app.context import AppContext
 from iOpenPod.app.core.settings.definitions import (
     PLAYER_POSITION,
@@ -244,7 +248,9 @@ class MainWindow(QMainWindow):
         self._connected.progress.connect(self._connected_progress)
         self._connected.signInUrl.connect(self._open_sign_in_url)
         self._pending_sync_folders: tuple[HostMediaFolder, ...] | None = None
+        self._stars_pending = False
         self._scrobbling.finished.connect(self._scrobble_finished)
+        self._scrobbling.set_plex_source(self._connected.plex_credentials)
         self._sync_controller = SyncController(
             SyncExecutor(
                 context.device_coordinator,
@@ -1523,10 +1529,11 @@ class MainWindow(QMainWindow):
         )
 
     def _scrobble_now(self) -> None:
-        if not configured_accounts(self._context.settings):
+        if not self._scrobbling.scrobble_now() and not configured_accounts(
+            self._context.settings
+        ):
             self._show_page(PageId.SETTINGS.value)
             self._settings_page.show_sync_settings()
-        self._scrobbling.scrobble_now()
 
     def _scrobbling_changed(self) -> None:
         self._sidebar.set_scrobble_available(self._scrobbling.can_scrobble)
@@ -1562,6 +1569,15 @@ class MainWindow(QMainWindow):
             action=StatusAction("details", self.tr("Details")),
             timeout_ms=0 if result.issues else 20_000,
         )
+        if (
+            not result.cancelled
+            and self._scrobbling.last_run_included_plex
+            and self._context.device_controller.active_ipod is not None
+        ):
+            # Scrobble now also sets Plex stars from the iPod's.
+            self._stars_pending = self._connected.plex_push_stars(
+                self._context.library_workspace.tracks
+            )
 
     def _navigate_page(self, page_value: str) -> None:
         if page_value == PageId.NORMALIZE_TAGS.value:
@@ -1760,6 +1776,25 @@ class MainWindow(QMainWindow):
         open_desktop_url(QUrl(url))
 
     def _connected_result(self, operation: str, _value: object) -> None:
+        if operation == "plex-stars" and isinstance(_value, StarsSent):
+            self._stars_pending = False
+            parts = [
+                self.tr("Plex: set stars on {count} songs from the iPod.").format(
+                    count=_value.set
+                )
+            ]
+            if _value.failed:
+                parts.append(
+                    self.tr("{count} couldn't be set.").format(count=_value.failed)
+                )
+            if _value.plex_only:
+                parts.append(
+                    self.tr(
+                        "{count} songs rated only in Plex can get their stars on the Plex page."
+                    ).format(count=_value.plex_only)
+                )
+            self._context.status.show("plex.stars", " ".join(parts), timeout_ms=20_000)
+            return
         folders = self._pending_sync_folders
         if operation == "refresh" and folders is not None:
             self._pending_sync_folders = None
@@ -1767,6 +1802,14 @@ class MainWindow(QMainWindow):
             self._start_host_sync(folders)
 
     def _connected_message(self, text: str) -> None:
+        if self._stars_pending:
+            self._stars_pending = False
+            self._context.status.show(
+                "plex.stars",
+                self.tr("Plex stars: {problem}").format(problem=text),
+                timeout_ms=20_000,
+            )
+            return
         if self._pending_sync_folders is not None:
             folders = self._pending_sync_folders
             self._pending_sync_folders = None
@@ -1776,6 +1819,9 @@ class MainWindow(QMainWindow):
                 self._start_host_sync(folders)
 
     def _connected_progress(self, text: str) -> None:
+        if self._stars_pending and text:
+            self._context.status.show("plex.stars", text)
+            return
         if self._pending_sync_folders is not None and text:
             self._context.status.show("connected.refresh", text)
 
@@ -1840,6 +1886,8 @@ class MainWindow(QMainWindow):
     def _start_host_sync(
         self, folders: tuple[HostMediaFolder, ...], *, files: tuple[HostPath, ...] = ()
     ) -> None:
+        # Plays captured during Sync go to Plex when it's switched on.
+        self._scrobbling.ensure_plex()
         controller = self._context.host_media_controller
         started = (
             controller.start(folders, files=files)

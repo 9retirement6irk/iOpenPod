@@ -1180,6 +1180,10 @@
         <translation>Poniendo estrellas en Plex: {index} de {total}…</translation>
     </message>
     <message>
+        <source>Comparing star ratings with Plex…</source>
+        <translation>Comparando las valoraciones con Plex…</translation>
+    </message>
+    <message>
         <source>Finish signing in with {provider} in your browser…</source>
         <translation>Termina de iniciar sesión con {provider} en tu navegador…</translation>
     </message>
@@ -3158,6 +3162,22 @@
         <translation>Selecciona un iPod activo y espera a que termine la exportación actual.</translation>
     </message>
     <message>
+        <source>Plex: set stars on {count} songs from the iPod.</source>
+        <translation>Plex: se pusieron estrellas del iPod en {count} canciones.</translation>
+    </message>
+    <message>
+        <source>{count} couldn&apos;t be set.</source>
+        <translation>{count} no se pudieron poner.</translation>
+    </message>
+    <message>
+        <source>{count} songs rated only in Plex can get their stars on the Plex page.</source>
+        <translation>{count} canciones valoradas solo en Plex pueden recibir sus estrellas desde la página de Plex.</translation>
+    </message>
+    <message>
+        <source>Plex stars: {problem}</source>
+        <translation>Estrellas de Plex: {problem}</translation>
+    </message>
+    <message>
         <source>Sync Comparison Unavailable</source>
         <translation>Comparación para sincronizar no disponible</translation>
     </message>
@@ -4225,16 +4245,20 @@
         <translation>Memos con todas estas etiquetas</translation>
     </message>
     <message>
+        <source>Picking #work also includes nested tags like #work/meetings. Each memo becomes a note titled by its first line, directly in the iPod&apos;s Notes list; long memos are split into parts because the iPod shows 4 KB per note and up to 1,000 notes.</source>
+        <translation>Elegir #work también incluye etiquetas anidadas como #work/meetings. Cada memo se convierte en una nota con el título de su primera línea, directamente en la lista de Notas del iPod; los memos largos se dividen en partes porque el iPod muestra 4 KB por nota y hasta 1000 notas.</translation>
+    </message>
+    <message>
         <source>A folder for each tag</source>
-        <translation>Una carpeta por etiqueta</translation>
+        <translation type="vanished">Una carpeta por etiqueta</translation>
     </message>
     <message>
         <source>Picking #work also includes nested tags like #work/meetings. Each memo becomes a note titled by its first line; long memos are split into parts because the iPod shows 4 KB per note and up to 1,000 notes.</source>
-        <translation>Elegir #work también incluye etiquetas anidadas como #work/meetings. Cada memo se convierte en una nota con el título de su primera línea; los memos largos se dividen en partes porque el iPod muestra 4 KB por nota y hasta 1000 notas.</translation>
+        <translation type="vanished">Elegir #work también incluye etiquetas anidadas como #work/meetings. Cada memo se convierte en una nota con el título de su primera línea; los memos largos se dividen en partes porque el iPod muestra 4 KB por nota y hasta 1000 notas.</translation>
     </message>
     <message>
         <source>Folder on the iPod: Notes /</source>
-        <translation>Carpeta en el iPod: Notas /</translation>
+        <translation type="vanished">Carpeta en el iPod: Notas /</translation>
     </message>
     <message>
         <source>Reading your memos…</source>
@@ -5851,15 +5875,19 @@ Usa Editar para revisar sus reglas.</translation>
     </message>
     <message>
         <source>Send iPod plays to Plex during Sync</source>
-        <translation>Enviar reproducciones del iPod a Plex al sincronizar</translation>
+        <translation type="vanished">Enviar reproducciones del iPod a Plex al sincronizar</translation>
     </message>
     <message>
         <source>Each play is reported as a finished listen from a player named after your iPod (platform iPod), so it appears in Plex Play History.</source>
-        <translation>Cada reproducción se registra como escuchada por completo desde un reproductor con el nombre de tu iPod (plataforma iPod), así que aparece en el historial de reproducción de Plex.</translation>
+        <translation type="vanished">Cada reproducción se registra como escuchada por completo desde un reproductor con el nombre de tu iPod (plataforma iPod), así que aparece en el historial de reproducción de Plex.</translation>
     </message>
     <message>
         <source>Sync star ratings now…</source>
         <translation>Sincronizar valoraciones ahora…</translation>
+    </message>
+    <message>
+        <source>Scrobble now and Sync send iPod plays to Plex, reported from a player named after your iPod so they appear in Plex Play History. Scrobble now also sets Plex stars from the iPod&apos;s. Turn this off in Settings → Sync → Scrobbling.</source>
+        <translation>«Enviar reproducciones» y la sincronización envían las reproducciones del iPod a Plex, desde un reproductor con el nombre de tu iPod para que aparezcan en el historial de reproducción de Plex. «Enviar reproducciones» también pone en Plex las estrellas del iPod. Puedes desactivarlo en Ajustes → Sincronizar → Scrobbling.</translation>
     </message>
     <message>
         <source>Star ratings: songs rated on the iPod set Plex&apos;s stars (the iPod wins when they differ); songs rated only in Plex get those stars on the iPod. Whole stars are compared, so Plex half-stars are kept.</source>
@@ -6003,7 +6031,7 @@ Usa Editar para revisar sus reglas.</translation>
     </message>
     <message>
         <source>Choose a Plex server first.</source>
-        <translation>Elige primero un servidor de Plex.</translation>
+        <translation type="vanished">Elige primero un servidor de Plex.</translation>
     </message>
     <message>
         <source>Star ratings already match. {unmatched} songs weren&apos;t found in Plex.</source>
@@ -6590,7 +6618,15 @@ Usa Editar para revisar sus reglas.</translation>
     </message>
     <message>
         <source>Connect Last.fm or ListenBrainz in Settings → Sync, or turn on Send plays to Plex in the Plex page.</source>
-        <translation>Conecta Last.fm o ListenBrainz en Ajustes → Sincronizar, o activa «Enviar reproducciones del iPod a Plex» en la página de Plex.</translation>
+        <translation type="vanished">Conecta Last.fm o ListenBrainz en Ajustes → Sincronizar, o activa «Enviar reproducciones del iPod a Plex» en la página de Plex.</translation>
+    </message>
+    <message>
+        <source>Could not save the Plex preference. Check Host storage.</source>
+        <translation>No se pudo guardar la preferencia de Plex. Revisa el almacenamiento del equipo.</translation>
+    </message>
+    <message>
+        <source>Connect Last.fm or ListenBrainz in Settings → Sync, or choose a Plex server on the Plex page.</source>
+        <translation>Conecta Last.fm o ListenBrainz en Ajustes → Sincronizar, o elige un servidor de Plex en la página de Plex.</translation>
     </message>
     <message>
         <source>Authorize iOpenPod in your browser, then click Finish signing in.</source>
@@ -6633,6 +6669,18 @@ Usa Editar para revisar sus reglas.</translation>
     <message>
         <source>Not connected</source>
         <translation>Sin conexión</translation>
+    </message>
+    <message>
+        <source>Send plays and stars to Plex</source>
+        <translation>Enviar reproducciones y estrellas a Plex</translation>
+    </message>
+    <message>
+        <source>Sync and Scrobble now send iPod plays to the Plex server chosen on the Plex page; Scrobble now also sets Plex stars from the iPod&apos;s.</source>
+        <translation>La sincronización y «Enviar reproducciones» envían las reproducciones del iPod al servidor de Plex elegido en la página de Plex; «Enviar reproducciones» también pone en Plex las estrellas del iPod.</translation>
+    </message>
+    <message>
+        <source>Sync and Scrobble now send iPod plays to Plex, and Scrobble now sets Plex stars from the iPod&apos;s, once you choose a server on the Plex page.</source>
+        <translation>Cuando elijas un servidor en la página de Plex, la sincronización y «Enviar reproducciones» enviarán las reproducciones del iPod a Plex, y «Enviar reproducciones» pondrá en Plex las estrellas del iPod.</translation>
     </message>
     <message>
         <source>Scrobbling accounts</source>
@@ -6681,6 +6729,10 @@ Usa Editar para revisar sus reglas.</translation>
     <message>
         <source>Get user token</source>
         <translation>Obtener token de usuario</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>Activado</translation>
     </message>
     <message>
         <source>View last scrobble report</source>

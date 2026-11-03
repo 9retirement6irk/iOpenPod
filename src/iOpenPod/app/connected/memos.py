@@ -100,7 +100,6 @@ class NotesPlan:
     total: int
     split: int
     skipped: int
-    folder_per_tag: bool
     notes: int = field(default=0)
 
 
@@ -438,56 +437,46 @@ def _part_names(stem: str, count: int) -> list[str]:
 def plan_notes(
     memos: tuple[Memo, ...], config: MemosConfig, *, other_notes: int = 0
 ) -> NotesPlan:
-    """The note files for the chosen tags, inside ``Notes/<folder>``."""
+    """The note files for the chosen tags, directly in the iPod's ``Notes`` folder.
+
+    Notes sit at the top of Notes rather than in subfolders, so they open from the
+    first Notes screen without an extra menu.
+    """
 
     wanted = [tag.strip().lstrip("#").strip("/") for tag in config.tags if tag.strip()]
     if not wanted:
         raise ConnectedError("Pick at least one Memos tag to sync.")
-    matched: list[tuple[Memo, list[str]]] = []
+    matched: list[Memo] = []
     for memo in memos:
         hits = [
             want for want in wanted if any(tag_matches(tag, want) for tag in memo.tags)
         ]
         if (len(hits) == len(wanted)) if config.match is TagMatch.ALL else bool(hits):
-            matched.append((memo, hits))
+            matched.append(memo)
     # When the 1,000-note limit is reached, pinned and recently edited memos win.
-    matched.sort(key=lambda item: item[0].updated or item[0].created, reverse=True)
-    matched.sort(key=lambda item: not item[0].pinned)
-    by_tag = config.folder_per_tag and config.match is TagMatch.ANY and len(wanted) > 1
-    top = safe_component(config.folder or "Memos", "Memos", limit=60)
+    matched.sort(key=lambda memo: memo.updated or memo.created, reverse=True)
+    matched.sort(key=lambda memo: not memo.pinned)
     room = IPOD_MAX_NOTES - other_notes
     files: list[NoteFile] = []
-    used: dict[str, set[str]] = {}
+    used: set[str] = set()
     split = skipped = written = 0
-    for memo, hits in matched:
+    for memo in matched:
         title, bodies = render_memo(memo)
-        folders = (
-            [
-                f"{top}/{safe_component(hit.replace('/', ' - '), 'Tag', limit=60)}"
-                for hit in hits
-            ]
-            if by_tag
-            else [top]
-        )
-        for folder in folders:
-            if room < len(bodies):
-                skipped += 1
-                continue
-            names = used.setdefault(folder.casefold(), set())
-            base = safe_component(title.replace("…", ""), "Memo", limit=60)
-            stem, counter = base, 2
-            while any(
-                name.casefold() in names for name in _part_names(stem, len(bodies))
-            ):
-                stem, counter = f"{base} ({counter})", counter + 1
-            for name, data in zip(_part_names(stem, len(bodies)), bodies, strict=True):
-                names.add(name.casefold())
-                files.append(NoteFile(f"{folder}/{name}", data))
-            room -= len(bodies)
-            written += 1
-            split += len(bodies) > 1
+        if room < len(bodies):
+            skipped += 1
+            continue
+        base = safe_component(title.replace("…", ""), "Memo", limit=60)
+        stem, counter = base, 2
+        while any(name.casefold() in used for name in _part_names(stem, len(bodies))):
+            stem, counter = f"{base} ({counter})", counter + 1
+        for name, data in zip(_part_names(stem, len(bodies)), bodies, strict=True):
+            used.add(name.casefold())
+            files.append(NoteFile(name, data))
+        room -= len(bodies)
+        written += 1
+        split += len(bodies) > 1
     return NotesPlan(
-        tuple(files), len(matched), len(memos), split, skipped, by_tag, notes=written
+        tuple(files), len(matched), len(memos), split, skipped, notes=written
     )
 
 

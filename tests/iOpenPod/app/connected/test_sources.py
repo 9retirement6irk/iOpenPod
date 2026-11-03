@@ -212,10 +212,11 @@ def test_notes_fit_the_note_reader_and_follow_tags() -> None:
     }
     plan = plan_notes(memos, MemosConfig(tags=("work", "travel", "home")))
     paths = [f.relative for f in plan.files]
-    assert "Memos/work/Standup \u2039notes\u203a.txt" in paths
-    parts = [
-        f for f in plan.files if f.relative.startswith("Memos/travel/Trip packing (")
-    ]
+    # Every note sits directly in Notes, once, however many chosen tags it has.
+    assert all("/" not in path for path in paths)
+    assert len(paths) == len({path.casefold() for path in paths})
+    assert "Standup \u2039notes\u203a.txt" in paths
+    parts = [f for f in plan.files if f.relative.startswith("Trip packing (")]
     assert len(parts) >= 2
     assert all(
         len(f.data) <= 4096 and f.data.startswith(NOTE_HEADER.encode())
@@ -229,9 +230,9 @@ def test_notes_fit_the_note_reader_and_follow_tags() -> None:
     )
     both = plan_notes(
         memos,
-        MemosConfig(tags=("home", "shop"), match=TagMatch.ALL, folder="From Memos"),
+        MemosConfig(tags=("home", "shop"), match=TagMatch.ALL),
     )
-    assert [f.relative for f in both.files] == ["From Memos/Groceries.txt"]
+    assert [f.relative for f in both.files] == ["Groceries.txt"]
     capped = plan_notes(
         memos, MemosConfig(tags=("work", "travel", "home")), other_notes=999
     )

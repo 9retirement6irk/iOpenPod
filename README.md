@@ -35,8 +35,10 @@ This fork adds pages under **Connected** in the sidebar. They sync from your own
 servers without exporting anything by hand:
 
 * **Plex**: sign in with your Plex account and pick playlists, artists, albums, or
-  songs. Optionally send iPod plays to Plex (they show up in Play History as your
-  iPod) and sync star ratings both ways.
+  songs. **Scrobble now** and Sync send iPod plays to Plex (they show up in Play
+  History as your iPod), and Scrobble now also sets Plex stars from the iPod's.
+  Turn that off in Settings → Sync → Scrobbling. Star ratings can also be synced
+  both ways from the Plex page.
 * **Immich**: pick Favorites, albums, people, or individual photos, with previews.
 * **Grimmory**: sign in with your Grimmory account (or with single sign-on, after
   adding `http://127.0.0.1:53817/oauth2-callback` as a redirect address for
@@ -44,8 +46,8 @@ servers without exporting anything by hand:
   shelf, or search, and keep listening progress in step: where you stopped on the
   iPod goes to Grimmory, and where you stopped in Grimmory becomes the iPod's
   bookmark.
-* **Notes**: send Memos notes with chosen tags to Extras → Notes (Memos 26.10 and
-  earlier).
+* **Notes**: send Memos notes with chosen tags straight into Extras → Notes
+  (Memos 26.10 and earlier).
 * **Calendars**: send `.ics` files and calendar links to Extras → Calendars.
 
 Picks are downloaded to `~/Music/iOpenPod Connected` and refreshed automatically

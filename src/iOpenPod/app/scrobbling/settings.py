@@ -11,6 +11,8 @@ SCROBBLE_DURING_SYNC = SettingDefinition(
 LASTFM_USERNAME = SettingDefinition("scrobbling/lastfm-username", str, "")
 LISTENBRAINZ_USERNAME = SettingDefinition("scrobbling/listenbrainz-username", str, "")
 PLEX_USERNAME = SettingDefinition("scrobbling/plex-username", str, "")
+# Send iPod plays (Sync and Scrobble now) and star ratings (Scrobble now) to Plex.
+PLEX_SYNC = SettingDefinition("scrobbling/plex-sync", bool, True)
 
 
 def account_setting(service: Service) -> SettingDefinition[str]:
@@ -26,4 +28,5 @@ def configured_accounts(settings: SettingsService) -> tuple[Account, ...]:
         Account(service, username)
         for service in Service
         if (username := settings.get(account_setting(service)))
+        and (service is not Service.PLEX or settings.get(PLEX_SYNC))
     )

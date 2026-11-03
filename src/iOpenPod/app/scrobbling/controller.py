@@ -15,7 +15,7 @@ from .credentials import SystemCredentialStore
 from .models import Credentials, ScrobbleError, ScrobbleResult, Service
 from .queue import ScrobbleQueue
 from .service import ScrobbleService
-from .settings import account_setting, configured_accounts
+from .settings import PLEX_SYNC, account_setting, configured_accounts
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -99,6 +99,8 @@ class ScrobbleController(QObject):
         self._reserved = False
         self._closed = False
         self._last_result: ScrobbleResult | None = None
+        self._plex_source: Callable[[], Credentials | None] = lambda: None
+        self._plex_run = False
         devices.busyChanged.connect(self._availability_changed)
         devices.activeIPodChanged.connect(self._availability_changed)
 
@@ -199,6 +201,57 @@ class ScrobbleController(QObject):
 
         self._start(connect)
 
+    # --- Plex --------------------------------------------------------------------------
+
+    def set_plex_source(self, source: Callable[[], Credentials | None]) -> None:
+        """Where the chosen Plex server's credentials come from (the Plex page)."""
+
+        self._plex_source = source
+
+    @property
+    def plex_sync(self) -> bool:
+        return bool(self._settings.get(PLEX_SYNC))
+
+    @property
+    def plex_connected(self) -> bool:
+        return bool(self._settings.get(account_setting(Service.PLEX)))
+
+    @property
+    def last_run_included_plex(self) -> bool:
+        """Whether the latest Scrobble now sent plays to Plex (stars follow it)."""
+
+        return self._plex_run
+
+    def set_plex_sync(self, enabled: bool) -> None:
+        try:
+            self._settings.set_global(PLEX_SYNC, enabled)
+        except Exception:
+            self.message.emit(
+                self.tr("Could not save the Plex preference. Check Host storage.")
+            )
+            return
+        if enabled and not self.plex_connected:
+            credentials = self._plex_source()
+            if credentials is not None:
+                self.connect_plex(credentials)
+        self.changed.emit()
+
+    def ensure_plex(self) -> None:
+        """Pick up a Plex server chosen before Plex plays had their own switch."""
+
+        if not self.plex_sync or self.plex_connected:
+            return
+        credentials = self._plex_source()
+        if credentials is None:
+            return
+        try:
+            self._credentials.save(Service.PLEX, credentials)
+            self._settings.set_global(
+                account_setting(Service.PLEX), credentials.username
+            )
+        except Exception:
+            return  # Plex is skipped; the other services still run
+
     def disconnect_service(self, service: Service) -> None:
         if not self.available:
             return
@@ -213,14 +266,16 @@ class ScrobbleController(QObject):
         active = self._devices.active_ipod
         if not self.can_scrobble or active is None:
             return False
+        self.ensure_plex()
         accounts = configured_accounts(self._settings)
         if not accounts:
             self.message.emit(
                 self.tr(
-                    "Connect Last.fm or ListenBrainz in Settings → Sync, or turn on Send plays to Plex in the Plex page."
+                    "Connect Last.fm or ListenBrainz in Settings → Sync, or choose a Plex server on the Plex page."
                 )
             )
             return False
+        self._plex_run = any(account.service is Service.PLEX for account in accounts)
         if not self._devices.begin_read_only_operation():
             return False
         self._reserved = True

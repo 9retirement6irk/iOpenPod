@@ -63,7 +63,7 @@ class ScrobbleService:
         if not accounts:
             return ScrobbleResult(
                 issues=(
-                    "Connect Last.fm or ListenBrainz in Settings → Sync, or turn on Send plays to Plex in the Plex page.",
+                    "Connect Last.fm or ListenBrainz in Settings → Sync, or choose a Plex server on the Plex page.",
                 )
             )
         if not self._lock.acquire(blocking=False):

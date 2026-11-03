@@ -46,7 +46,11 @@ Grimmory accepts an http redirect only when its origin matches the request's
 self-hosted identity providers match redirect addresses exactly; a provider admin
 adds that one address to Grimmory's client, and a Grimmory that limits
 `app.cors.allowed-origins` must also allow `http://127.0.0.1:53817`. Audiobooks are listed through the app API filtered to audiobook files, by
-library, shelf, or search. A single-file audiobook is downloaded as its original file;
+library, shelf, or search. Libraries come from the web API's `/api/v1/libraries`,
+because Grimmory 3.5's app library list reads library paths outside a database
+transaction and answers HTTP 500; a library or shelf list that still fails is
+reported without undoing the sign-in. A single-file audiobook is downloaded as its original file (through the
+player's stream endpoint on Grimmory 3.5, which has no per-file download);
 a folder-based one is downloaded through its per-track stream endpoint. `.m4a` files
 are renamed `.m4b` with `stik` 2, and MP3 files receive an ID3 `media_type` of
 `audiobook`, the existing classification evidence.
@@ -81,8 +85,9 @@ the Active iPod exclusively, verifies the Library database is unchanged, and use
 the same commit, recovery, and finalization path as game installation.
 
 Memos notes use the 26.10 REST prefix `/api` with a fallback to `/api/v1` for older
-servers; 26.10 answers the old prefix with `410 Gone`. Notes follow the Note Reader
-limits: UTF-8 header, 4 KB per file with numbered parts for longer memos, and
+servers; 26.10 answers the old prefix with `410 Gone`. Every note is written directly
+in the iPod's `Notes` folder, once however many chosen tags it has, so it opens from
+the first Notes screen. Notes follow the Note Reader limits: UTF-8 header, 4 KB per file with numbered parts for longer memos, and
 1,000 notes in total counting foreign files.
 
 ## Plex plays and ratings
@@ -96,6 +101,13 @@ pending. A mid-batch failure keeps receipts for plays already delivered.
 Two-way star ratings compare the Library Workspace with Plex at whole-star precision:
 the iPod's stars win when both differ, and Plex-only stars become ordinary Track
 edits that the person reviews and saves.
+
+One switch in Settings → Sync → Scrobbling, on by default, controls Plex: plays
+go to the Plex server chosen on the Plex page during Sync and Scrobble now, and
+Scrobble now then sets Plex stars from the iPod's without a review, because only
+Plex changes. Plex-only stars still reach the iPod only through the Plex page's
+reviewed sync. Turning the switch off keeps the Plex sign-in and leaves Plex out
+of both.
 
 ## Secrets
 

@@ -70,6 +70,7 @@ from iOpenPod.app.host_media_folders import (
     same_host_media_folder,
     save_host_media_folders,
 )
+from iOpenPod.app.scrobbling.models import Credentials
 from iOpenPod.app.services.ipod_extras import ExtrasFile, ExtrasResult, ExtrasSection
 from storage import HostPath
 
@@ -113,6 +114,13 @@ class RefreshOutcome:
     # Grimmory: listening positions sent before downloading.
     progress_sent: int = 0
     marks: tuple[GrimmoryMark, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class StarsSent:
+    set: int
+    failed: int
+    plex_only: int  # Plex stars the iPod lacks; brought over from the Plex page
 
 
 @dataclass(frozen=True, slots=True)
@@ -486,6 +494,52 @@ class ConnectedController(QObject):
             replace(self._config, plex=replace(self._config.plex, picks=picks))
         )
 
+    def plex_credentials(self) -> Credentials | None:
+        """The chosen Plex server, as Scrobbling credentials for sending plays."""
+
+        secret = self.secret(SecretKey.PLEX)
+        if not secret.get("server_token") or not secret.get("server_uri"):
+            return None
+        return Credentials(
+            self._config.plex.username or "Plex",
+            secret["server_token"],
+            secret["server_uri"],
+            secret.get("server_id", ""),
+        )
+
+    def plex_push_stars(self, tracks: tuple[Track, ...]) -> bool:
+        """Set Plex stars from the iPod's, without asking (part of Scrobble now).
+
+        Only the iPod's ratings move; Plex-only stars come to the iPod through the
+        Plex page's reviewed two-way sync, since they change the iPod Library.
+        """
+
+        if not self.plex_restore() or self._plex_server is None:
+            return False
+
+        def work(server: PlexServer, job: _Job) -> StarsSent:
+            job.signals.progress.emit(self.tr("Comparing star ratings with Plex…"))
+            plan = plan_ratings(tracks, self.plex.library_tracks(server, job.cancelled))
+            failed = 0
+            for index, change in enumerate(plan.to_plex, start=1):
+                if job.cancelled.is_set():
+                    raise CancelledError
+                job.signals.progress.emit(
+                    self.tr("Setting Plex stars {index} of {total}…").format(
+                        index=index, total=len(plan.to_plex)
+                    )
+                )
+                try:
+                    self.plex.rate(server, change.track.rating_key, change.rating)
+                except CancelledError:
+                    raise
+                except ConnectedError:
+                    failed += 1
+            return StarsSent(len(plan.to_plex) - failed, failed, len(plan.to_ipod))
+
+        server = self._plex_server
+        return self._start("plex-stars", lambda job: work(server, job))
+
     def plex_ratings_plan(self, tracks: tuple[Track, ...]) -> None:
         """Compare the Library Workspace's Tracks with Plex ratings."""
 
@@ -715,10 +769,10 @@ class ConnectedController(QObject):
                 )
             )
             grimmory_sso.sign_in(client, sso, job.cancelled, job.signals.link.emit)
-            return (client.username(), client.collections())
+            return (client.username(), *client.collections())
 
         def then(value: object) -> None:
-            username = cast("tuple[str, object]", value)[0]
+            username = cast("tuple[str, object, object]", value)[0]
             self.update_config(
                 replace(
                     self._config,

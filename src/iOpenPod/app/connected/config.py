@@ -50,7 +50,6 @@ class PlexConfig:
     username: str = ""
     picks: tuple[PlexPick, ...] = ()
     mappings: tuple[PathMapping, ...] = ()
-    send_plays: bool = False
     sync_ratings: bool = False
 
 
@@ -116,10 +115,8 @@ class MemosConfig:
     url: str = ""
     tags: tuple[str, ...] = ()
     match: TagMatch = TagMatch.ANY
-    folder_per_tag: bool = True
     only_mine: bool = True
     include_archived: bool = False
-    folder: str = "Memos"
 
 
 @dataclass(frozen=True, slots=True)

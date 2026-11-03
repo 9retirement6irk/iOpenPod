@@ -256,7 +256,9 @@ class GrimmoryClient:
             raise ConnectedError("Sign in to Grimmory first.", 401)
         return {"Authorization": f"Bearer {self.tokens.access}", "Accept": accept}
 
-    def _call(self, method: str, path: str, body: object | None = None) -> object:
+    def _call(
+        self, method: str, path: str, body: object | None = None, *, what: str = ""
+    ) -> object:
         data = None if body is None else json.dumps(body).encode()
         for attempt in (0, 1):
             headers = self._headers()
@@ -279,6 +281,12 @@ class GrimmoryClient:
                     raise ConnectedError(
                         "Your Grimmory account can't open that item. Check its library access in Grimmory.",
                         403,
+                    ) from None
+                if what and (error.status or 0) >= 500:
+                    # Name the step: a bare "HTTP 500" can't be told apart from sign-in.
+                    raise ConnectedError(
+                        f"Grimmory had a problem {what} ({error}) Its server log has the details.",
+                        error.status,
                     ) from None
                 raise
             return json_body(response) if response.body else {}
@@ -303,17 +311,53 @@ class GrimmoryClient:
     def username(self) -> str:
         """The signed-in account's username."""
 
-        data = _object(self._call("GET", "/api/v1/users/me"))
+        try:
+            data = _object(
+                self._call("GET", "/api/v1/users/me", what="reading your account")
+            )
+        except ConnectedError as error:
+            if error.status in (401, None):
+                raise
+            return ""  # only used to label the account
         return _str(data.get("username")) or _str(data.get("name"))
 
     # --- browsing ---------------------------------------------------------------------
 
-    def collections(self) -> tuple[GrimmoryCollection, ...]:
+    def collections(self) -> tuple[tuple[GrimmoryCollection, ...], tuple[str, ...]]:
+        """Libraries and shelves to browse, plus any that couldn't be listed.
+
+        Libraries come from the web app's ``/api/v1/libraries``: in Grimmory 3.5 the
+        app API's library list reads library paths outside a database transaction and
+        answers HTTP 500. A list that fails is reported and the other is still shown,
+        since "All audiobooks" works without either.
+        """
+
         found: list[GrimmoryCollection] = []
-        for kind, path in (
-            ("library", "/api/v1/app/libraries"),
-            ("shelf", "/api/v1/app/shelves"),
-        ):
+        issues: list[str] = []
+        sources = (
+            (
+                "library",
+                ("/api/v1/libraries", "/api/v1/app/libraries"),
+                "listing libraries",
+            ),
+            ("shelf", ("/api/v1/app/shelves", "/api/v1/shelves"), "listing shelves"),
+        )
+        for kind, paths, what in sources:
+            rows: list[dict[str, object]] | None = None
+            problem: ConnectedError | None = None
+            for path in paths:
+                try:
+                    rows = _objects(self._call("GET", path, what=what))
+                    break
+                except CancelledError:
+                    raise
+                except ConnectedError as error:
+                    if error.status in (401, None):
+                        raise
+                    problem = problem or error
+            if rows is None:
+                issues.append(str(problem) if problem else what)
+                continue
             found.extend(
                 GrimmoryCollection(
                     kind,
@@ -321,10 +365,10 @@ class GrimmoryClient:
                     _str(row.get("name")) or kind.capitalize(),
                     _int(row.get("bookCount")),
                 )
-                for row in _objects(self._call("GET", path))
+                for row in rows
                 if _str(row.get("id"))
             )
-        return tuple(found)
+        return tuple(found), tuple(issues)
 
     def audiobooks(
         self,
@@ -349,7 +393,13 @@ class GrimmoryClient:
                 query["libraryId" if collection.kind == "library" else "shelfId"] = (
                     collection.id
                 )
-            data = _object(self._call("GET", f"/api/v1/app/books?{urlencode(query)}"))
+            data = _object(
+                self._call(
+                    "GET",
+                    f"/api/v1/app/books?{urlencode(query)}",
+                    what="listing audiobooks",
+                )
+            )
             for row in _objects(data.get("content")):
                 book_id = _str(row.get("id"))
                 if not book_id:
@@ -371,7 +421,11 @@ class GrimmoryClient:
 
     def info(self, book_id: str) -> AudiobookInfo:
         data = _object(
-            self._call("GET", f"/api/v1/audiobooks/{book_id}/info?bookType=AUDIOBOOK")
+            self._call(
+                "GET",
+                f"/api/v1/audiobooks/{book_id}/info?bookType=AUDIOBOOK",
+                what="describing an audiobook",
+            )
         )
         tracks = tuple(
             AudiobookTrack(
@@ -423,8 +477,18 @@ class GrimmoryClient:
     def download_book(
         self, info: AudiobookInfo, destination: Path, cancelled: Event | None = None
     ) -> str:
+        try:
+            return self._download(
+                f"/api/v1/books/{info.book_id}/files/{info.book_file_id}/download",
+                destination,
+                cancelled,
+            )
+        except ConnectedError as error:
+            if error.status != 404:
+                raise
+        # Grimmory 3.5 has no per-file download; its player streams the original file.
         return self._download(
-            f"/api/v1/books/{info.book_id}/files/{info.book_file_id}/download",
+            f"/api/v1/audiobooks/{info.book_id}/stream?bookType=AUDIOBOOK",
             destination,
             cancelled,
         )
@@ -445,7 +509,13 @@ class GrimmoryClient:
     # --- progress ---------------------------------------------------------------------
 
     def progress(self, book_id: str) -> GrimmoryProgress:
-        data = _object(self._call("GET", f"/api/v1/app/books/{book_id}/progress"))
+        data = _object(
+            self._call(
+                "GET",
+                f"/api/v1/app/books/{book_id}/progress",
+                what="reading listening progress",
+            )
+        )
         audio = _object(data.get("audiobookProgress"))
         if not audio:
             return GrimmoryProgress(0, None, 0.0, 0)
@@ -493,6 +563,7 @@ class GrimmoryClient:
                 "audiobookProgress": progress,
                 "fileProgress": file_progress,
             },
+            what="saving listening progress",
         )
 
 

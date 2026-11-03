@@ -105,7 +105,7 @@ def test_expired_access_token_is_refreshed_once() -> None:
 
     transport = FakeTransport(
         {
-            f"GET {BASE}/api/v1/app/libraries": libraries,
+            f"GET {BASE}/api/v1/libraries": libraries,
             f"GET {BASE}/api/v1/app/shelves": [{"id": 4, "name": "Commute"}],
             f"POST {BASE}/api/v1/auth/refresh": {
                 "accessToken": "a2",
@@ -117,8 +117,11 @@ def test_expired_access_token_is_refreshed_once() -> None:
         BASE, GrimmoryTokens("a1", "r1"), transport, on_tokens=seen.append
     )
     assert client.collections() == (
-        GrimmoryCollection("library", "1", "Audio", 3),
-        GrimmoryCollection("shelf", "4", "Commute", 0),
+        (
+            GrimmoryCollection("library", "1", "Audio", 3),
+            GrimmoryCollection("shelf", "4", "Commute", 0),
+        ),
+        (),
     )
     assert attempts == ["Bearer a1", "Bearer a2"]
     assert seen == [GrimmoryTokens("a2", "r2")]
@@ -127,12 +130,45 @@ def test_expired_access_token_is_refreshed_once() -> None:
 def test_expired_refresh_token_asks_to_sign_in_again() -> None:
     transport = FakeTransport(
         {
-            f"GET {BASE}/api/v1/app/libraries": ConnectedError("HTTP 401", 401),
+            f"GET {BASE}/api/v1/libraries": ConnectedError("HTTP 401", 401),
             f"POST {BASE}/api/v1/auth/refresh": ConnectedError("HTTP 401", 401),
         }
     )
     with pytest.raises(ConnectedError, match="Sign in again"):
         signed_in(transport).collections()
+
+
+def test_a_failing_list_does_not_undo_sign_in() -> None:
+    """Grimmory 3.5's app library list answers HTTP 500; shelves still show."""
+
+    error = ConnectedError(
+        "The server answered HTTP 500: An unexpected error occurred.", 500
+    )
+    transport = FakeTransport(
+        {
+            f"GET {BASE}/api/v1/libraries": error,
+            f"GET {BASE}/api/v1/app/libraries": error,
+            f"GET {BASE}/api/v1/app/shelves": [{"id": 4, "name": "Commute"}],
+        }
+    )
+    collections, issues = signed_in(transport).collections()
+    assert collections == (GrimmoryCollection("shelf", "4", "Commute", 0),)
+    (issue,) = issues
+    assert "listing libraries" in issue and "HTTP 500" in issue
+
+
+def test_single_file_download_falls_back_to_the_player_stream(tmp_path: Path) -> None:
+    from iOpenPod.app.connected.grimmory import AudiobookInfo
+
+    transport = FakeTransport()
+    transport.files[f"{BASE}/api/v1/audiobooks/7/stream"] = b"audio"
+    info = AudiobookInfo("7", "70", "Dune", 5_000, False, ())
+    signed_in(transport).download_book(info, tmp_path / "book")
+    assert (tmp_path / "book").read_bytes() == b"audio"
+    assert [call[1] for call in transport.calls] == [
+        f"{BASE}/api/v1/books/7/files/70/download",
+        f"{BASE}/api/v1/audiobooks/7/stream?bookType=AUDIOBOOK",
+    ]
 
 
 # --- browsing ----------------------------------------------------------------------------

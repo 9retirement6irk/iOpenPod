@@ -48,7 +48,7 @@ from iOpenPod.app.connected_controller import (
     ProgressSent,
     RefreshOutcome,
 )
-from iOpenPod.app.scrobbling.models import Credentials, Service
+from iOpenPod.app.scrobbling.models import Service
 from iOpenPod.GUI.presentation.desktop_services import open_desktop_url
 from iOpenPod.GUI.presentation.theme.tokens import LAYOUT
 from iOpenPod.GUI.widgets.browser_chrome import PageHeader
@@ -298,19 +298,17 @@ class PlexPage(_ConnectedPage):
         account_layout.addLayout(_row(self._servers, self._use_server, self._manual))
 
         plays = QGroupBox(self.tr("Plays and ratings"), self)
-        self._send_plays = QCheckBox(
-            self.tr("Send iPod plays to Plex during Sync"), plays
-        )
-        self._send_plays.setToolTip(
-            self.tr(
-                "Each play is reported as a finished listen from a player named after your iPod (platform iPod), so it appears in Plex Play History."
-            )
-        )
-        self._send_plays.toggled.connect(self._toggle_plays)
         self._ratings = _button(self.tr("Sync star ratings now…"), plays)
         self._ratings.clicked.connect(self._plan_ratings)
         plays_layout = QVBoxLayout(plays)
-        plays_layout.addWidget(self._send_plays)
+        plays_layout.addWidget(
+            _description(
+                self.tr(
+                    "Scrobble now and Sync send iPod plays to Plex, reported from a player named after your iPod so they appear in Plex Play History. Scrobble now also sets Plex stars from the iPod's. Turn this off in Settings → Sync → Scrobbling."
+                ),
+                plays,
+            )
+        )
         plays_layout.addWidget(
             _description(
                 self.tr(
@@ -451,10 +449,6 @@ class PlexPage(_ConnectedPage):
             widget.setEnabled(not busy)
         self._download.setEnabled(not busy and connected and bool(config.picks))
         self._ratings.setEnabled(not busy and connected)
-        self._send_plays.blockSignals(True)
-        self._send_plays.setChecked(config.send_plays)
-        self._send_plays.setEnabled(connected)
-        self._send_plays.blockSignals(False)
 
     def _start_sign_in(self) -> None:
         self.start("plex-sign-in")
@@ -485,6 +479,10 @@ class PlexPage(_ConnectedPage):
         elif operation == "plex-connect":
             server = cast("PlexServer", value)
             self.controller.plex_connected(server)
+            credentials = self.controller.plex_credentials()
+            if credentials is not None and self._scrobbling.plex_sync:
+                # Plays and stars follow the chosen server.
+                self._scrobbling.connect_plex(credentials)
             self.say(self.tr("Connected to {name}.").format(name=server.name))
             self._load_library()
         elif operation == "plex-library":
@@ -531,15 +529,9 @@ class PlexPage(_ConnectedPage):
             self.controller.plex_connect_manual(address)
 
     def _forget(self) -> None:
-        if self.controller.config.plex.send_plays:
+        if self._scrobbling.plex_connected:
             self._scrobbling.disconnect_service(Service.PLEX)
         self.controller.forget(SecretKey.PLEX)
-        self.controller.update_config(
-            replace(
-                self.controller.config,
-                plex=replace(self.controller.config.plex, send_plays=False),
-            )
-        )
         for widget in (self._playlists, self._artists, self._albums, self._results):
             widget.clear()
 
@@ -720,28 +712,6 @@ class PlexPage(_ConnectedPage):
             self._save_mappings()
 
     # --- plays and ratings -------------------------------------------------------------
-
-    def _toggle_plays(self, enabled: bool) -> None:
-        secret = self.controller.secret(SecretKey.PLEX)
-        config = self.controller.config.plex
-        if enabled:
-            if not secret.get("server_token"):
-                self.say(self.tr("Choose a Plex server first."))
-                self._send_plays.setChecked(False)
-                return
-            self._scrobbling.connect_plex(
-                Credentials(
-                    config.username or "Plex",
-                    secret["server_token"],
-                    secret.get("server_uri", ""),
-                    secret.get("server_id", ""),
-                )
-            )
-        else:
-            self._scrobbling.disconnect_service(Service.PLEX)
-        self.controller.update_config(
-            replace(self.controller.config, plex=replace(config, send_plays=enabled))
-        )
 
     def _plan_ratings(self) -> None:
         self.start("plex-ratings-plan")
@@ -1233,15 +1203,19 @@ class GrimmoryPage(_ConnectedPage):
 
     def handle(self, operation: str, value: object) -> None:
         if operation == "grimmory-sso":
-            username, collections = cast("tuple[str, object]", value)
-            self._user.setText(username)
-            self.handle("grimmory-connect", collections)
+            username, collections, issues = cast("tuple[str, object, object]", value)
+            if username:
+                self._user.setText(username)
+            self.handle("grimmory-connect", (collections, issues))
         elif operation == "grimmory-connect":
+            collections, issues = cast(
+                "tuple[tuple[GrimmoryCollection, ...], tuple[str, ...]]", value
+            )
             self._shelves.clear()
             everything = QListWidgetItem(self.tr("All audiobooks"))
             everything.setData(_ROLE, None)
             self._shelves.addItem(everything)
-            for collection in cast("tuple[GrimmoryCollection, ...]", value):
+            for collection in collections:
                 label = (
                     self.tr("Library: {name}")
                     if collection.kind == "library"
@@ -1250,7 +1224,11 @@ class GrimmoryPage(_ConnectedPage):
                 item = QListWidgetItem(label)
                 item.setData(_ROLE, collection)
                 self._shelves.addItem(item)
-            self.say(self.tr("Connected. Choose a library or shelf."))
+            self.say(
+                "\n".join(
+                    (self.tr("Connected. Choose a library or shelf."), *issues[:2])
+                )
+            )
         elif operation == "grimmory-books":
             self._fill(cast("tuple[Audiobook, ...]", value))
         elif operation == "grimmory-progress-plan":
@@ -1460,25 +1438,17 @@ class NotesPage(_ConnectedPage):
         self._match.addItem(self.tr("Memos with all of these tags"), TagMatch.ALL.value)
         self._match.setCurrentIndex(0 if config.match is TagMatch.ANY else 1)
         self._match.currentIndexChanged.connect(self._save_options)
-        self._per_tag = QCheckBox(self.tr("A folder for each tag"), tags)
-        self._per_tag.setChecked(config.folder_per_tag)
-        self._per_tag.toggled.connect(self._save_options)
-        self._folder = QLineEdit(config.folder, tags)
-        self._folder.editingFinished.connect(self._save_options)
         layout = QVBoxLayout(tags)
         layout.addWidget(
             _description(
                 self.tr(
-                    "Picking #work also includes nested tags like #work/meetings. Each memo becomes a note titled by its first line; long memos are split into parts because the iPod shows 4 KB per note and up to 1,000 notes."
+                    "Picking #work also includes nested tags like #work/meetings. Each memo becomes a note titled by its first line, directly in the iPod's Notes list; long memos are split into parts because the iPod shows 4 KB per note and up to 1,000 notes."
                 ),
                 tags,
             )
         )
         layout.addWidget(self._tags, 1)
-        layout.addLayout(_row(self._match, self._per_tag))
-        layout.addLayout(
-            _row(QLabel(self.tr("Folder on the iPod: Notes /"), tags), self._folder)
-        )
+        layout.addLayout(_row(self._match))
         self.body.addWidget(account)
         self.body.addWidget(tags, 1)
         self._render_saved_tags()
@@ -1575,10 +1545,8 @@ class NotesPage(_ConnectedPage):
                 memos=replace(
                     self.controller.config.memos,
                     match=TagMatch(str(self._match.currentData())),
-                    folder_per_tag=self._per_tag.isChecked(),
                     only_mine=self._mine.isChecked(),
                     include_archived=self._archived.isChecked(),
-                    folder=self._folder.text().strip() or "Memos",
                 ),
             )
         )
