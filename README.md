@@ -34,24 +34,29 @@ See [iPod compatibility](#ipod-compatibility) before getting started.
 This fork adds pages under **Connected** in the sidebar. They sync from your own
 servers without exporting anything by hand:
 
-* **Plex**: sign in with your Plex account and pick playlists, artists, albums, or
-  songs. **Scrobble now** and Sync send iPod plays to Plex (they show up in Play
+* **Plex**: sign in with your Plex account, and all your Plex music and playlists
+  appear in **Sync with Host**'s media list beside your computer's music. Check
+  what goes on the iPod there; songs download only when Sync copies them.
+  **Scrobble now** and Sync send iPod plays to Plex (they show up in Play
   History as your iPod), and Scrobble now also sets Plex stars from the iPod's.
   Turn that off in Settings → Sync → Scrobbling. Star ratings can also be synced
   both ways from the Plex page.
 * **Immich**: pick Favorites, albums, people, or individual photos, with previews.
 * **Grimmory**: sign in with your Grimmory account (or with single sign-on, after
   adding `http://127.0.0.1:53817/oauth2-callback` as a redirect address for
-  Grimmory in your identity provider), pick audiobooks by library,
-  shelf, or search, and keep listening progress in step: where you stopped on the
+  Grimmory in your identity provider), and all your audiobooks appear
+  in Sync's media list, downloaded only when Sync copies them. Listening progress
+  stays in step: where you stopped on the
   iPod goes to Grimmory, and where you stopped in Grimmory becomes the iPod's
   bookmark.
 * **Notes**: send Memos notes with chosen tags straight into Extras → Notes
   (Memos 26.10 and earlier).
 * **Calendars**: send `.ics` files and calendar links to Extras → Calendars.
 
-Picks are downloaded to `~/Music/iOpenPod Connected` and refreshed automatically
-when you start **Sync with Host**, so they go through the normal Sync Review. Sign-ins
+Plex and Grimmory downloads are kept in `~/Music/iOpenPod Connected` up to the
+media cache limit in Settings → Sync (or removed after each Sync when the cache is
+off). Immich picks are downloaded there and refreshed when you start **Sync with
+Host**. Everything goes through the normal Sync Review. Sign-ins
 and keys are kept in your system keychain. See
 [ADR-0225](docs/adr/0225-add-connected-sources-and-ipod-extras.md) for the design.
 

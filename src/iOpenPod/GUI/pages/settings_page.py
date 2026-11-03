@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from iOpenPod.app.connected_controller import ConnectedController
 from iOpenPod.app.core.logging import active_log_path
 from iOpenPod.app.core.settings.definitions import (
     BACKUP_LOCATION,
@@ -69,6 +70,7 @@ from iOpenPod.GUI.presentation.theme.tokens import LAYOUT
 from iOpenPod.GUI.widgets.app_combo_box import AppComboBox
 from iOpenPod.GUI.widgets.browser_chrome import PageHeader
 from iOpenPod.GUI.widgets.ipod_preferences import IPodPreferencesView
+from iOpenPod.GUI.widgets.media_cache_settings import MediaCacheSettings
 from iOpenPod.GUI.widgets.media_tools_settings import MediaToolsSettings
 from iOpenPod.GUI.widgets.scrobbling_settings import ScrobblingSettings
 from iOpenPod.GUI.widgets.setting_group import SettingGroup, SettingRow
@@ -97,6 +99,7 @@ class SettingsPage(QWidget):
         parent: QWidget | None = None,
         *,
         scrobbling: ScrobbleController | None = None,
+        connected: ConnectedController | None = None,
     ) -> None:
         super().__init__(parent)
         self._settings = settings
@@ -371,12 +374,20 @@ class SettingsPage(QWidget):
             if scrobbling is not None
             else None
         )
+        self._media_cache_settings = (
+            MediaCacheSettings(connected, self) if connected is not None else None
+        )
         self._sync_tab = self._add_tab(
             "syncSettingsScroll",
             self._sync_settings,
             *(
                 (self._scrobbling_settings,)
                 if self._scrobbling_settings is not None
+                else ()
+            ),
+            *(
+                (self._media_cache_settings,)
+                if self._media_cache_settings is not None
                 else ()
             ),
         )
@@ -722,6 +733,8 @@ class SettingsPage(QWidget):
         self._backup_location_row.setVisible(not device)
         if self._scrobbling_settings is not None:
             self._scrobbling_settings.setVisible(not device)
+        if self._media_cache_settings is not None:
+            self._media_cache_settings.setVisible(not device)
         self._update_scope_state()
 
     def _update_scope_state(self) -> None:

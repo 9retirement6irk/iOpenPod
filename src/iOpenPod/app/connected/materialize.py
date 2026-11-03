@@ -121,6 +121,7 @@ class _Owned:
     revision: str
     size: int
     bundle: str = ""
+    used: int = 0  # Unix seconds of the last Sync that read it (media cache)
 
 
 def _load_manifest(folder: Path) -> dict[str, _Owned]:
@@ -146,13 +147,15 @@ def _load_manifest(folder: Path) -> dict[str, _Owned]:
         item = cast("dict[str, object]", value)
         revision, size = item.get("revision"), item.get("size")
         bundle = item.get("bundle", "")
+        used = item.get("used", 0)
         if (
             isinstance(revision, str)
             and isinstance(size, int)
             and isinstance(bundle, str)
+            and isinstance(used, int)
             and _valid_key(key)
         ):
-            owned[key] = _Owned(revision, size, bundle)
+            owned[key] = _Owned(revision, size, bundle, used)
     return owned
 
 
@@ -163,6 +166,7 @@ def _save_manifest(folder: Path, owned: dict[str, _Owned]) -> None:
         "files": {
             key: {"revision": value.revision, "size": value.size}
             | ({"bundle": value.bundle} if value.bundle else {})
+            | ({"used": value.used} if value.used else {})
             for key, value in sorted(owned.items())
         },
     }
@@ -415,16 +419,29 @@ def m3u8_playlist(name: str, entries: Iterable[tuple[str, int, str]]) -> bytes:
     return ("\n".join(lines) + "\n").encode("utf-8")
 
 
+# The media cache (remote_source) reuses this record of owned files.
+Owned = _Owned
+load_owned = _load_manifest
+save_owned = _save_manifest
+owned_target = _target
+prune_empty = _prune_empty
+
+
 __all__ = [
     "MANIFEST_NAME",
     "Desired",
     "DesiredBundle",
     "DesiredBytes",
     "DesiredDownload",
+    "Owned",
     "RefreshReport",
+    "load_owned",
     "m3u8_playlist",
+    "owned_target",
+    "prune_empty",
     "refresh_folder",
     "relative_path",
     "safe_component",
+    "save_owned",
     "write_atomic",
 ]

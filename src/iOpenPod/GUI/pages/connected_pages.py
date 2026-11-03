@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, cast
 from PySide6.QtCore import QCoreApplication, QSize, Qt, QUrl
 from PySide6.QtGui import QIcon, QPixmap, QShowEvent
 from PySide6.QtWidgets import (
-    QAbstractItemView,
     QCheckBox,
     QComboBox,
     QFileDialog,
@@ -26,19 +25,15 @@ from PySide6.QtWidgets import (
     QSplitter,
     QTableWidget,
     QTableWidgetItem,
-    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from iOpenPod.app.connected.config import (
-    GrimmoryPick,
     ImmichPick,
     ImmichPickKind,
     ImmichSize,
     PathMapping,
-    PlexPick,
-    PlexPickKind,
     TagMatch,
 )
 from iOpenPod.app.connected.grimmory_sso import redirect_uri
@@ -59,8 +54,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from iOpenPod.app.connected.grimmory import (
-        Audiobook,
-        GrimmoryClient,
         GrimmoryCollection,
     )
     from iOpenPod.app.connected.grimmory_progress import ProgressPlan
@@ -72,7 +65,6 @@ if TYPE_CHECKING:
     from iOpenPod.app.connected.memos import MemosSummary, NotesPlan
     from iOpenPod.app.connected.plex import (
         PlexClient,
-        PlexItem,
         PlexServer,
         PlexServerChoice,
     )
@@ -234,10 +226,6 @@ def _thumbnail(client: ImmichClient, asset: str) -> Callable[[], bytes]:
     return lambda: client.thumbnail(asset)
 
 
-def _cover(client: GrimmoryClient, book: Audiobook) -> Callable[[], bytes]:
-    return lambda: client.cover(book.book_id)
-
-
 def _clock(ms: int) -> str:
     seconds = max(0, ms) // 1000
     hours, rest = divmod(seconds, 3600)
@@ -267,16 +255,9 @@ class PlexPage(_ConnectedPage):
     ) -> None:
         self._scrobbling = scrobbling
         self._workspace = workspace
-        self._section = ""
-        self._loading_lists = False
         super().__init__(controller, "Plex", parent)
         self.setObjectName("plexPage")
         self._header.set_title(self.tr("Plex"))
-        self._download = _button(
-            self.tr("Download for Sync"), self, ActionButtonKind.PRIMARY
-        )
-        self._download.clicked.connect(self._refresh_downloads)
-        self._header.add_action(self._download)
 
         account = QGroupBox(self.tr("Account and server"), self)
         self._account = QLabel(account)
@@ -346,78 +327,32 @@ class PlexPage(_ConnectedPage):
         mappings_layout.addWidget(self._mappings)
         mappings_layout.addLayout(_row(add_mapping, remove_mapping))
 
-        picker = QGroupBox(self.tr("Choose music"), self)
-        self._tabs = QTabWidget(picker)
-        self._playlists = QListWidget(self._tabs)
-        self._artists = QListWidget(self._tabs)
-        self._albums = QListWidget(self._tabs)
-        artist_split = QSplitter(self._tabs)
-        artist_split.addWidget(self._artists)
-        artist_split.addWidget(self._albums)
-        self._artists.currentItemChanged.connect(self._artist_selected)
-        search = QWidget(self._tabs)
-        self._query = QLineEdit(search)
-        self._query.setPlaceholderText(self.tr("Search artists, albums and songs"))
-        self._query.returnPressed.connect(self._search)
-        self._results = QListWidget(search)
-        search_layout = QVBoxLayout(search)
-        search_layout.setContentsMargins(0, 0, 0, 0)
-        search_layout.addWidget(self._query)
-        search_layout.addWidget(self._results)
-        self._tabs.addTab(self._playlists, self.tr("Playlists"))
-        self._tabs.addTab(artist_split, self.tr("Artists and albums"))
-        self._tabs.addTab(search, self.tr("Search"))
-        for widget in (self._playlists, self._artists, self._albums, self._results):
-            widget.itemChanged.connect(self._pick_toggled)
-            widget.setMinimumHeight(260)
-        self._selected = QListWidget(picker)
-        self._selected.setSelectionMode(
-            QAbstractItemView.SelectionMode.ExtendedSelection
+        music = QGroupBox(self.tr("Music"), self)
+        open_folder = _button(
+            self.tr("Show downloaded music"), music, ActionButtonKind.QUIET
         )
-        self._selected.setMaximumWidth(320)
-        remove = _button(
-            self.tr("Remove from selection"), picker, ActionButtonKind.QUIET
-        )
-        remove.clicked.connect(self._remove_selected)
-        reload = _button(self.tr("Reload Plex library"), picker, ActionButtonKind.QUIET)
-        reload.clicked.connect(self._load_library)
-        open_folder = _button(self.tr("Show downloads"), picker, ActionButtonKind.QUIET)
         open_folder.clicked.connect(lambda: self.open_folder(ConnectedSource.PLEX))
-        selected_column = QVBoxLayout()
-        selected_column.addWidget(QLabel(self.tr("Selected for the iPod"), picker))
-        selected_column.addWidget(self._selected, 1)
-        selected_column.addWidget(remove)
-        picker_layout = QVBoxLayout(picker)
-        top = QHBoxLayout()
-        top.addWidget(self._tabs, 1)
-        top.addLayout(selected_column)
-        picker_layout.addLayout(top)
-        picker_layout.addLayout(_row(reload, open_folder))
-
-        for icon_list in (self._playlists, self._albums, self._results):
-            icon_list.setIconSize(QSize(40, 40))
-        controller.previewLoaded.connect(self._preview)
+        music_layout = QVBoxLayout(music)
+        music_layout.addWidget(
+            _description(
+                self.tr(
+                    "All your Plex music and playlists appear in Sync with Host's media list, beside your computer's music. Check what goes on the iPod there; songs download only when Sync copies them. Downloads are kept within the media cache limit in Settings → Sync."
+                ),
+                music,
+            )
+        )
+        music_layout.addLayout(_row(open_folder))
         self.body.addWidget(account)
-        self.body.addWidget(picker, 1)
+        self.body.addWidget(music)
         self.body.addWidget(plays)
         self.body.addWidget(mappings)
         self._load_mappings()
-        self._render_selected()
         self.refresh()
 
     # --- state ---------------------------------------------------------------------
 
-    def showEvent(self, event: QShowEvent) -> None:
-        super().showEvent(event)
-        if (
-            self.controller.plex_restore()
-            and not self._playlists.count()
-            and not self.controller.busy
-        ):
-            self._load_library()
-
     def refresh(self) -> None:
-        if not hasattr(self, "_download"):
+        if not hasattr(self, "_ratings"):
             return
         config = self.controller.config.plex
         signed_in = bool(config.username)
@@ -445,9 +380,8 @@ class PlexPage(_ConnectedPage):
                     + ("" if choice.owned else self.tr(" (shared with you)")),
                     choice,
                 )
-        for widget in (self._sign_in, self._use_server, self._ratings, self._download):
+        for widget in (self._sign_in, self._use_server, self._ratings):
             widget.setEnabled(not busy)
-        self._download.setEnabled(not busy and connected and bool(config.picks))
         self._ratings.setEnabled(not busy and connected)
 
     def _start_sign_in(self) -> None:
@@ -483,29 +417,11 @@ class PlexPage(_ConnectedPage):
             if credentials is not None and self._scrobbling.plex_sync:
                 # Plays and stars follow the chosen server.
                 self._scrobbling.connect_plex(credentials)
-            self.say(self.tr("Connected to {name}.").format(name=server.name))
-            self._load_library()
-        elif operation == "plex-library":
-            playlists, artists, section = cast(
-                "tuple[tuple[PlexItem, ...], tuple[PlexItem, ...], str]", value
-            )
-            self._section = section
-            self._fill(self._playlists, playlists)
-            self._fill(self._artists, artists)
             self.say(
-                self.tr("{playlists} playlists and {artists} artists.").format(
-                    playlists=len(playlists), artists=len(artists)
-                )
+                self.tr(
+                    "Connected to {name}. Its music appears in Sync with Host."
+                ).format(name=server.name)
             )
-        elif operation == "plex-albums":
-            self._fill(self._albums, cast("tuple[PlexItem, ...]", value))
-            self.say("")
-        elif operation == "plex-search":
-            results = cast("tuple[PlexItem, ...]", value)
-            self._fill(self._results, results)
-            self.say(self.tr("{count} results.").format(count=len(results)))
-        elif operation == "refresh":
-            self.refresh_outcome(value)
         elif operation == "plex-ratings-plan":
             self._review_ratings(cast("RatingPlan", value))
         elif operation == "plex-ratings-send":
@@ -532,141 +448,6 @@ class PlexPage(_ConnectedPage):
         if self._scrobbling.plex_connected:
             self._scrobbling.disconnect_service(Service.PLEX)
         self.controller.forget(SecretKey.PLEX)
-        for widget in (self._playlists, self._artists, self._albums, self._results):
-            widget.clear()
-
-    def _load_library(self) -> None:
-        self.start("plex-library")
-        self.say(self.tr("Reading your Plex library…"))
-        plex = self.controller.plex
-
-        def work(server: PlexServer, _job: object) -> object:
-            sections = plex.music_sections(server)
-            section = sections[0][0] if sections else ""
-            artists = plex.artists(server, section) if section else ()
-            return (plex.playlists(server), artists, section)
-
-        self.controller.run_plex("plex-library", work)
-
-    def _artist_selected(
-        self, current: QListWidgetItem | None, _previous: object
-    ) -> None:
-        if current is None or self.controller.busy:
-            return
-        item = cast("PlexItem", current.data(_ROLE))
-        plex = self.controller.plex
-        self.start("plex-albums")
-        self.controller.run_plex(
-            "plex-albums", lambda server, _job: plex.albums(server, item.key)
-        )
-
-    def _search(self) -> None:
-        text = self._query.text().strip()
-        if not text or not self._section:
-            return
-        plex, section = self.controller.plex, self._section
-        self.start("plex-search")
-        self.controller.run_plex(
-            "plex-search", lambda server, _job: plex.search(server, section, text)
-        )
-
-    # --- selection -----------------------------------------------------------------
-
-    def _picked(self) -> dict[tuple[str, str], PlexPick]:
-        return {
-            (pick.kind.value, pick.key): pick
-            for pick in self.controller.config.plex.picks
-        }
-
-    def _fill(self, widget: QListWidget, items: tuple[PlexItem, ...]) -> None:
-        picked = self._picked()
-        self._loading_lists = True
-        widget.clear()
-        for item in items:
-            detail = item.subtitle
-            if item.count:
-                detail = f"{detail} · {item.count}" if detail else str(item.count)
-            widget.addItem(
-                _checkable(
-                    item.title, item, (item.kind.value, item.key) in picked, detail
-                )
-            )
-            server = self.controller.plex_server
-            if item.thumb and server is not None and widget is not self._artists:
-                self.controller.preview(
-                    f"plex:{item.key}",
-                    _plex_art(self.controller.plex, server, item.thumb),
-                )
-        self._loading_lists = False
-
-    def _preview(self, key: str, data: bytes) -> None:
-        if not key.startswith("plex:") or not data:
-            return
-        pixmap = QPixmap()
-        if not pixmap.loadFromData(data):
-            return
-        rating_key = key.removeprefix("plex:")
-        for widget in (self._playlists, self._albums, self._results):
-            for row in range(widget.count()):
-                entry = widget.item(row)
-                if cast("PlexItem", entry.data(_ROLE)).key == rating_key:
-                    entry.setIcon(QIcon(pixmap))
-
-    def _pick_toggled(self, entry: QListWidgetItem) -> None:
-        if self._loading_lists:
-            return
-        item = cast("PlexItem", entry.data(_ROLE))
-        picks = self._picked()
-        key = (item.kind.value, item.key)
-        if entry.checkState() == Qt.CheckState.Checked:
-            picks[key] = PlexPick(item.kind, item.key, item.title, item.subtitle)
-        else:
-            picks.pop(key, None)
-        self.controller.set_plex_picks(tuple(picks.values()))
-        self._render_selected()
-
-    def _render_selected(self) -> None:
-        self._selected.clear()
-        labels = {
-            PlexPickKind.PLAYLIST: self.tr("Playlist"),
-            PlexPickKind.ARTIST: self.tr("Artist"),
-            PlexPickKind.ALBUM: self.tr("Album"),
-            PlexPickKind.TRACK: self.tr("Song"),
-        }
-        for pick in self.controller.config.plex.picks:
-            entry = QListWidgetItem(f"{labels[pick.kind]}: {pick.title}")
-            entry.setData(_ROLE, pick)
-            self._selected.addItem(entry)
-
-    def _remove_selected(self) -> None:
-        gone = {
-            id(cast("PlexPick", item.data(_ROLE)))
-            for item in self._selected.selectedItems()
-        }
-        keep = tuple(
-            pick for pick in self.controller.config.plex.picks if id(pick) not in gone
-        )
-        self.controller.set_plex_picks(keep)
-        self._render_selected()
-        removed = {
-            (pick.kind.value, pick.key) for pick in self.controller.config.plex.picks
-        }
-        self._loading_lists = True
-        for widget in (self._playlists, self._artists, self._albums, self._results):
-            for row in range(widget.count()):
-                entry = widget.item(row)
-                item = cast("PlexItem", entry.data(_ROLE))
-                entry.setCheckState(
-                    Qt.CheckState.Checked
-                    if (item.kind.value, item.key) in removed
-                    else Qt.CheckState.Unchecked
-                )
-        self._loading_lists = False
-
-    def _refresh_downloads(self) -> None:
-        self.start("refresh")
-        self.controller.register_folder(ConnectedSource.PLEX)
-        self.controller.refresh((ConnectedSource.PLEX,))
 
     # --- path mappings ---------------------------------------------------------------
 
@@ -1056,11 +837,6 @@ class GrimmoryPage(_ConnectedPage):
         super().__init__(controller, "Grimmory", parent)
         self.setObjectName("grimmoryPage")
         self._header.set_title(self.tr("Grimmory Audiobooks"))
-        self._download = _button(
-            self.tr("Download for Sync"), self, ActionButtonKind.PRIMARY
-        )
-        self._download.clicked.connect(self._refresh_downloads)
-        self._header.add_action(self._download)
         account = QGroupBox(self.tr("Server"), self)
         self._url = QLineEdit(controller.config.grimmory.url, account)
         self._url.setPlaceholderText("http://192.168.1.10:6060")
@@ -1102,32 +878,21 @@ class GrimmoryPage(_ConnectedPage):
             ),
         )
 
-        picker = QGroupBox(self.tr("Choose audiobooks"), self)
-        self._shelves = QListWidget(picker)
-        self._shelves.setMaximumWidth(280)
-        self._shelves.currentItemChanged.connect(self._shelf_opened)
-        self._query = QLineEdit(picker)
-        self._query.setPlaceholderText(self.tr("Search audiobooks"))
-        self._query.returnPressed.connect(self._search)
-        self._books = QListWidget(picker)
-        self._books.setIconSize(QSize(48, 48))
-        self._books.setMinimumHeight(320)
-        self._books.itemChanged.connect(self._book_toggled)
-        self._summary = QLabel(picker)
-        open_folder = _button(self.tr("Show downloads"), picker, ActionButtonKind.QUIET)
+        books = QGroupBox(self.tr("Audiobooks"), self)
+        open_folder = _button(
+            self.tr("Show downloaded audiobooks"), books, ActionButtonKind.QUIET
+        )
         open_folder.clicked.connect(lambda: self.open_folder(ConnectedSource.GRIMMORY))
-        books_column = QWidget(picker)
-        books_layout = QVBoxLayout(books_column)
-        books_layout.setContentsMargins(0, 0, 0, 0)
-        books_layout.addWidget(self._query)
-        books_layout.addWidget(self._books, 1)
-        split = QSplitter(picker)
-        split.addWidget(self._shelves)
-        split.addWidget(books_column)
-        split.setStretchFactor(1, 1)
-        layout = QVBoxLayout(picker)
-        layout.addWidget(split, 1)
-        layout.addLayout(_row(self._summary, open_folder))
+        books_layout = QVBoxLayout(books)
+        books_layout.addWidget(
+            _description(
+                self.tr(
+                    "All your Grimmory audiobooks appear in Sync with Host's media list. Check what goes on the iPod there; they download only when Sync copies them, and are kept within the media cache limit in Settings → Sync."
+                ),
+                books,
+            )
+        )
+        books_layout.addLayout(_row(open_folder))
 
         progress = QGroupBox(self.tr("Listening progress"), self)
         self._exchange = _button(self.tr("Sync Progress Now"), progress)
@@ -1149,9 +914,8 @@ class GrimmoryPage(_ConnectedPage):
         progress_layout.addWidget(self._auto)
         progress_layout.addLayout(_row(self._exchange))
         self.body.addWidget(account)
-        self.body.addWidget(picker, 1)
+        self.body.addWidget(books)
         self.body.addWidget(progress)
-        controller.previewLoaded.connect(self._preview)
         self.refresh()
 
     def refresh(self) -> None:
@@ -1171,11 +935,7 @@ class GrimmoryPage(_ConnectedPage):
             if signed_in
             else ""
         )
-        self._download.setEnabled(not busy and bool(config.picks))
         self._exchange.setEnabled(not busy and signed_in)
-        self._summary.setText(
-            self.tr("{count} audiobooks selected").format(count=len(config.picks))
-        )
 
     def _connect_server(self) -> None:
         if self.controller.busy:
@@ -1197,8 +957,6 @@ class GrimmoryPage(_ConnectedPage):
 
     def _forget(self) -> None:
         self.controller.forget(SecretKey.GRIMMORY)
-        self._shelves.clear()
-        self._books.clear()
         self.say(self.tr("Signed out of Grimmory."))
 
     def handle(self, operation: str, value: object) -> None:
@@ -1208,29 +966,19 @@ class GrimmoryPage(_ConnectedPage):
                 self._user.setText(username)
             self.handle("grimmory-connect", (collections, issues))
         elif operation == "grimmory-connect":
-            collections, issues = cast(
+            _collections, issues = cast(
                 "tuple[tuple[GrimmoryCollection, ...], tuple[str, ...]]", value
             )
-            self._shelves.clear()
-            everything = QListWidgetItem(self.tr("All audiobooks"))
-            everything.setData(_ROLE, None)
-            self._shelves.addItem(everything)
-            for collection in collections:
-                label = (
-                    self.tr("Library: {name}")
-                    if collection.kind == "library"
-                    else self.tr("Shelf: {name}")
-                ).format(name=collection.name)
-                item = QListWidgetItem(label)
-                item.setData(_ROLE, collection)
-                self._shelves.addItem(item)
             self.say(
                 "\n".join(
-                    (self.tr("Connected. Choose a library or shelf."), *issues[:2])
+                    (
+                        self.tr(
+                            "Connected. Your audiobooks appear in Sync with Host's media list."
+                        ),
+                        *issues[:2],
+                    )
                 )
             )
-        elif operation == "grimmory-books":
-            self._fill(cast("tuple[Audiobook, ...]", value))
         elif operation == "grimmory-progress-plan":
             self._review_progress(cast("ProgressPlan", value))
         elif operation == "grimmory-progress-send":
@@ -1248,67 +996,6 @@ class GrimmoryPage(_ConnectedPage):
                 )
             lines.extend(result.failed[:5])
             self.say("\n".join(lines))
-        elif operation == "refresh":
-            self.refresh_outcome(value)
-
-    def _shelf_opened(self, current: QListWidgetItem | None, _previous: object) -> None:
-        if current is None or self.controller.busy:
-            return
-        self.start("grimmory-books")
-        self.say(self.tr("Loading audiobooks…"))
-        self.controller.grimmory_books(
-            cast("GrimmoryCollection | None", current.data(_ROLE))
-        )
-
-    def _search(self) -> None:
-        text = self._query.text().strip()
-        if not text or self.controller.busy:
-            return
-        self.start("grimmory-books")
-        self.say(self.tr("Searching…"))
-        self.controller.grimmory_books(search=text)
-
-    def _fill(self, books: tuple[Audiobook, ...]) -> None:
-        picked = {pick.book_id for pick in self.controller.config.grimmory.picks}
-        client = self.controller.grimmory()
-        self._loading = True
-        self._books.clear()
-        for book in books:
-            detail = " · ".join(part for part in (book.author, book.series) if part)
-            self._books.addItem(
-                _checkable(book.title, book, book.book_id in picked, detail)
-            )
-            self.controller.preview(f"grimmory:{book.book_id}", _cover(client, book))
-        self._loading = False
-        self.say(self.tr("{count} audiobooks.").format(count=len(books)))
-
-    def _preview(self, key: str, data: bytes) -> None:
-        if not key.startswith("grimmory:") or not data:
-            return
-        pixmap = QPixmap()
-        if not pixmap.loadFromData(data):
-            return
-        book_id = key.removeprefix("grimmory:")
-        for row in range(self._books.count()):
-            item = self._books.item(row)
-            if cast("Audiobook", item.data(_ROLE)).book_id == book_id:
-                item.setIcon(QIcon(pixmap))
-
-    def _book_toggled(self, entry: QListWidgetItem) -> None:
-        if self._loading:
-            return
-        book = cast("Audiobook", entry.data(_ROLE))
-        picks = {pick.book_id: pick for pick in self.controller.config.grimmory.picks}
-        if entry.checkState() == Qt.CheckState.Checked:
-            picks[book.book_id] = GrimmoryPick(book.book_id, book.title, book.author)
-        else:
-            picks.pop(book.book_id, None)
-        self.controller.set_grimmory_picks(tuple(picks.values()))
-
-    def _refresh_downloads(self) -> None:
-        self.start("refresh")
-        self.controller.register_folder(ConnectedSource.GRIMMORY)
-        self.controller.refresh((ConnectedSource.GRIMMORY,))
 
     def _plan_progress(self) -> None:
         if self.controller.busy:

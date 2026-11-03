@@ -282,6 +282,9 @@ class HostMediaSource:
     modified_ns: int
     acoustic_fingerprint: str | None = None
     content_sha256: str | None = None
+    # A Connected Source item whose file is downloaded when Sync prepares it;
+    # ``path`` is where it is (or will be) cached.
+    remote: bool = False
 
     @property
     def playlist_id(self) -> int | None:
@@ -3629,6 +3632,41 @@ def _nonnegative_int(value: object) -> int:
     )
 
 
+def folder_artwork_source(
+    path: HostPath, size_bytes: int, modified_ns: int, content_sha256: str
+) -> HostMediaArtworkSource:
+    """A cover file beside media, identified by its content like scanned covers."""
+
+    return HostMediaArtworkSource(
+        _stable_content_identity(content_sha256, "artwork"),
+        HostArtworkKind.FOLDER,
+        path,
+        size_bytes,
+        modified_ns,
+        content_sha256,
+    )
+
+
+def playlist_entry_identity(
+    playlist: os.PathLike[str], index: int, target: os.PathLike[str]
+) -> str:
+    """The entry ID a playlist file's ``index``-th reference to ``target`` receives."""
+
+    return _entry_identity(playlist, index, target)
+
+
+def stable_playlist_identity(path: os.PathLike[str]) -> int:
+    """The Playlist ID a playlist file at ``path`` (or a remote playlist) receives."""
+
+    return _stable_identity(path, "playlist")
+
+
+def stable_track_identity(path: os.PathLike[str]) -> int:
+    """The snapshot Track ID a Host file (or remote item) at ``path`` receives."""
+
+    return _stable_identity(path, "track")
+
+
 def _stable_identity(path: os.PathLike[str], namespace: str) -> int:
     digest = hashlib.blake2b(
         f"iopenpod.host.{namespace}.v1\0{_path_identity(path)}".encode(
@@ -3691,4 +3729,8 @@ __all__ = [
     "PlaylistExternalReference",
     "classify_host_media_file",
     "embedded_artwork_from_bytes",
+    "folder_artwork_source",
+    "playlist_entry_identity",
+    "stable_playlist_identity",
+    "stable_track_identity",
 ]

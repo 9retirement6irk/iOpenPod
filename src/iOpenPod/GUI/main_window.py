@@ -33,6 +33,7 @@ from iOpenPod.app.connected_controller import (
     ConnectedController,
     ConnectedSource,
     StarsSent,
+    SyncPreparation,
 )
 from iOpenPod.app.context import AppContext
 from iOpenPod.app.core.settings.definitions import (
@@ -72,6 +73,7 @@ from iOpenPod.app.models.device import ActiveIPod, DeviceDiscovery
 from iOpenPod.app.photo_controller import PhotoLoadFailure
 from iOpenPod.app.playback.backend import PlaybackFailure
 from iOpenPod.app.podcasts.sync import PodcastSyncRequest
+from iOpenPod.app.remote_media import RemoteCatalog, merge_remote
 from iOpenPod.app.scrobbling.controller import create_scrobbling
 from iOpenPod.app.scrobbling.models import ScrobbleResult
 from iOpenPod.app.scrobbling.settings import configured_accounts
@@ -83,7 +85,7 @@ from iOpenPod.app.sync_execution import (
     SyncExecutor,
     review_playlist_sync,
 )
-from iOpenPod.app.sync_plan import prepare_sync_plan
+from iOpenPod.app.sync_plan import host_path_identity, prepare_sync_plan
 from iOpenPod.app.synesthesia import AnalysisProgress, TrackAnalysis
 from iOpenPod.app.tag_normalization_controller import TagNormalizationController
 from iOpenPod.app.tag_normalizer import tag_profile
@@ -248,6 +250,8 @@ class MainWindow(QMainWindow):
         self._connected.progress.connect(self._connected_progress)
         self._connected.signInUrl.connect(self._open_sign_in_url)
         self._pending_sync_folders: tuple[HostMediaFolder, ...] | None = None
+        # Plex and Grimmory listed for the current Sync, merged after the scan.
+        self._remote_catalog: RemoteCatalog | None = None
         self._stars_pending = False
         self._scrobbling.finished.connect(self._scrobble_finished)
         self._scrobbling.set_plex_source(self._connected.plex_credentials)
@@ -449,6 +453,7 @@ class MainWindow(QMainWindow):
             context.i18n_manager,
             self._pages,
             scrobbling=self._scrobbling,
+            connected=self._connected,
         )
         self._media_tools = MediaToolsController(
             self, find_tool=context.find_media_tool
@@ -1730,45 +1735,43 @@ class MainWindow(QMainWindow):
         self._start_host_sync(folders)
 
     def _refresh_connected_sources(self, folders: tuple[HostMediaFolder, ...]) -> bool:
-        """Download Connected Source Selections first when Sync includes their folders."""
+        """Before scanning: update Immich picks and list Plex and Grimmory.
 
-        connected = {
-            source
-            for source in (
-                ConnectedSource.PLEX,
-                ConnectedSource.IMMICH,
-                ConnectedSource.GRIMMORY,
-            )
-            if any(
-                os.path.normcase(os.path.normpath(os.fspath(folder.path)))
-                == os.path.normcase(
-                    os.path.normpath(os.fspath(self._connected.folder(source)))
-                )
-                for folder in folders
-            )
-        }
-        config = self._connected.config
-        sources = tuple(
-            source
-            for source, picks in (
-                (ConnectedSource.PLEX, config.plex.picks),
-                (ConnectedSource.IMMICH, config.immich.picks),
-                (ConnectedSource.GRIMMORY, config.grimmory.picks),
-            )
-            if picks and source in connected
+        Plex and Grimmory join Sync's media list from their catalogs, so their
+        cache folders are never scanned as ordinary Host folders.
+        """
+
+        def same(folder: HostMediaFolder, path: Path) -> bool:
+            return os.path.normcase(
+                os.path.normpath(os.fspath(folder.path))
+            ) == os.path.normcase(os.path.normpath(os.fspath(path)))
+
+        immich = any(
+            same(folder, self._connected.folder(ConnectedSource.IMMICH))
+            for folder in folders
+        )
+        streamed = tuple(
+            self._connected.folder(source)
+            for source in (ConnectedSource.PLEX, ConnectedSource.GRIMMORY)
+        )
+        folders = tuple(
+            folder
+            for folder in folders
+            if not any(same(folder, path) for path in streamed)
         )
         tracks = (
             self._context.library_workspace.tracks
-            if ConnectedSource.GRIMMORY in sources
-            and self._context.device_controller.active_ipod is not None
+            if self._context.device_controller.active_ipod is not None
             else ()
         )
-        if not sources or not self._connected.refresh(sources, tracks):
-            return False
+        self._remote_catalog = None
+        if not self._connected.prepare_for_sync(immich=immich, tracks=tracks):
+            self._start_host_sync(folders)
+            return True
         self._pending_sync_folders = folders
         self._context.status.show(
             "connected.refresh",
-            source_text("Updating Plex, Immich and Grimmory downloads before Sync…"),
+            source_text("Listing Plex and Grimmory, and updating Immich, before Sync…"),
         )
         return True
 
@@ -1796,9 +1799,17 @@ class MainWindow(QMainWindow):
             self._context.status.show("plex.stars", " ".join(parts), timeout_ms=20_000)
             return
         folders = self._pending_sync_folders
-        if operation == "refresh" and folders is not None:
+        if operation == "prepare-sync" and folders is not None:
             self._pending_sync_folders = None
-            self._context.status.clear("connected.refresh")
+            preparation = cast("SyncPreparation", _value)
+            self._remote_catalog = preparation.catalog
+            problems = (*preparation.catalog.issues, *preparation.notes)
+            if problems:
+                self._context.status.show(
+                    "connected.refresh", " ".join(problems[:3]), timeout_ms=20_000
+                )
+            else:
+                self._context.status.clear("connected.refresh")
             self._start_host_sync(folders)
 
     def _connected_message(self, text: str) -> None:
@@ -1972,9 +1983,16 @@ class MainWindow(QMainWindow):
         finally:
             dialog.deleteLater()
 
+    def _with_remote(self, value: HostMediaLibrary) -> HostMediaLibrary:
+        """Add the Plex and Grimmory catalog listed for this Sync."""
+
+        catalog = self._remote_catalog
+        return value if catalog is None else merge_remote(value, catalog)
+
     def _media_scan_finished(self, value: object) -> None:
         if not isinstance(value, HostMediaLibrary):
             return
+        value = self._with_remote(value)
         if self._context.device_controller.active_ipod is not None:
             self._pending_host_media_library = value
             if self._context.ipod_media_controller.start():
@@ -2003,6 +2021,11 @@ class MainWindow(QMainWindow):
                 if self._context.settings.get(ROCKBOX_METADATA_SUPPORT)
                 else None,
             )
+            remote = {
+                host_path_identity(str(source.path))
+                for source in host.sources
+                if source.remote
+            }
             paths = frozenset(
                 HostPath(Path(item.host_path))
                 for item in comparison.items
@@ -2010,6 +2033,8 @@ class MainWindow(QMainWindow):
                 and not item.host_size_changed
                 and not item.host_modified_changed
                 and item.host_path is not None
+                # A remote item's details come from its server, not a file.
+                and host_path_identity(item.host_path) not in remote
             )
             if paths:
                 self._pending_ipod_media_library = value
@@ -2029,7 +2054,7 @@ class MainWindow(QMainWindow):
             None,
         )
         if isinstance(value, HostMediaLibrary) and ipod is not None:
-            self._finish_media_scan(value, ipod)
+            self._finish_media_scan(self._with_remote(value), ipod)
 
     def _finish_media_scan(
         self,
@@ -2135,6 +2160,7 @@ class MainWindow(QMainWindow):
             active,
             reconcile_playlists=self._sync_workspace.reconcile_playlists,
             playlist_choices=self._sync_workspace.playlist_choices,
+            remote=self._connected.remote_media,
             podcasts=(
                 self._context.podcast_controller.sync_request()
                 if self._context.podcast_controller.snapshot.writable
@@ -2172,6 +2198,8 @@ class MainWindow(QMainWindow):
     def _sync_finished(self, value: object) -> None:
         if not isinstance(value, SyncExecutionResult):
             return
+        # Keep Plex and Grimmory downloads within the cache limit, or remove them.
+        self._connected.trim_cache()
         self._review_host = None
         self._review_ipod = None
         self._review_active = None

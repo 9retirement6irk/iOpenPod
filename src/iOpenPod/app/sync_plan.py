@@ -913,7 +913,12 @@ def _paired_item(
         # analysis window. Missing evidence falls back to changed Host file facts.
         audio_payload_changed = (
             host.fingerprint != ipod.fingerprint
-            if host.fingerprint is not None and ipod.fingerprint is not None
+            if host.fingerprint is not None
+            and ipod.fingerprint is not None
+            # A remote identity names an item, not its sound: an iPod copy made
+            # from a downloaded pick has a real fingerprint, so compare file facts.
+            and is_remote_identity(host.fingerprint)
+            == is_remote_identity(ipod.fingerprint)
             else size_changed or modified_changed
         )
         # A video or a non-default audio/subtitle selection can change while the
@@ -1306,6 +1311,17 @@ def _track_detail(track: Track | None) -> str:
     return " · ".join(value for value in (track.artist, track.album) if value.strip())
 
 
+# A Remote Identity is stored where Acoustic Fingerprints are, in their raw fpcalc
+# form, so it opens with values fpcalc never produces at the start of audio.
+REMOTE_IDENTITY_PREFIX = "0,0,0,4294967295,4294967295,0,"
+
+
+def is_remote_identity(value: str | None) -> bool:
+    """Whether a fingerprint is a Connected Source item identity, not audio."""
+
+    return value is not None and value.startswith(REMOTE_IDENTITY_PREFIX)
+
+
 def _identity(value: str | None) -> str | None:
     normalized = "" if value is None else value.strip()
     return normalized or None
@@ -1327,6 +1343,7 @@ def _item_sort_key(item: SyncPlanItem) -> tuple[int, str, str]:
 
 
 __all__ = [
+    "REMOTE_IDENTITY_PREFIX",
     "SyncDuplicateGroup",
     "SyncDuplicateHost",
     "SyncDuplicateIPod",
@@ -1338,6 +1355,7 @@ __all__ = [
     "SyncPlanItem",
     "SyncPlanMediaKind",
     "host_path_identity",
+    "is_remote_identity",
     "prepare_sync_plan",
     "resolve_sync_duplicates",
     "select_sync_plan",

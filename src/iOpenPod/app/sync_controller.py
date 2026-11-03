@@ -49,6 +49,7 @@ if TYPE_CHECKING:
     from iOpenPod.app.models.device import ActiveIPod
     from iOpenPod.app.playlist_sync import PlaylistSyncChoice
     from iOpenPod.app.podcasts.sync import PodcastSyncRequest
+    from iOpenPod.app.remote_media import RemoteMedia
     from iOpenPod.app.sync_plan import SyncPlan
 
 logger = logging.getLogger(__name__)
@@ -368,6 +369,7 @@ class SyncController(QObject):
         reconcile_playlists: bool = True,
         playlist_choices: tuple[PlaylistSyncChoice, ...] = (),
         podcasts: PodcastSyncRequest | None = None,
+        remote: RemoteMedia | None = None,
     ) -> bool:
         self.last_error = ""
         if self.needs_recovery:
@@ -433,6 +435,7 @@ class SyncController(QObject):
                 playlist_choices=playlist_choices,
                 podcasts=podcasts,
                 scrobble_accounts=configured_accounts(self._settings),
+                remote=remote,
             )
         except ValueError as error:
             self.last_error = f"Check the transcoding settings: {error}"

@@ -139,6 +139,9 @@ class ConnectedConfig:
     plex: PlexConfig = field(default_factory=PlexConfig)
     immich: ImmichConfig = field(default_factory=ImmichConfig)
     grimmory: GrimmoryConfig = field(default_factory=GrimmoryConfig)
+    # Keep Plex and Grimmory downloads between Syncs, up to this many GB.
+    cache_media: bool = True
+    cache_limit_gb: int = 20
     memos: MemosConfig = field(default_factory=MemosConfig)
     calendars: CalendarsConfig = field(default_factory=CalendarsConfig)
 

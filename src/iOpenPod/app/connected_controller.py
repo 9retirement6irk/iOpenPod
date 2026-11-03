@@ -31,7 +31,6 @@ from iOpenPod.app.connected.grimmory import (
     GrimmoryCollection,
     GrimmoryProgress,
     GrimmoryTokens,
-    plan_grimmory,
 )
 from iOpenPod.app.connected.grimmory_progress import (
     IPodBook,
@@ -61,7 +60,7 @@ from iOpenPod.app.connected.plex import (
     client_identifier,
 )
 from iOpenPod.app.connected.plex_ratings import RatingPlan, plan_ratings
-from iOpenPod.app.connected.plex_source import plan_plex
+from iOpenPod.app.connected.remote_source import ConnectedRemote
 from iOpenPod.app.connected.secrets import SecretKey, SecretStore, SystemSecretStore
 from iOpenPod.app.host_media_folders import (
     HostMediaFolder,
@@ -70,6 +69,7 @@ from iOpenPod.app.host_media_folders import (
     same_host_media_folder,
     save_host_media_folders,
 )
+from iOpenPod.app.remote_media import RemoteCatalog
 from iOpenPod.app.scrobbling.models import Credentials
 from iOpenPod.app.services.ipod_extras import ExtrasFile, ExtrasResult, ExtrasSection
 from storage import HostPath
@@ -114,6 +114,15 @@ class RefreshOutcome:
     # Grimmory: listening positions sent before downloading.
     progress_sent: int = 0
     marks: tuple[GrimmoryMark, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class SyncPreparation:
+    refreshed: tuple[RefreshOutcome, ...]
+    catalog: RemoteCatalog
+    progress_sent: int = 0
+    marks: tuple[GrimmoryMark, ...] = ()
+    notes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,6 +226,7 @@ class ConnectedController(QObject):
         self._plex_choices: tuple[PlexServerChoice, ...] = ()
         self._preview_cache: dict[str, bytes] = {}
         self._calendar_links: list[tuple[str, str]] | None = None
+        self._remote: ConnectedRemote | None = None
 
     # --- state ---------------------------------------------------------------------
 
@@ -394,6 +404,22 @@ class ConnectedController(QObject):
             return
         save_host_media_folders(self._settings, (*folders, wanted))
 
+    def unregister_streamed(self) -> None:
+        """Plex and Grimmory join Sync from their catalogs, not as scanned folders."""
+
+        streamed = [
+            HostMediaFolder(HostPath(self.folder(source)))
+            for source in (ConnectedSource.PLEX, ConnectedSource.GRIMMORY)
+        ]
+        folders = load_host_media_folders(self._settings)
+        kept = tuple(
+            folder
+            for folder in folders
+            if not any(same_host_media_folder(folder, item) for item in streamed)
+        )
+        if len(kept) != len(folders):
+            save_host_media_folders(self._settings, kept)
+
     # --- Plex --------------------------------------------------------------------------
 
     def plex_sign_in(self) -> None:
@@ -462,7 +488,7 @@ class ConnectedController(QObject):
                 ),
             )
         )
-        self.register_folder(ConnectedSource.PLEX)
+        self.unregister_streamed()
 
     def plex_restore(self) -> bool:
         """Reuse the saved server without a network round trip."""
@@ -592,18 +618,11 @@ class ConnectedController(QObject):
         return self._start("refresh", work, then=then)
 
     def refresh_before_sync(self) -> bool:
-        """Refresh every source with a Selection; returns False when nothing to do."""
+        """Update Immich picks; Plex and Grimmory are listed by prepare_for_sync."""
 
-        sources = tuple(
-            source
-            for source, picks in (
-                (ConnectedSource.PLEX, self._config.plex.picks),
-                (ConnectedSource.IMMICH, self._config.immich.picks),
-                (ConnectedSource.GRIMMORY, self._config.grimmory.picks),
-            )
-            if picks
+        return bool(self._config.immich.picks) and self.refresh(
+            (ConnectedSource.IMMICH,)
         )
-        return bool(sources) and self.refresh(sources)
 
     def _refresh_source(
         self,
@@ -612,59 +631,144 @@ class ConnectedController(QObject):
         job: _Job,
         books: tuple[IPodBook, ...] = (),
     ) -> RefreshOutcome:
+        if source != ConnectedSource.IMMICH:
+            raise ConnectedError(
+                "Plex and Grimmory are no longer downloaded ahead of Sync; they appear in Sync's media list."
+            )
         emit = job.signals.progress.emit
         folder = config.root() / _FOLDER_TYPES[source][0]
-        notes: list[str] = []
-        sent = 0
-        marks: tuple[GrimmoryMark, ...] = ()
-        items: tuple[Desired, ...]
-        if source == ConnectedSource.PLEX:
-            if not self.plex_restore() or self._plex_server is None:
-                raise ConnectedError("Choose a Plex server before downloading.")
-            plan = plan_plex(
-                self.plex,
-                self._plex_server,
-                config.plex,
-                cancelled=job.cancelled,
-                progress=emit,
-            )
-            items = plan.items
-            notes.extend(plan.skipped)
-            label = "Plex"
-        elif source == ConnectedSource.IMMICH:
-            key = self.secret(SecretKey.IMMICH).get("api_key", "")
-            immich = ImmichClient(config.immich.url, key)
-            items = plan_immich(
-                immich, config.immich, cancelled=job.cancelled, progress=emit
-            )
-            label = "Immich"
-        else:
-            client = self.grimmory()
-            if books:
-                emit("Grimmory: sending listening progress…")
-                exchange = plan_progress(
-                    books,
-                    self._remote_progress(client, books, job),
-                    {mark.book_id: mark for mark in config.grimmory.marks},
-                    pull=False,
-                )
-                result = self._send_progress(client, exchange, job, pulled=False)
-                sent = result.sent
-                marks = self._kept_marks(exchange, result, pulled=False)
-                notes.extend(result.failed)
-            items = plan_grimmory(
-                client, config.grimmory, cancelled=job.cancelled, progress=emit
-            )
-            label = "Grimmory"
+        key = self.secret(SecretKey.IMMICH).get("api_key", "")
+        immich = ImmichClient(config.immich.url, key)
+        items: tuple[Desired, ...] = plan_immich(
+            immich, config.immich, cancelled=job.cancelled, progress=emit
+        )
 
         def report(name: str, index: int, total: int) -> None:
             if name:
-                emit(f"{label}: {index + 1} of {total} · {name.rsplit('/', 1)[-1]}")
+                emit(f"Immich: {index + 1} of {total} · {name.rsplit('/', 1)[-1]}")
 
         outcome = refresh_folder(
             folder, items, cancelled=job.cancelled, progress=report
         )
-        return RefreshOutcome(source, outcome, tuple(notes), sent, marks)
+        return RefreshOutcome(source, outcome)
+
+    # --- streaming Plex and Grimmory into Sync ---------------------------------------
+
+    @property
+    def remote_media(self) -> ConnectedRemote | None:
+        """The downloader for the last listed catalog, for Sync Execution."""
+
+        return self._remote
+
+    @property
+    def streams(self) -> bool:
+        """Whether Plex or Grimmory is set up to appear in Sync."""
+
+        return bool(self._config.plex.server_id) or bool(self._config.grimmory.username)
+
+    def _make_remote(self) -> ConnectedRemote | None:
+        server = self._plex_server if self.plex_restore() else None
+        grimmory = self.grimmory() if self._config.grimmory.username else None
+        if server is None and grimmory is None:
+            return None
+        return ConnectedRemote(
+            self._config.root(),
+            self._store.directory / "connected-catalog.json",
+            plex=self.plex if server is not None else None,
+            server=server,
+            mappings=self._config.plex.mappings,
+            grimmory=grimmory,
+        )
+
+    def prepare_for_sync(self, *, immich: bool, tracks: tuple[Track, ...] = ()) -> bool:
+        """Before a Host scan: update Immich picks, send Grimmory progress, list remotes.
+
+        Returns False when there is nothing to do, so Sync can start at once.
+        """
+
+        self.unregister_streamed()
+        config = self._config
+        remote = self._make_remote()
+        immich = immich and bool(config.immich.picks)
+        if remote is None and not immich:
+            self._remote = None
+            return False
+        books = (
+            ipod_books(tracks)
+            if config.grimmory.sync_progress and config.grimmory.username
+            else ()
+        )
+
+        def work(job: _Job) -> SyncPreparation:
+            outcomes: list[RefreshOutcome] = []
+            if immich:
+                outcomes.append(
+                    self._refresh_source(ConnectedSource.IMMICH, config, job)
+                )
+            catalog = RemoteCatalog()
+            sent = 0
+            marks: tuple[GrimmoryMark, ...] = ()
+            notes: tuple[str, ...] = ()
+            if remote is not None:
+                if books:
+                    sent, marks, notes = self._push_progress(
+                        self.grimmory(), books, config, job
+                    )
+                catalog = remote.catalog(job.cancelled, job.signals.progress.emit)
+            return SyncPreparation(tuple(outcomes), catalog, sent, marks, notes)
+
+        def then(value: object) -> None:
+            if isinstance(value, SyncPreparation):
+                self._remote = remote
+                if value.marks:
+                    self._save_marks(value.marks)
+
+        return self._start("prepare-sync", work, then=then)
+
+    def _push_progress(
+        self,
+        client: GrimmoryClient,
+        books: tuple[IPodBook, ...],
+        config: ConnectedConfig,
+        job: _Job,
+    ) -> tuple[int, tuple[GrimmoryMark, ...], tuple[str, ...]]:
+        job.signals.progress.emit("Grimmory: sending listening progress…")
+        try:
+            exchange = plan_progress(
+                books,
+                self._remote_progress(client, books, job),
+                {mark.book_id: mark for mark in config.grimmory.marks},
+                pull=False,
+            )
+        except CancelledError:
+            raise
+        except ConnectedError as error:
+            return 0, (), (f"Grimmory progress: {error}",)
+        result = self._send_progress(client, exchange, job, pulled=False)
+        return (
+            result.sent,
+            self._kept_marks(exchange, result, pulled=False),
+            result.failed,
+        )
+
+    def trim_cache(self) -> bool:
+        """After Sync: keep downloads within the cache limit, or remove them."""
+
+        remote = self._remote
+        if remote is None:
+            return False
+        keep = self._config.cache_media
+        limit = max(0, self._config.cache_limit_gb) * 1024**3
+
+        def work(_job: _Job) -> tuple[int, int]:
+            return remote.trim(keep=keep, limit_bytes=limit)
+
+        return self._start("trim-cache", work)
+
+    def set_cache(self, *, enabled: bool, limit_gb: int) -> None:
+        self.update_config(
+            replace(self._config, cache_media=enabled, cache_limit_gb=max(1, limit_gb))
+        )
 
     # --- Immich -------------------------------------------------------------------------
 
@@ -722,7 +826,7 @@ class ConnectedController(QObject):
         self.update_config(
             replace(self._config, grimmory=replace(self._config.grimmory, url=url))
         )
-        self.register_folder(ConnectedSource.GRIMMORY)
+        self.unregister_streamed()
         client = (
             self.grimmory()
             if same_server and not password
@@ -754,7 +858,7 @@ class ConnectedController(QObject):
         self.update_config(
             replace(self._config, grimmory=replace(self._config.grimmory, url=url))
         )
-        self.register_folder(ConnectedSource.GRIMMORY)
+        self.unregister_streamed()
         client = GrimmoryClient(url, on_tokens=self._save_grimmory_tokens)
 
         def work(job: _Job) -> object:

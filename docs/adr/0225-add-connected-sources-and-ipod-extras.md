@@ -72,6 +72,35 @@ iPod positions are optionally sent to Grimmory; moving iPod bookmarks always wai
 an explicit exchange. A Progress Mark is not per iPod, so two iPods listening to the
 same book take turns as the side that moved.
 
+## Plex and Grimmory are streamed into Sync
+
+Plex and Grimmory no longer use Selections. Before each Sync, their whole catalogs
+are listed (every Plex song and audio playlist, every Grimmory audiobook track)
+and merged into the Host Media Library after the scan as Remote Items, so they
+appear in Sync's media list beside the Host's own files and are checked there.
+Nothing is downloaded until Sync Execution prepares a checked item: the download
+happens inside that item's preparation, just before it is converted, and Plex
+path mappings still copy from a share instead.
+
+A Remote Item's path is its cache location, the same path a pick was saved to, so
+an earlier pick counts as a cached copy and keeps its iPod pairing by prior path.
+Its fingerprint is a Remote Identity: a marker no fpcalc output begins with,
+followed by a digest of the item's server key, stored where Acoustic Fingerprints
+are. Sync Plan never compares a Remote Identity with real audio evidence; it
+compares file facts instead. Those facts are kept stable across downloads: a
+current cached copy reports its own facts, an uncached item reports the server's
+size (or the size last downloaded) and a time derived from its revision, and a
+download receives that same time. A new server revision therefore changes the
+facts and replaces the iPod copy, and an unchanged item is never copied again.
+
+The media cache keeps downloads between Syncs up to a limit in Settings → Sync,
+evicting the least recently synced first; with it off, each Sync removes its
+downloads afterwards. Covers are always kept because Sync reads them for artwork.
+The last listing is remembered, with audiobook details and downloaded sizes, so a
+server that cannot be reached still shows its items. The Plex and Grimmory
+folders are no longer registered as scanned Host folders. Immich keeps its
+Selections.
+
 ## iPod Extras are published through Storage
 
 Notes and calendars are not Library media. They are iPod Extras: plain files the

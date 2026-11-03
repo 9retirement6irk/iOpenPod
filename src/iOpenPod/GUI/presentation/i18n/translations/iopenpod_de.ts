@@ -2260,7 +2260,7 @@
     </message>
     <message>
         <source>Download for Sync</source>
-        <translation>Für Synchronisation laden</translation>
+        <translation type="vanished">Für Synchronisation laden</translation>
     </message>
     <message>
         <source>Server</source>
@@ -2315,16 +2315,32 @@
         <translation>„Mit SSO anmelden“ öffnet deinen Identitätsanbieter im Browser, wie Grimmorys eigene Anmeldeseite. Dazu muss {address} bei deinem Identitätsanbieter als erlaubte Weiterleitungsadresse (Callback) für Grimmorys Client eingetragen sein.</translation>
     </message>
     <message>
+        <source>Audiobooks</source>
+        <translation>Hörbücher</translation>
+    </message>
+    <message>
+        <source>Show downloaded audiobooks</source>
+        <translation>Geladene Hörbücher anzeigen</translation>
+    </message>
+    <message>
+        <source>All your Grimmory audiobooks appear in Sync with Host&apos;s media list. Check what goes on the iPod there; they download only when Sync copies them, and are kept within the media cache limit in Settings → Sync.</source>
+        <translation>Alle deine Grimmory-Hörbücher erscheinen in der Medienliste von „Mit Computer synchronisieren“. Wähle dort aus, was auf den iPod kommt; sie werden erst geladen, wenn die Synchronisation sie kopiert, und im Rahmen des Medien-Cache-Limits unter Einstellungen → Synchronisieren behalten.</translation>
+    </message>
+    <message>
+        <source>Connected. Your audiobooks appear in Sync with Host&apos;s media list.</source>
+        <translation>Verbunden. Deine Hörbücher erscheinen in der Medienliste von „Mit Computer synchronisieren“.</translation>
+    </message>
+    <message>
         <source>Choose audiobooks</source>
-        <translation>Hörbücher auswählen</translation>
+        <translation type="vanished">Hörbücher auswählen</translation>
     </message>
     <message>
         <source>Search audiobooks</source>
-        <translation>Hörbücher suchen</translation>
+        <translation type="vanished">Hörbücher suchen</translation>
     </message>
     <message>
         <source>Show downloads</source>
-        <translation>Downloads anzeigen</translation>
+        <translation type="vanished">Downloads anzeigen</translation>
     </message>
     <message>
         <source>Listening progress</source>
@@ -2352,7 +2368,7 @@
     </message>
     <message>
         <source>{count} audiobooks selected</source>
-        <translation>{count} Hörbücher ausgewählt</translation>
+        <translation type="vanished">{count} Hörbücher ausgewählt</translation>
     </message>
     <message>
         <source>Connecting to Grimmory…</source>
@@ -2368,19 +2384,19 @@
     </message>
     <message>
         <source>All audiobooks</source>
-        <translation>Alle Hörbücher</translation>
+        <translation type="vanished">Alle Hörbücher</translation>
     </message>
     <message>
         <source>Library: {name}</source>
-        <translation>Bibliothek: {name}</translation>
+        <translation type="vanished">Bibliothek: {name}</translation>
     </message>
     <message>
         <source>Shelf: {name}</source>
-        <translation>Regal: {name}</translation>
+        <translation type="vanished">Regal: {name}</translation>
     </message>
     <message>
         <source>Connected. Choose a library or shelf.</source>
-        <translation>Verbunden. Wähle eine Bibliothek oder ein Regal.</translation>
+        <translation type="vanished">Verbunden. Wähle eine Bibliothek oder ein Regal.</translation>
     </message>
     <message>
         <source>Sent {sent} positions to Grimmory and moved {pulled} iPod bookmarks.</source>
@@ -2392,15 +2408,15 @@
     </message>
     <message>
         <source>Loading audiobooks…</source>
-        <translation>Hörbücher werden geladen…</translation>
+        <translation type="vanished">Hörbücher werden geladen…</translation>
     </message>
     <message>
         <source>Searching…</source>
-        <translation>Suche läuft…</translation>
+        <translation type="vanished">Suche läuft…</translation>
     </message>
     <message>
         <source>{count} audiobooks.</source>
-        <translation>{count} Hörbücher.</translation>
+        <translation type="vanished">{count} Hörbücher.</translation>
     </message>
     <message>
         <source>Listening progress already matches for {count} audiobooks.</source>
@@ -3256,6 +3272,49 @@
     <message>
         <source>Details</source>
         <translation>Details</translation>
+    </message>
+</context>
+<context>
+    <name>MediaCacheSettings</name>
+    <message>
+        <source>Plex and Grimmory media</source>
+        <translation>Medien aus Plex und Grimmory</translation>
+    </message>
+    <message>
+        <source>On</source>
+        <translation>Ein</translation>
+    </message>
+    <message>
+        <source>Keep downloads between Syncs</source>
+        <translation>Downloads zwischen Synchronisationen behalten</translation>
+    </message>
+    <message>
+        <source>Plex songs and Grimmory audiobooks download when Sync copies them to the iPod. Kept downloads aren&apos;t fetched again for later Syncs; when this is off, each Sync downloads what it needs and removes it afterwards.</source>
+        <translation>Plex-Titel und Grimmory-Hörbücher werden geladen, wenn die Synchronisation sie auf den iPod kopiert. Behaltene Downloads werden bei späteren Synchronisationen nicht erneut geladen; ist dies aus, lädt jede Synchronisation, was sie braucht, und entfernt es danach.</translation>
+    </message>
+    <message>
+        <source>Cache limit</source>
+        <translation>Cache-Limit</translation>
+    </message>
+    <message>
+        <source>After each Sync, the least recently synced downloads are removed until the cache fits. Covers are always kept.</source>
+        <translation>Nach jeder Synchronisation werden die am längsten nicht synchronisierten Downloads entfernt, bis der Cache passt. Cover werden immer behalten.</translation>
+    </message>
+    <message>
+        <source> GB</source>
+        <translation> GB</translation>
+    </message>
+    <message>
+        <source>Cache limit in gigabytes</source>
+        <translation>Cache-Limit in Gigabyte</translation>
+    </message>
+    <message>
+        <source>Cache folder</source>
+        <translation>Cache-Ordner</translation>
+    </message>
+    <message>
+        <source>Show folder</source>
+        <translation>Ordner anzeigen</translation>
     </message>
 </context>
 <context>
@@ -5847,7 +5906,7 @@ Prüfen Sie ihre Regeln mit „Bearbeiten“.</translation>
     </message>
     <message>
         <source>Download for Sync</source>
-        <translation>Für Synchronisation laden</translation>
+        <translation type="vanished">Für Synchronisation laden</translation>
     </message>
     <message>
         <source>Account and server</source>
@@ -5918,40 +5977,56 @@ Prüfen Sie ihre Regeln mit „Bearbeiten“.</translation>
         <translation>Wenn deine Musikfreigabe hier eingebunden ist, kopiert iOpenPod Dateien daraus, statt sie über Plex zu laden. Beispiel: /mnt/media/music → /Volumes/Media/music.</translation>
     </message>
     <message>
+        <source>Music</source>
+        <translation>Musik</translation>
+    </message>
+    <message>
+        <source>Show downloaded music</source>
+        <translation>Geladene Musik anzeigen</translation>
+    </message>
+    <message>
+        <source>All your Plex music and playlists appear in Sync with Host&apos;s media list, beside your computer&apos;s music. Check what goes on the iPod there; songs download only when Sync copies them. Downloads are kept within the media cache limit in Settings → Sync.</source>
+        <translation>Deine gesamte Plex-Musik und alle Wiedergabelisten erscheinen in der Medienliste von „Mit Computer synchronisieren“, neben der Musik deines Computers. Wähle dort aus, was auf den iPod kommt; Titel werden erst geladen, wenn die Synchronisation sie kopiert. Downloads werden im Rahmen des Medien-Cache-Limits unter Einstellungen → Synchronisieren behalten.</translation>
+    </message>
+    <message>
+        <source>Connected to {name}. Its music appears in Sync with Host.</source>
+        <translation>Mit {name} verbunden. Die Musik erscheint in „Mit Computer synchronisieren“.</translation>
+    </message>
+    <message>
         <source>Choose music</source>
-        <translation>Musik auswählen</translation>
+        <translation type="vanished">Musik auswählen</translation>
     </message>
     <message>
         <source>Search artists, albums and songs</source>
-        <translation>Künstler, Alben und Titel suchen</translation>
+        <translation type="vanished">Künstler, Alben und Titel suchen</translation>
     </message>
     <message>
         <source>Playlists</source>
-        <translation>Wiedergabelisten</translation>
+        <translation type="vanished">Wiedergabelisten</translation>
     </message>
     <message>
         <source>Artists and albums</source>
-        <translation>Künstler und Alben</translation>
+        <translation type="vanished">Künstler und Alben</translation>
     </message>
     <message>
         <source>Search</source>
-        <translation>Suchen</translation>
+        <translation type="vanished">Suchen</translation>
     </message>
     <message>
         <source>Remove from selection</source>
-        <translation>Aus Auswahl entfernen</translation>
+        <translation type="vanished">Aus Auswahl entfernen</translation>
     </message>
     <message>
         <source>Reload Plex library</source>
-        <translation>Plex-Mediathek neu laden</translation>
+        <translation type="vanished">Plex-Mediathek neu laden</translation>
     </message>
     <message>
         <source>Show downloads</source>
-        <translation>Downloads anzeigen</translation>
+        <translation type="vanished">Downloads anzeigen</translation>
     </message>
     <message>
         <source>Selected for the iPod</source>
-        <translation>Für den iPod ausgewählt</translation>
+        <translation type="vanished">Für den iPod ausgewählt</translation>
     </message>
     <message>
         <source>Signed in as {name} · {server}</source>
@@ -5983,15 +6058,15 @@ Prüfen Sie ihre Regeln mit „Bearbeiten“.</translation>
     </message>
     <message>
         <source>Connected to {name}.</source>
-        <translation>Mit {name} verbunden.</translation>
+        <translation type="vanished">Mit {name} verbunden.</translation>
     </message>
     <message>
         <source>{playlists} playlists and {artists} artists.</source>
-        <translation>{playlists} Wiedergabelisten und {artists} Künstler.</translation>
+        <translation type="vanished">{playlists} Wiedergabelisten und {artists} Künstler.</translation>
     </message>
     <message>
         <source>{count} results.</source>
-        <translation>{count} Ergebnisse.</translation>
+        <translation type="vanished">{count} Ergebnisse.</translation>
     </message>
     <message>
         <source>Set stars on {count} Plex songs.</source>
@@ -6011,23 +6086,23 @@ Prüfen Sie ihre Regeln mit „Bearbeiten“.</translation>
     </message>
     <message>
         <source>Reading your Plex library…</source>
-        <translation>Deine Plex-Mediathek wird gelesen…</translation>
+        <translation type="vanished">Deine Plex-Mediathek wird gelesen…</translation>
     </message>
     <message>
         <source>Playlist</source>
-        <translation>Wiedergabeliste</translation>
+        <translation type="vanished">Wiedergabeliste</translation>
     </message>
     <message>
         <source>Artist</source>
-        <translation>Künstler</translation>
+        <translation type="vanished">Künstler</translation>
     </message>
     <message>
         <source>Album</source>
-        <translation>Album</translation>
+        <translation type="vanished">Album</translation>
     </message>
     <message>
         <source>Song</source>
-        <translation>Titel</translation>
+        <translation type="vanished">Titel</translation>
     </message>
     <message>
         <source>Choose a Plex server first.</source>
@@ -10898,6 +10973,10 @@ Playlists: %3</translation>
         <translation>Linux benötigt die mitgelieferte Identifikationsregel 61-iopenpod.rules, damit iOpenPod dieses Modell prüfen kann. Installieren Sie diese in /etc/udev/rules.d, laden Sie die udev-Regeln neu und schließen Sie den iPod erneut an.</translation>
     </message>
     <message>
+        <source>Listing Plex and Grimmory, and updating Immich, before Sync…</source>
+        <translation>Plex und Grimmory werden aufgelistet und Immich wird aktualisiert, bevor synchronisiert wird…</translation>
+    </message>
+    <message>
         <source>Lyrics cannot be verified for this iPod&apos;s native player: {reason} The full lyrics and source file were not truncated.</source>
         <translation>Der Liedtext kann für den integrierten Player dieses iPod nicht überprüft werden: {reason} Der vollständige Liedtext und die Quelldatei wurden nicht gekürzt.</translation>
     </message>
@@ -12823,7 +12902,7 @@ Playlists: %3</translation>
     </message>
     <message>
         <source>Updating Plex, Immich and Grimmory downloads before Sync…</source>
-        <translation>Plex-, Immich- und Grimmory-Downloads werden vor der Synchronisation aktualisiert…</translation>
+        <translation type="vanished">Plex-, Immich- und Grimmory-Downloads werden vor der Synchronisation aktualisiert…</translation>
     </message>
     <message>
         <source>Use a finite number.</source>
@@ -13106,6 +13185,10 @@ Beim Fortfahren wird das Autorisierungsformat für {model} versucht.</translatio
     <message>
         <source>{name} is empty or is not a regular file.</source>
         <translation>{name} ist leer oder keine reguläre Datei.</translation>
+    </message>
+    <message>
+        <source>{name} is in Plex or Grimmory, which isn&apos;t connected. Sign in again on its page.</source>
+        <translation>{name} liegt in Plex oder Grimmory, das nicht verbunden ist. Melde dich auf der zugehörigen Seite erneut an.</translation>
     </message>
     <message>
         <source>{name} is not ready to load ({readiness}).</source>

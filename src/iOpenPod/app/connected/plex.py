@@ -475,6 +475,19 @@ class PlexClient:
                 )
         return tuple(found)
 
+    def playlist_tracks(
+        self, server: PlexServer, key: str, cancelled: Event | None = None
+    ) -> tuple[PlexTrack, ...]:
+        """One audio playlist's Tracks, in Plex's order."""
+
+        rows = self._paged(server, f"/playlists/{quote(key)}/items", cancelled)
+        return tuple(
+            track
+            for row in rows
+            if row.get("type") in (None, "track")
+            and (track := parse_track(row)) is not None
+        )
+
     def expand(
         self, server: PlexServer, pick: PlexPick, cancelled: Event | None = None
     ) -> tuple[PlexTrack, ...]:

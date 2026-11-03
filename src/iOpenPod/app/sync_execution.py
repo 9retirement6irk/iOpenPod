@@ -154,6 +154,7 @@ if TYPE_CHECKING:
         PodcastSyncRequest,
     )
     from iOpenPod.app.podcasts.sync_preparation import PreparedPodcastSync
+    from iOpenPod.app.remote_media import RemoteMedia
     from iOpenPod.app.scrobbling.service import ScrobbleService
     from iOpenPod.app.services.device_coordinator import DeviceCoordinator
     from iOpenPod.app.sync_plan import SyncPlan
@@ -195,6 +196,8 @@ class SyncExecutionRequest:
     podcasts: PodcastSyncRequest | None = None
     scrobble_accounts: tuple[Account, ...] = ()
     playlist_choices: tuple[PlaylistSyncChoice, ...] = ()
+    # Downloads Connected Source items (Plex, Grimmory) as Sync prepares them.
+    remote: RemoteMedia | None = None
     genius_analysis_skip: Event = field(
         default_factory=Event, compare=False, repr=False, kw_only=True
     )
@@ -1851,6 +1854,17 @@ class SyncExecutor:
         activity: Callable[[MediaPreparationProgress], None],
     ) -> _PreparedTrack:
         checkpoint()
+        if source.remote:
+            if request.remote is None:
+                raise ValueError(
+                    source_text(
+                        "{name} is in Plex or Grimmory, which isn't connected. Sign in again on its page.",
+                        name=item.name,
+                    )
+                )
+            # Download (or reuse the cached copy) now; its facts replace the
+            # server's description for the checks and Sync Details below.
+            source = request.remote.materialize(source, checkpoint, activity)
         _validate_host_source(source)
         with ExitStack() as lifetime:
             result = lifetime.enter_context(
@@ -2998,6 +3012,10 @@ def _validate_device_sources(
 
 
 def _validate_host_source(source: HostMediaSource) -> None:
+    if source.remote:
+        # Not a Host file until downloaded; materialize() checks the download,
+        # and preparation reads a private captured copy of it.
+        return
     observed = LocalHostFile.observe(source.path)
     if (observed.size_bytes, observed.modified_ns) != (
         source.size_bytes,
