@@ -48,6 +48,8 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Open the iTunesDB chunk object browser.",
     )
+    # An iopenpod:// link the operating system opened with iOpenPod (sign-in).
+    parser.add_argument("link", nargs="?", default=None, help=argparse.SUPPRESS)
 
     return parser
 
@@ -75,6 +77,16 @@ def main(
             sys.stderr.write(report)
         return result
 
+    link: str | None = args.link
+    if link is not None:
+        from iOpenPod.app.app_links import forward, is_app_link
+
+        if not is_app_link(link):
+            parser.error(f"unrecognized argument: {link}")
+        if forward(link):
+            # The running iOpenPod takes it from here; don't open a second window.
+            return 0
+
     from iOpenPod.app.core.runtime import configure_frozen_runtime
 
     configure_frozen_runtime()
@@ -87,7 +99,7 @@ def main(
         logger.info("iOpenPod CLI stopped.")
         return 0
 
-    exit_code = start_gui()
+    exit_code = start_gui(link)
 
     logger.info("iOpenPod stopped.")
     return exit_code
@@ -151,10 +163,10 @@ def run_cli(
     return False
 
 
-def start_gui() -> int:
+def start_gui(link: str | None = None) -> int:
     from iOpenPod.app.app import start_ui
 
-    return start_ui()
+    return start_ui(link)
 
 
 def run_chunk_browser() -> None:

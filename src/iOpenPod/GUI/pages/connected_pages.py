@@ -36,7 +36,7 @@ from iOpenPod.app.connected.config import (
     PathMapping,
     TagMatch,
 )
-from iOpenPod.app.connected.grimmory_sso import redirect_uri
+from iOpenPod.app.connected.grimmory_sso import CALLBACK
 from iOpenPod.app.connected.secrets import SecretKey
 from iOpenPod.app.connected_controller import (
     ConnectedSource,
@@ -872,8 +872,8 @@ class GrimmoryPage(_ConnectedPage):
             "",
             _description(
                 self.tr(
-                    "Sign In with SSO opens your identity provider in the browser, like Grimmory's own sign-in page. It needs {address} added as an allowed redirect (callback) address for Grimmory's client in your identity provider."
-                ).format(address=redirect_uri()),
+                    "Sign In with SSO opens your identity provider in the browser, the way Grimmory's mobile apps do, and the browser returns to iOpenPod through {address}. Add that address once in Grimmory (Settings → Authentication → Mobile Redirect URIs) and as an allowed redirect for Grimmory's client in your identity provider."
+                ).format(address=CALLBACK),
                 account,
             ),
         )

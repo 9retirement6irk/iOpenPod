@@ -1188,6 +1188,10 @@
         <translation>Schließe die Anmeldung bei {provider} in deinem Browser ab…</translation>
     </message>
     <message>
+        <source>A sign-in link arrived, but no Grimmory sign-in was waiting for it. Choose Sign In with SSO again.</source>
+        <translation>Ein Anmeldelink ist eingetroffen, aber keine Grimmory-Anmeldung hat darauf gewartet. Wähle erneut „Mit SSO anmelden“.</translation>
+    </message>
+    <message>
         <source>No audiobooks downloaded from Grimmory are on this iPod yet. Sync them first.</source>
         <translation>Auf diesem iPod sind noch keine Hörbücher aus Grimmory. Synchronisiere sie zuerst.</translation>
     </message>
@@ -2312,7 +2316,7 @@
     </message>
     <message>
         <source>Sign In with SSO opens your identity provider in the browser, like Grimmory&apos;s own sign-in page. It needs {address} added as an allowed redirect (callback) address for Grimmory&apos;s client in your identity provider.</source>
-        <translation>„Mit SSO anmelden“ öffnet deinen Identitätsanbieter im Browser, wie Grimmorys eigene Anmeldeseite. Dazu muss {address} bei deinem Identitätsanbieter als erlaubte Weiterleitungsadresse (Callback) für Grimmorys Client eingetragen sein.</translation>
+        <translation type="vanished">„Mit SSO anmelden“ öffnet deinen Identitätsanbieter im Browser, wie Grimmorys eigene Anmeldeseite. Dazu muss {address} bei deinem Identitätsanbieter als erlaubte Weiterleitungsadresse (Callback) für Grimmorys Client eingetragen sein.</translation>
     </message>
     <message>
         <source>Audiobooks</source>
@@ -2417,6 +2421,10 @@
     <message>
         <source>{count} audiobooks.</source>
         <translation type="vanished">{count} Hörbücher.</translation>
+    </message>
+    <message>
+        <source>Sign In with SSO opens your identity provider in the browser, the way Grimmory&apos;s mobile apps do, and the browser returns to iOpenPod through {address}. Add that address once in Grimmory (Settings → Authentication → Mobile Redirect URIs) and as an allowed redirect for Grimmory&apos;s client in your identity provider.</source>
+        <translation>„Mit SSO anmelden“ öffnet deinen Identitätsanbieter im Browser, wie es die Grimmory-Apps für Mobilgeräte tun, und der Browser kehrt über {address} zu iOpenPod zurück. Trage diese Adresse einmalig in Grimmory ein (Einstellungen → Authentifizierung → Mobile Redirect URIs) und bei deinem Identitätsanbieter als erlaubte Weiterleitung für Grimmorys Client.</translation>
     </message>
     <message>
         <source>Listening progress already matches for {count} audiobooks.</source>

@@ -253,3 +253,42 @@ def test_sync_downloads_a_remote_item_and_records_its_identity(tmp_path: Path) -
         assert failed.status is not SyncExecutionStatus.SUCCESS or failed.issues
     finally:
         device.coordinator.close()
+
+
+def test_a_song_synced_on_another_computer_shows_as_ticked_and_unchanged(
+    tmp_path: Path,
+) -> None:
+    """Synced from Plex on one computer, compared on another whose cache lives
+    elsewhere: the Remote Identity pairs them, so it is on the iPod and ticked."""
+
+    from PySide6.QtCore import Qt
+
+    from iOpenPod.app.models.sync_selection import SyncSelection
+
+    mac_cache = (
+        tmp_path
+        / "Users/will/Music/iOpenPod Connected/Plex/Band/Album/03 Song [1].flac"
+    )
+    windows_cache = (
+        tmp_path
+        / "C/Users/will/Music/iOpenPod Connected/Plex/Band/Album/03 Song [1].flac"
+    )
+    on_windows = item(windows_cache)  # same Plex server and item, not cached here
+    synced_on_mac = _ipod_track(
+        track_id=10,
+        fingerprint=on_windows.identity,
+        sync=_sync(
+            mac_cache, size=on_windows.size_bytes, modified=on_windows.modified_ns
+        ),
+    )
+    host = merge_remote(_host_library((), (), ()), RemoteCatalog((on_windows,)))
+    plan = prepare_sync_plan(host, _ipod_library((synced_on_mac,)), _ipod_snapshot(10))
+    (entry,) = plan.items
+    assert entry.ipod_id == 10
+    assert entry.action is SyncPlanAction.UNCHANGED
+    assert not entry.audio_payload_changed
+    selection = SyncSelection()
+    selection.reset(host, plan)
+    (track,) = host.snapshot.tracks
+    assert selection.track_on_ipod(track.track_id)
+    assert selection.track_check_state(track.track_id) is Qt.CheckState.Checked

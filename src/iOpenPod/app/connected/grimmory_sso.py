@@ -1,29 +1,26 @@
-"""Grimmory single sign-on (OIDC) for a desktop app.
+"""Grimmory single sign-on (OIDC) for a desktop app, the way its mobile apps do it.
 
-Grimmory's web app signs in with the Authorization Code flow and PKCE against the
-identity provider Grimmory is configured for, then hands the code to Grimmory
-(``POST /api/v1/auth/oidc/callback``), which exchanges it, validates the ID token,
-and answers with Grimmory's own access and refresh tokens.
+iOpenPod signs in with the Authorization Code flow and PKCE against the identity
+provider Grimmory is configured for. The provider returns to iOpenPod through a
+custom-scheme link, ``iopenpod://oauth2-callback?code=...&state=...``, which the
+operating system hands to the running app (see ``iOpenPod.app.app_links``). The
+code then goes to Grimmory's mobile callback (``POST
+/api/v1/auth/oidc/mobile/callback``), which exchanges it, validates the ID token and
+answers with Grimmory's own access and refresh tokens.
 
-iOpenPod does the same as a native app (RFC 8252): it opens the provider's sign-in
-page in the browser and receives the code on a loopback address,
-``http://127.0.0.1:53817/oauth2-callback``. Grimmory only accepts http(s) redirect
-addresses that end in ``/oauth2-callback`` and whose origin matches the request's
-``Origin``, so iOpenPod sends that origin with the callback. The identity provider
-must list the loopback address as an allowed redirect for Grimmory's client, which
-is the one setup step a server admin does once.
+Setup, once per server: Grimmory accepts a custom-scheme address only when it is
+listed under Settings → Authentication → Mobile Redirect URIs (only
+``grimmory://oauth2-callback`` is listed by default), and the identity provider
+must allow the same address as a redirect for Grimmory's client.
 """
 
 from __future__ import annotations
 
 import base64
 import hashlib
-import json
 import secrets
 import threading
 from dataclasses import dataclass
-from html import escape
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import TYPE_CHECKING, cast
 from urllib.parse import parse_qs, urlencode, urlsplit
 
@@ -35,14 +32,9 @@ if TYPE_CHECKING:
 
     from .grimmory import GrimmoryClient, GrimmoryTokens
 
-SSO_PORT = 53817
-CALLBACK_PATH = "/oauth2-callback"
+CALLBACK = "iopenpod://oauth2-callback"
 SSO_TIMEOUT = 300.0  # Grimmory's sign-in state expires after five minutes
 _DEFAULT_SCOPES = "openid profile email groups offline_access"
-
-
-def redirect_uri(port: int = SSO_PORT) -> str:
-    return f"http://127.0.0.1:{port}{CALLBACK_PATH}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,7 +54,7 @@ class SsoRequest:
     state: str
     nonce: str
     verifier: str
-    redirect: str
+    redirect: str = CALLBACK
 
 
 def _b64(data: bytes) -> str:
@@ -96,9 +88,7 @@ def provider(client: GrimmoryClient) -> SsoProvider | None:
     )
 
 
-def start(
-    client: GrimmoryClient, sso: SsoProvider, *, port: int = SSO_PORT
-) -> SsoRequest:
+def start(client: GrimmoryClient, sso: SsoProvider) -> SsoRequest:
     """Ask Grimmory for a state, find the provider's sign-in page, build its URL."""
 
     state = str(_object(client.public("/api/v1/auth/oidc/state")).get("state") or "")
@@ -120,12 +110,11 @@ def start(
         )
     verifier, challenge = pkce_pair()
     nonce = _b64(secrets.token_bytes(24))
-    redirect = redirect_uri(port)
     query = urlencode(
         {
             "response_type": "code",
             "client_id": sso.client_id,
-            "redirect_uri": redirect,
+            "redirect_uri": CALLBACK,
             "scope": sso.scopes,
             "code_challenge": challenge,
             "code_challenge_method": "S256",
@@ -134,45 +123,38 @@ def start(
         }
     )
     separator = "&" if "?" in endpoint else "?"
-    return SsoRequest(f"{endpoint}{separator}{query}", state, nonce, verifier, redirect)
+    return SsoRequest(f"{endpoint}{separator}{query}", state, nonce, verifier)
 
 
 def finish(client: GrimmoryClient, request: SsoRequest, code: str) -> GrimmoryTokens:
     """Hand the provider's code to Grimmory and keep the Grimmory tokens it returns."""
 
-    parts = urlsplit(request.redirect)
-    origin = f"{parts.scheme}://{parts.netloc}"
-    body = json.dumps(
+    query = urlencode(
         {
             "code": code,
-            "codeVerifier": request.verifier,
-            "redirectUri": request.redirect,
+            "code_verifier": request.verifier,
+            "redirect_uri": request.redirect,
             "nonce": request.nonce,
             "state": request.state,
         }
-    ).encode()
+    )
     try:
         response = client.transport.send(
             "POST",
-            f"{client.base}/api/v1/auth/oidc/callback",
-            {
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-                # Grimmory compares the redirect's origin with the request's.
-                "Origin": origin,
-            },
-            body,
+            f"{client.base}/api/v1/auth/oidc/mobile/callback?{query}",
+            {"Accept": "application/json"},
+            b"",
         )
     except ConnectedError as error:
-        raise _explain(error, origin) from None
+        raise _explain(error) from None
     return client.accept_tokens(_object(json_body(response)))
 
 
-def _explain(error: ConnectedError, origin: str) -> ConnectedError:
-    text = str(error)
-    if error.status == 400 and "redirect" in text.casefold():
+def _explain(error: ConnectedError) -> ConnectedError:
+    text = str(error).casefold()
+    if error.status == 400 and "redirect" in text:
         return ConnectedError(
-            "Grimmory refused iOpenPod's sign-in address. Update Grimmory, or ask its admin to check the OIDC settings.",
+            f"Grimmory doesn't allow iOpenPod's sign-in address yet. In Grimmory, add {CALLBACK} under Settings → Authentication → Mobile Redirect URIs, then try again.",
             400,
         )
     if error.status == 400:
@@ -180,124 +162,72 @@ def _explain(error: ConnectedError, origin: str) -> ConnectedError:
             "The sign-in took longer than five minutes or was already used. Try again.",
             400,
         )
-    if error.status == 403 and "provisioned" in text.casefold():
+    if error.status == 403 and "provisioned" in text:
         return ConnectedError(
             "Your sign-in worked, but Grimmory has no account for you and won't create one. Ask its admin to add you or turn on automatic accounts.",
             403,
         )
-    if error.status == 403:
-        return ConnectedError(
-            f"Grimmory refused the request from {origin}. If its admin limited allowed origins (app.cors.allowed-origins), add {origin}.",
-            403,
-        )
     if error.status == 502:
         return ConnectedError(
-            f"Grimmory couldn't finish the sign-in with your identity provider. Ask its admin to allow {origin}{CALLBACK_PATH} as a redirect address for Grimmory's client.",
+            f"Grimmory couldn't finish the sign-in with your identity provider. Check that {CALLBACK} is an allowed redirect address for Grimmory's client there.",
             502,
         )
     return error
 
 
-# --- loopback receiver --------------------------------------------------------------------
+class SsoInbox:
+    """Where the running app drops ``iopenpod://oauth2-callback`` links.
 
+    The sign-in job waits here; the GUI thread offers each link that arrives. Only
+    a link carrying the expected state is accepted, so a stale or forged link is
+    ignored rather than ending the sign-in.
+    """
 
-_PAGE = """<!doctype html><html lang="en"><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>iOpenPod</title>
-<body style="font:16px system-ui,sans-serif;margin:3em auto;max-width:32em;padding:0 1em">
-<h1 style="font-size:1.4em">{title}</h1><p>{text}</p></body></html>"""
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._arrived = threading.Event()
+        self._state = ""
+        self._result: dict[str, str] = {}
 
+    def expect(self, state: str) -> None:
+        with self._lock:
+            self._state = state
+            self._result = {}
+            self._arrived.clear()
 
-class _Handler(BaseHTTPRequestHandler):
-    server: _Receiver
-
-    def log_message(self, format: str, *args: object) -> None:
-        return
-
-    def do_GET(self) -> None:
-        parts = urlsplit(self.path)
-        if parts.path != CALLBACK_PATH:
-            self.send_error(404)
-            return
-        query = {key: values[0] for key, values in parse_qs(parts.query).items()}
-        accepted = self.server.offer(query)
-        if accepted and "code" in query:
-            title, text = (
-                "You're signed in",
-                "Return to iOpenPod. You can close this tab.",
-            )
-        elif accepted:
-            title, text = (
-                "Sign-in didn't finish",
-                escape(query.get("error_description") or query.get("error") or ""),
-            )
-        else:
-            title, text = (
-                "This sign-in has expired",
-                "Start again from iOpenPod.",
-            )
-        page = _PAGE.format(title=title, text=text).encode("utf-8")
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Content-Length", str(len(page)))
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("Referrer-Policy", "no-referrer")
-        self.end_headers()
-        self.wfile.write(page)
-
-
-class _Receiver(HTTPServer):
-    def __init__(self, port: int, state: str) -> None:
-        super().__init__(("127.0.0.1", port), _Handler)
-        self.state = state
-        self.result: dict[str, str] | None = None
-        self.arrived = threading.Event()
-
-    def offer(self, query: dict[str, str]) -> bool:
-        # Only the answer to this sign-in counts; anything else is ignored.
-        if self.arrived.is_set() or query.get("state") != self.state:
+    def offer(self, link: str) -> bool:
+        parts = urlsplit(link)
+        if parts.scheme.casefold() != "iopenpod" or parts.netloc != "oauth2-callback":
             return False
-        self.result = query
-        self.arrived.set()
-        return True
+        query = {key: values[0] for key, values in parse_qs(parts.query).items()}
+        with self._lock:
+            if not self._state or self._arrived.is_set():
+                return False
+            if not secrets.compare_digest(query.get("state", ""), self._state):
+                return False
+            self._result = query
+            self._arrived.set()
+            return True
 
-
-class LoopbackReceiver:
-    """Listen on 127.0.0.1 for exactly one answer carrying the expected state."""
-
-    def __init__(self, state: str, port: int = SSO_PORT) -> None:
-        try:
-            self._server = _Receiver(port, state)
-        except OSError:
-            raise ConnectedError(
-                f"Another app is using port {port}, which iOpenPod needs for single sign-on. Close it and try again."
-            ) from None
-        self._thread = threading.Thread(
-            target=self._server.serve_forever,
-            kwargs={"poll_interval": 0.2},
-            name="grimmory-sso",
-            daemon=True,
-        )
-        self._thread.start()
-
-    @property
-    def port(self) -> int:
-        return int(self._server.server_address[1])
+    def cancel(self) -> None:
+        with self._lock:
+            self._state = ""
 
     def wait(self, cancelled: Event, timeout: float = SSO_TIMEOUT) -> str:
         """Return the code, or raise when cancelled, refused, or out of time."""
 
         try:
             waited = 0.0
-            while not self._server.arrived.wait(0.25):
+            while not self._arrived.wait(0.25):
                 waited += 0.25
                 if cancelled.is_set():
                     raise CancelledError
                 if waited >= timeout:
                     raise ConnectedError(
-                        "No answer from the sign-in page within five minutes. Try again."
+                        f"No answer from the sign-in page within five minutes. If your browser showed an error about the redirect address, add {CALLBACK} to Grimmory's client in your identity provider."
                     )
-            result = self._server.result or {}
+            with self._lock:
+                result = dict(self._result)
             if result.get("code"):
                 return result["code"]
             reason = result.get("error_description") or result.get("error") or ""
@@ -306,45 +236,39 @@ class LoopbackReceiver:
                 + (f": {' '.join(reason.split())[:200]}" if reason else ".")
             )
         finally:
-            self.close()
-
-    def close(self) -> None:
-        self._server.shutdown()
-        self._server.server_close()
+            self.cancel()
 
 
 def sign_in(
     client: GrimmoryClient,
     sso: SsoProvider,
+    inbox: SsoInbox,
     cancelled: Event,
     open_page: Callable[[str], None],
     *,
-    port: int = SSO_PORT,
     timeout: float = SSO_TIMEOUT,
 ) -> GrimmoryTokens:
-    """The whole flow: listen, open the browser, wait for the code, ask Grimmory."""
+    """The whole flow: open the browser, wait for iOpenPod's link, ask Grimmory."""
 
-    request = start(client, sso, port=port)
-    receiver = LoopbackReceiver(request.state, port)
+    request = start(client, sso)
+    inbox.expect(request.state)
     try:
         open_page(request.url)
     except BaseException:
-        receiver.close()
+        inbox.cancel()
         raise
-    code = receiver.wait(cancelled, timeout)
+    code = inbox.wait(cancelled, timeout)
     return finish(client, request, code)
 
 
 __all__ = [
-    "CALLBACK_PATH",
-    "SSO_PORT",
-    "LoopbackReceiver",
+    "CALLBACK",
+    "SsoInbox",
     "SsoProvider",
     "SsoRequest",
     "finish",
     "pkce_pair",
     "provider",
-    "redirect_uri",
     "sign_in",
     "start",
 ]

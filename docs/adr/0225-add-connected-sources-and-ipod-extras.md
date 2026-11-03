@@ -35,17 +35,23 @@ neither report nor record listening progress. A person signs in once with their
 Grimmory username and password; only the returned access and refresh tokens are kept,
 and an expired access token is renewed once before the person is asked to sign in
 again. A person whose Grimmory account uses single sign-on signs in the
-way Grimmory's web app does: iOpenPod reads the provider from Grimmory's public
+way Grimmory's mobile apps do: iOpenPod reads the provider from Grimmory's public
 settings, gets a one-time state from Grimmory, and opens the provider's
-authorization page with PKCE (S256) and a nonce. The provider redirects to a
-loopback address, `http://127.0.0.1:53817/oauth2-callback` (RFC 8252), where
-iOpenPod accepts exactly one answer carrying that state, then posts the code to
-Grimmory's OIDC callback, which exchanges it and returns ordinary Grimmory tokens.
-Grimmory accepts an http redirect only when its origin matches the request's
-`Origin`, so iOpenPod sends the loopback origin. The port is fixed because many
-self-hosted identity providers match redirect addresses exactly; a provider admin
-adds that one address to Grimmory's client, and a Grimmory that limits
-`app.cors.allowed-origins` must also allow `http://127.0.0.1:53817`. Audiobooks are listed through the app API filtered to audiobook files, by
+authorization page with PKCE (S256) and a nonce. The provider returns through the
+custom-scheme link `iopenpod://oauth2-callback`; iOpenPod accepts exactly one link
+carrying that state and posts the code to Grimmory's mobile OIDC callback, which
+exchanges it and returns ordinary Grimmory tokens. Grimmory accepts a custom-scheme
+address only when it is listed under Settings → Authentication → Mobile Redirect
+URIs, and the identity provider must allow it for Grimmory's client; both are
+one-time server settings.
+
+The operating system opens `iopenpod://` links with iOpenPod. Packaged macOS and
+Microsoft Store builds declare the scheme in their bundle and package manifest;
+other installations register it for the current user at start-up (the Windows
+registry, or a hidden desktop entry with `xdg-mime` on Linux). On Windows and
+Linux a link starts a second process, which hands it to the running iOpenPod over a
+per-user local socket and exits; macOS delivers it to the running app as a
+file-open event. Audiobooks are listed through the app API filtered to audiobook files, by
 library, shelf, or search. Libraries come from the web API's `/api/v1/libraries`,
 because Grimmory 3.5's app library list reads library paths outside a database
 transaction and answers HTTP 500; a library or shelf list that still fails is

@@ -227,6 +227,7 @@ class ConnectedController(QObject):
         self._preview_cache: dict[str, bytes] = {}
         self._calendar_links: list[tuple[str, str]] | None = None
         self._remote: ConnectedRemote | None = None
+        self._sso_inbox = grimmory_sso.SsoInbox()
 
     # --- state ---------------------------------------------------------------------
 
@@ -872,7 +873,9 @@ class ConnectedController(QObject):
                     provider=sso.name
                 )
             )
-            grimmory_sso.sign_in(client, sso, job.cancelled, job.signals.link.emit)
+            grimmory_sso.sign_in(
+                client, sso, self._sso_inbox, job.cancelled, job.signals.link.emit
+            )
             return (client.username(), *client.collections())
 
         def then(value: object) -> None:
@@ -885,6 +888,18 @@ class ConnectedController(QObject):
             )
 
         self._start("grimmory-sso", work, then=then)
+
+    def receive_link(self, link: str) -> bool:
+        """An ``iopenpod://`` link from the browser; True when a sign-in took it."""
+
+        accepted = self._sso_inbox.offer(link)
+        if not accepted:
+            self.message.emit(
+                self.tr(
+                    "A sign-in link arrived, but no Grimmory sign-in was waiting for it. Choose Sign In with SSO again."
+                )
+            )
+        return accepted
 
     def set_grimmory_picks(self, picks: tuple[GrimmoryPick, ...]) -> None:
         self.update_config(

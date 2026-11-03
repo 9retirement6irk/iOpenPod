@@ -132,5 +132,12 @@ if sys.platform == "darwin":
                 "macos-minimum-version"
             ],
             "NSRemovableVolumesUsageDescription": "Manage the media library on your selected iPod.",
+            # Sign-in pages return to iOpenPod through iopenpod:// links.
+            "CFBundleURLTypes": [
+                {
+                    "CFBundleURLName": "com.iopenpod.app.sign-in",
+                    "CFBundleURLSchemes": ["iopenpod"],
+                }
+            ],
         },
     )

@@ -10,6 +10,7 @@ from types import FrameType
 from PySide6.QtCore import QCoreApplication, QSocketNotifier, QTimer
 from PySide6.QtWidgets import QApplication
 
+from iOpenPod.app.app_links import AppLinks, register_scheme
 from iOpenPod.app.context import AppContext
 from iOpenPod.app.playback.system_media import (
     SystemMediaBridge,
@@ -32,8 +33,11 @@ logger = logging.getLogger(__name__)
 _WINDOWS_APP_USER_MODEL_ID = "iOpenPod.iOpenPod"
 
 
-def start_ui() -> int:
-    """Start iOpenPod and discover connected Device Candidates."""
+def start_ui(link: str | None = None) -> int:
+    """Start iOpenPod and discover connected Device Candidates.
+
+    ``link`` is an ``iopenpod://`` link the operating system started us with.
+    """
 
     initialize_update_runtime()
     cleanup_stale_staging()
@@ -57,6 +61,13 @@ def start_ui() -> int:
         context, auto_discover=not health_launch, defer_startup=health_launch
     )
     window.show()
+    links = AppLinks(application)
+    links.listen()
+    application.installEventFilter(links)  # macOS delivers links as file-open events
+    links.received.connect(window.open_app_link)
+    register_scheme()
+    if link is not None:
+        QTimer.singleShot(0, lambda: links.deliver(link))
 
     def ready() -> None:
         if health_launch:
@@ -80,6 +91,7 @@ def start_ui() -> int:
             return
         shutdown_complete = True
         window.close_app_updates()
+        links.close()
         system_media_bridge.close()
         context.shutdown()
         close_update_runtime()

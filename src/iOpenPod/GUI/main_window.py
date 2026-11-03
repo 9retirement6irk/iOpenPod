@@ -1775,6 +1775,13 @@ class MainWindow(QMainWindow):
         )
         return True
 
+    def open_app_link(self, link: str) -> None:
+        """An ``iopenpod://`` link the browser sent back, such as a finished sign-in."""
+
+        if self._connected.receive_link(link):
+            self.raise_()
+            self.activateWindow()
+
     def _open_sign_in_url(self, url: str) -> None:
         open_desktop_url(QUrl(url))
 

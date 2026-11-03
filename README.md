@@ -43,8 +43,8 @@ servers without exporting anything by hand:
   both ways from the Plex page.
 * **Immich**: pick Favorites, albums, people, or individual photos, with previews.
 * **Grimmory**: sign in with your Grimmory account (or with single sign-on, after
-  adding `http://127.0.0.1:53817/oauth2-callback` as a redirect address for
-  Grimmory in your identity provider), and all your audiobooks appear
+  adding `iopenpod://oauth2-callback` to Grimmory's Mobile Redirect URIs and as a
+  redirect address for Grimmory in your identity provider), and all your audiobooks appear
   in Sync's media list, downloaded only when Sync copies them. Listening progress
   stays in step: where you stopped on the
   iPod goes to Grimmory, and where you stopped in Grimmory becomes the iPod's
