@@ -268,12 +268,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           test "$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq .sha)" = "$GITHUB_SHA"
+          # A release already made by hand on GitHub (which also creates the tag
+          # and starts this run) gets the downloads, rather than a second release.
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" --clobber release-assets/iOpenPod-*.zip release-assets/iOpenPod-*.dmg release-assets/iOpenPod-*-Linux-*.tar.gz
+          else
           gh release create "$RELEASE_TAG" --verify-tag --target "$GITHUB_SHA" --draft --title "iOpenPod $RELEASE_TAG" --generate-notes --notes-file packaging/github-release.md release-assets/iOpenPod-*.zip release-assets/iOpenPod-*.dmg release-assets/iOpenPod-*-Linux-*.tar.gz
+          fi
           gh release edit "$RELEASE_TAG" --draft=false --latest
 
   publish-pypi:
     needs: [prepare, publish]
+    # The iOpenPod name on PyPI belongs to the original project; forks skip it.
     if: >-
+      github.repository == 'TheRealSavi/iOpenPod' &&
       needs.prepare.outputs.publish == 'true' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
       (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
