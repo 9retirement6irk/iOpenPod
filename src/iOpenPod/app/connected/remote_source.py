@@ -1,6 +1,7 @@
-"""Plex music and Grimmory audiobooks as remote Host media, with a media cache.
+"""Plex music and video and Grimmory audiobooks as remote Host media, with a cache.
 
-Every Plex song and Grimmory audiobook track is listed as a Remote Item (see
+Every Plex song, video from the chosen Plex video libraries, and Grimmory audiobook
+track is listed as a Remote Item (see
 ``iOpenPod.app.remote_media``) from what its server reports. Nothing is downloaded
 until Sync prepares an item for the iPod; the download lands at the item's cache
 location inside the Connected Source Folder, which is where a pick was saved before
@@ -29,7 +30,7 @@ from pathlib import Path
 from threading import Event
 from typing import TYPE_CHECKING, Any, cast
 
-from iOpenPod.app.host_media_library import HostMediaFileKind, HostMediaSource
+from iOpenPod.app.host_media_library import HostMediaSource
 from iOpenPod.app.media.progress import MediaPreparationPhase, MediaPreparationProgress
 from iOpenPod.app.remote_media import (
     RemoteCatalog,
@@ -42,6 +43,7 @@ from iOpenPod.app.sync_plan import host_path_identity
 from iPodDB.library import MediaType
 from storage import HostPath
 
+from .config import PlexVideoUse
 from .grimmory import (
     AudiobookInfo,
     AudiobookTrack,
@@ -65,7 +67,7 @@ from .plex import PlexTrack
 from .plex_source import PLAYLIST_FOLDER, track_relative
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable, Iterable, Mapping
 
     from .config import PathMapping
     from .plex import PlexClient, PlexServer
@@ -127,6 +129,9 @@ class _Memory:
     plex_playlists: list[dict[str, object]] = field(
         default_factory=list[dict[str, object]]
     )
+    plex_videos: list[dict[str, object]] = field(
+        default_factory=list[dict[str, object]]
+    )
     books: list[dict[str, object]] = field(default_factory=list[dict[str, object]])
     infos: dict[str, dict[str, object]] = field(
         default_factory=dict[str, dict[str, object]]
@@ -146,7 +151,7 @@ def _load_memory(path: Path) -> _Memory:
     for name in ("plex_server",):
         if isinstance(data.get(name), str):
             setattr(memory, name, data[name])
-    for name in ("plex_tracks", "plex_playlists", "books"):
+    for name in ("plex_tracks", "plex_playlists", "plex_videos", "books"):
         value = data.get(name)
         if isinstance(value, list):
             setattr(memory, name, [v for v in value if isinstance(v, dict)])
@@ -189,6 +194,7 @@ class ConnectedRemote:
         server: PlexServer | None = None,
         mappings: Iterable[PathMapping] = (),
         plex_skip: Iterable[str] = (),
+        plex_videos: Mapping[str, str] | None = None,
         grimmory: GrimmoryClient | None = None,
     ) -> None:
         self.root = root
@@ -197,6 +203,8 @@ class ConnectedRemote:
         self._plex, self._server = plex, server
         self._mappings = tuple(mappings)
         self._plex_skip = frozenset(plex_skip)
+        # Video library key → PlexVideoUse value; only these libraries are listed.
+        self._plex_videos = dict(plex_videos or {})
         self._grimmory = grimmory
         self._specs: dict[str, _Spec] = {}
         self._lock = threading.Lock()
@@ -350,6 +358,11 @@ class ConnectedRemote:
         progress("Plex: listing your music…")
         try:
             tracks = plex.library_tracks(server, cancelled, skip=self._plex_skip)
+            videos = (
+                plex.library_videos(server, self._plex_videos, cancelled)
+                if self._plex_videos
+                else ()
+            )
             listed = plex.playlists(server)
             playlists = [
                 (item.title, plex.playlist_tracks(server, item.key, cancelled))
@@ -357,6 +370,7 @@ class ConnectedRemote:
             ]
             self._memory.plex_server = server.id
             self._memory.plex_tracks = [asdict(track) for track in tracks]
+            self._memory.plex_videos = [asdict(video) for video in videos]
             self._memory.plex_playlists = [
                 {"title": title, "keys": [t.rating_key for t in members]}
                 for title, members in playlists
@@ -364,7 +378,9 @@ class ConnectedRemote:
         except CancelledError:
             raise
         except ConnectedError as error:
-            if self._memory.plex_server != server.id or not self._memory.plex_tracks:
+            if self._memory.plex_server != server.id or not (
+                self._memory.plex_tracks or self._memory.plex_videos
+            ):
                 return [], [], [f"Plex: {error}"]
             issues.append(f"Plex: {error} Showing your music as last listed.")
             tracks = tuple(
@@ -383,6 +399,12 @@ class ConnectedRemote:
                 for row in self._memory.plex_playlists
             ]
             tracks = tuple(t for t in tracks if t.section not in self._plex_skip)
+            videos = tuple(
+                video
+                for row in self._memory.plex_videos
+                if (video := _plex_track(row))
+                and self._plex_videos.get(video.section) == video.media
+            )
         # Playlists keep only songs from the chosen libraries; empty ones are left out.
         included = {track.rating_key for track in tracks}
         playlists = [
@@ -402,6 +424,12 @@ class ConnectedRemote:
                         f"cover|{track.album_thumb}",
                         _plex_cover(plex, server, track.album_thumb),
                     ),
+                )
+        for video in videos:
+            if video.thumb:
+                thumbs.setdefault(
+                    video_relative(video).rsplit("/", 1)[0],
+                    (f"cover|{video.thumb}", _plex_cover(plex, server, video.thumb)),
                 )
         covers = self._covers(folder, owned, thumbs, cancelled, progress, "Plex")
         items: list[RemoteItem] = []
@@ -432,6 +460,39 @@ class ConnectedRemote:
                     year=track.year,
                 )
             )
+        for video in videos:
+            relative = video_relative(video)
+            spec = _Spec(
+                f"plex:{server.id}:{video.rating_key}",
+                folder,
+                relative,
+                f"{video.part_key}|{video.part_size}|{video.updated_at}",
+                "",
+                _plex_fetch(plex, server, video, self._mappings),
+            )
+            episode = video.media == PlexVideoUse.TV_SHOWS.value
+            items.append(
+                self._item(
+                    spec,
+                    owned,
+                    video.part_size,
+                    covers.get(relative.rsplit("/", 1)[0]),
+                    title=video.title,
+                    artist=video.artist,
+                    album=video.album,
+                    album_artist=video.album_artist,
+                    track_number=video.track_number if episode else 0,
+                    disc_number=video.disc_number if episode else 0,
+                    length_ms=video.duration_ms,
+                    genre=video.genre,
+                    year=video.year,
+                    media_type=_VIDEO_MEDIA[video.media],
+                    show=video.show if episode else "",
+                    season_number=video.disc_number if episode else 0,
+                    episode_number=video.track_number if episode else 0,
+                    description=video.summary,
+                )
+            )
         lists: list[RemotePlaylist] = []
         used: set[str] = set()
         for title, members in playlists:
@@ -448,7 +509,12 @@ class ConnectedRemote:
                     tuple(HostPath(folder / track_relative(t)) for t in members),
                 )
             )
-        progress(f"Plex: {len(items)} songs, {len(lists)} playlists.")
+        songs = len(items) - len(videos)
+        progress(
+            f"Plex: {songs} songs, {len(videos)} videos, {len(lists)} playlists."
+            if videos
+            else f"Plex: {songs} songs, {len(lists)} playlists."
+        )
         return items, lists, issues
 
     def _grimmory_catalog(
@@ -645,7 +711,7 @@ class ConnectedRemote:
                     self.downloaded += 1
         return HostMediaSource(
             HostPath(target),
-            HostMediaFileKind.AUDIO,
+            source.kind,
             stat.st_size,
             stat.st_mtime_ns,
             acoustic_fingerprint=source.acoustic_fingerprint,
@@ -693,6 +759,48 @@ class ConnectedRemote:
                 kept_bytes += total
         self.save_memory()
         return removed, kept_bytes
+
+
+_VIDEO_MEDIA = {
+    PlexVideoUse.MOVIES.value: MediaType.VIDEO,
+    PlexVideoUse.TV_SHOWS.value: MediaType.TV_SHOW,
+    PlexVideoUse.MUSIC_VIDEOS.value: MediaType.MUSIC_VIDEO,
+}
+VIDEO_FOLDERS = {
+    PlexVideoUse.MOVIES.value: "Movies",
+    PlexVideoUse.TV_SHOWS.value: "TV Shows",
+    PlexVideoUse.MUSIC_VIDEOS.value: "Music Videos",
+}
+
+
+def video_relative(video: PlexTrack) -> str:
+    """Where a Plex video is cached; each movie and music video gets a folder
+    (for its poster), and episodes share their season's folder."""
+
+    key = f"[{video.rating_key}]"
+    if video.media == PlexVideoUse.TV_SHOWS.value:
+        show = video.show or "Unknown Show"
+        number = (
+            f"S{video.disc_number:02d}E{video.track_number:02d} - "
+            if video.track_number
+            else ""
+        )
+        return relative_path(
+            VIDEO_FOLDERS[video.media],
+            show,
+            f"Season {video.disc_number:02d}",
+            f"{number}{video.title} {key}{video.extension}",
+        )
+    name = video.title
+    if video.media == PlexVideoUse.MUSIC_VIDEOS.value and video.artist:
+        name = f"{video.artist} - {video.title}"
+    elif video.year:
+        name = f"{video.title} ({video.year})"
+    return relative_path(
+        VIDEO_FOLDERS.get(video.media, "Videos"),
+        f"{name} {key}",
+        f"{name}{video.extension}",
+    )
 
 
 def _final(extension: str) -> str:

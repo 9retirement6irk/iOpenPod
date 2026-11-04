@@ -14,7 +14,7 @@ then beyond it.
 
 ## Current stage
 
-Connected Sources (this fork): Plex music and Grimmory audiobooks are listed in
+Connected Sources (this fork): Plex music, chosen Plex video libraries, and Grimmory audiobooks are listed in
 Sync's media list as Remote Items and downloaded only when Sync prepares them, kept
 in a size-limited Media Cache; Immich materializes Selections as a Host Media
 Library folder that Sync refreshes before scanning; and iPod Extras (Memos notes,

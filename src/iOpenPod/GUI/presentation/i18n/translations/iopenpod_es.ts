@@ -6229,6 +6229,18 @@ Usa Editar para revisar sus reglas.</translation>
         <translation>Si tu recurso compartido de música está montado aquí, iOpenPod copia los archivos desde él en lugar de descargarlos a través de Plex. Ejemplo: /mnt/media/music → /Volumes/Media/music.</translation>
     </message>
     <message>
+        <source>Music and video</source>
+        <translation>Música y vídeo</translation>
+    </message>
+    <message>
+        <source>All your Plex music and playlists appear in Sync with Host&apos;s media list, beside your computer&apos;s music, and so do the movie and TV libraries you choose below. Check what goes on the iPod there; items download only when Sync copies them, and videos are converted for the iPod using your video settings. Downloads are kept within the media cache limit in Settings → Sync.</source>
+        <translation>Toda tu música y tus listas de Plex aparecen en la lista de medios de «Sincronizar con el equipo», junto a la música de tu equipo, y también las bibliotecas de películas y TV que elijas abajo. Allí marcas lo que va al iPod; los elementos se descargan solo cuando la sincronización los copia, y los vídeos se convierten para el iPod con tus ajustes de vídeo. Las descargas se conservan dentro del límite de la caché de medios en Ajustes → Sincronización.</translation>
+    </message>
+    <message>
+        <source>Plex libraries to use</source>
+        <translation>Bibliotecas de Plex que se usan</translation>
+    </message>
+    <message>
         <source>Music</source>
         <translation>Música</translation>
     </message>
@@ -6238,11 +6250,11 @@ Usa Editar para revisar sus reglas.</translation>
     </message>
     <message>
         <source>All your Plex music and playlists appear in Sync with Host&apos;s media list, beside your computer&apos;s music. Check what goes on the iPod there; songs download only when Sync copies them. Downloads are kept within the media cache limit in Settings → Sync.</source>
-        <translation>Toda tu música y tus listas de Plex aparecen en la lista de medios de «Sincronizar con el equipo», junto a la música de tu equipo. Marca allí lo que va al iPod; las canciones se descargan solo cuando la sincronización las copia. Las descargas se guardan dentro del límite de la caché de medios en Ajustes → Sincronizar.</translation>
+        <translation type="vanished">Toda tu música y tus listas de Plex aparecen en la lista de medios de «Sincronizar con el equipo», junto a la música de tu equipo. Marca allí lo que va al iPod; las canciones se descargan solo cuando la sincronización las copia. Las descargas se guardan dentro del límite de la caché de medios en Ajustes → Sincronizar.</translation>
     </message>
     <message>
         <source>Music libraries to use</source>
-        <translation>Bibliotecas de música que se usan</translation>
+        <translation type="vanished">Bibliotecas de música que se usan</translation>
     </message>
     <message>
         <source>Signed in as {name} · {server}</source>
@@ -6291,6 +6303,22 @@ Usa Editar para revisar sus reglas.</translation>
     <message>
         <source>Address, for example http://192.168.1.10:32400</source>
         <translation>Dirección, por ejemplo http://192.168.1.10:32400</translation>
+    </message>
+    <message>
+        <source>Movies</source>
+        <translation>Películas</translation>
+    </message>
+    <message>
+        <source>Music videos</source>
+        <translation>Videos musicales</translation>
+    </message>
+    <message>
+        <source>TV shows</source>
+        <translation>Series de TV</translation>
+    </message>
+    <message>
+        <source>Don&apos;t use</source>
+        <translation>No usar</translation>
     </message>
     <message>
         <source>Saved. The change applies at the next Sync with Host.</source>

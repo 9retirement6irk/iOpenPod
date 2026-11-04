@@ -120,6 +120,16 @@ class PlexItem:
     thumb: str = ""
 
 
+_SECTION_TYPES = frozenset({"artist", "movie", "show"})
+
+
+@dataclass(frozen=True, slots=True)
+class PlexSection:
+    key: str
+    title: str
+    kind: str  # Plex's library type: "artist", "movie" or "show"
+
+
 @dataclass(frozen=True, slots=True)
 class PlexTrack:
     rating_key: str
@@ -140,9 +150,15 @@ class PlexTrack:
     album_thumb: str = ""
     album_key: str = ""
     artist_key: str = ""
-    section: str = ""  # the music library it is in
+    section: str = ""  # the library it is in
     year: int = 0
     genre: str = ""
+    # Videos: "" for music, else a PlexVideoUse value; TV episodes use
+    # track_number for the episode and disc_number for the season.
+    media: str = ""
+    show: str = ""
+    summary: str = ""
+    thumb: str = ""  # the poster or season art to show with it
 
     @property
     def extension(self) -> str:
@@ -358,13 +374,51 @@ class PlexClient:
                 break
         return items
 
-    def music_sections(self, server: PlexServer) -> tuple[tuple[str, str], ...]:
-        sections = _objects(self._get(server, "/library/sections").get("Directory"))
+    def sections(self, server: PlexServer) -> tuple[PlexSection, ...]:
+        """The server's music, movie and TV libraries."""
+
+        rows = _objects(self._get(server, "/library/sections").get("Directory"))
         return tuple(
-            (_str(item.get("key")), _str(item.get("title")) or "Music")
-            for item in sections
-            if item.get("type") == "artist" and _str(item.get("key"))
+            PlexSection(
+                _str(item.get("key")),
+                _str(item.get("title")) or _str(item.get("type")).capitalize(),
+                _str(item.get("type")),
+            )
+            for item in rows
+            if item.get("type") in _SECTION_TYPES and _str(item.get("key"))
         )
+
+    def music_sections(self, server: PlexServer) -> tuple[tuple[str, str], ...]:
+        return tuple(
+            (section.key, section.title or "Music")
+            for section in self.sections(server)
+            if section.kind == "artist"
+        )
+
+    def library_videos(
+        self,
+        server: PlexServer,
+        uses: Mapping[str, str],
+        cancelled: Event | None = None,
+    ) -> tuple[PlexTrack, ...]:
+        """Every movie or episode in the video libraries ``uses`` names.
+
+        ``uses`` maps a library key to a PlexVideoUse value. Movie libraries list
+        their movies and TV libraries their episodes, whatever they are used for.
+        """
+
+        videos: list[PlexTrack] = []
+        for section in self.sections(server):
+            use = uses.get(section.key)
+            if not use or section.kind not in {"movie", "show"}:
+                continue
+            kind = 1 if section.kind == "movie" else 4
+            path = f"/library/sections/{quote(section.key)}/all?type={kind}"
+            for row in self._paged(server, path, cancelled):
+                video = parse_video(row, use)
+                if video is not None:
+                    videos.append(replace(video, section=section.key))
+        return tuple(videos)
 
     def playlists(self, server: PlexServer) -> tuple[PlexItem, ...]:
         rows = _objects(
@@ -795,6 +849,51 @@ def parse_track(row: Mapping[str, object]) -> PlexTrack | None:
     )
 
 
+def parse_video(row: Mapping[str, object], use: str) -> PlexTrack | None:
+    """A Plex movie or episode, described for its use on the iPod."""
+
+    base = parse_track(row)
+    if base is None:
+        return None
+    title = _str(row.get("title")) or "Untitled"
+    year = _int(row.get("year"))
+    summary = _str(row.get("summary"))
+    if row.get("type") == "episode":
+        return replace(
+            base,
+            title=title,
+            artist=_str(row.get("grandparentTitle")),
+            album_artist=_str(row.get("grandparentTitle")),
+            album=_str(row.get("parentTitle")),
+            show=_str(row.get("grandparentTitle")) or "Unknown Show",
+            track_number=_int(row.get("index")),
+            disc_number=_int(row.get("parentIndex")),
+            year=year,
+            media=use,
+            summary=summary,
+            thumb=_str(row.get("parentThumb"))
+            or _str(row.get("grandparentThumb"))
+            or _str(row.get("thumb")),
+        )
+    artist = _str(row.get("originalTitle"))
+    if use == "music_videos" and not artist and " - " in title:
+        # "Other Videos" libraries name files "Artist - Title".
+        artist, title = (part.strip() for part in title.split(" - ", 1))
+    return replace(
+        base,
+        title=title,
+        artist=artist,
+        album_artist=artist,
+        album="",
+        track_number=0,
+        disc_number=0,
+        year=year,
+        media=use,
+        summary=summary,
+        thumb=_str(row.get("thumb")),
+    )
+
+
 def _first_tag(value: object) -> str:
     """The first tag of a Plex tag list such as ``Genre``."""
 
@@ -834,6 +933,7 @@ __all__ = [
     "PlexClient",
     "PlexItem",
     "PlexPin",
+    "PlexSection",
     "PlexServer",
     "PlexServerChoice",
     "PlexTrack",
@@ -841,4 +941,5 @@ __all__ = [
     "ipod_player",
     "map_server_path",
     "parse_track",
+    "parse_video",
 ]

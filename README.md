@@ -37,6 +37,10 @@ servers without exporting anything by hand:
 * **Plex**: sign in with your Plex account, and your Plex music and playlists (from
   the music libraries you choose) appear in **Sync with Host**'s media list beside your computer's music. Check
   what goes on the iPod there; songs download only when Sync copies them.
+  On the Plex page, set each movie or TV library to **Movies**, **Music videos**
+  or **TV shows** and its videos join Sync's Movies, Music Videos and TV Shows
+  pages on iPods that play video. They're converted for the iPod with your video
+  settings, which can take a while for long films.
   **Scrobble now** and Sync send iPod plays to Plex (they show up in Play
   History as your iPod), and Scrobble now also sets Plex stars from the iPod's.
   Turn that off in Settings → Sync → Scrobbling. Star ratings can also be synced

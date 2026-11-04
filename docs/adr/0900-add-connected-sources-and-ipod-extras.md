@@ -115,6 +115,15 @@ the Plex page (for example an audiobook library, when Grimmory provides audioboo
 contributes no items, and its songs are dropped from Plex playlists; a playlist
 left empty is not listed. New libraries are included until left out.
 
+Movie and TV libraries are used only when chosen on the Plex page, for movies,
+music videos (movie-type libraries) or TV shows (TV-type libraries), because
+videos are large. Their movies and episodes become video Remote Items with the
+matching Media Type, a TV episode carrying its show, season and episode number,
+and Sync downloads and prepares them like Host video files, converting them for
+the iPod. Each movie and music video is cached in its own folder beside its
+poster, and episodes share their season's folder and art. Music videos without
+a separate artist take one from an "Artist - Title" name.
+
 ## Sync with Host chooses everything
 
 Connected pages set a source up (addresses, sign-ins, uploads); Sync with Host's

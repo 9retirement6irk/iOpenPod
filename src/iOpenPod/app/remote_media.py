@@ -1,7 +1,7 @@
 """Remote Host media: Connected Source items listed in Sync before any download.
 
-A Remote Item is a Plex song or Grimmory audiobook track known from its server's
-description. It joins the Host Media Library beside scanned files so the Sync
+A Remote Item is a Plex song, video or Grimmory audiobook track known from its
+server's description. It joins the Host Media Library beside scanned files so the Sync
 workspace can show it and Sync Plan can compare it, but its file exists only once
 Sync prepares it (or while it stays in the size-limited media cache).
 
@@ -49,6 +49,9 @@ if TYPE_CHECKING:
     from storage import HostPath
 
 
+_VIDEO_TYPES = frozenset({MediaType.VIDEO, MediaType.MUSIC_VIDEO, MediaType.TV_SHOW})
+
+
 def revision_time_ns(revision: str) -> int:
     """A stable stand-in modification time that changes with the revision."""
 
@@ -88,6 +91,15 @@ class RemoteItem:
     media_type: MediaType = MediaType.AUDIO
     comment: str = ""
     cover: RemoteCover | None = None
+    # Videos: a TV episode's show, season and episode, and any description.
+    show: str = ""
+    season_number: int = 0
+    episode_number: int = 0
+    description: str = ""
+
+    @property
+    def video(self) -> bool:
+        return self.media_type in _VIDEO_TYPES
 
     @property
     def identity(self) -> str:
@@ -158,6 +170,14 @@ def merge_remote(library: HostMediaLibrary, catalog: RemoteCatalog) -> HostMedia
                 artwork_id=artwork_id,
                 media_types=(item.media_type,),
                 album_artist=item.album_artist,
+                show=item.show,
+                episode=(
+                    f"S{item.season_number:02d}E{item.episode_number:02d}"
+                    if item.show and item.episode_number
+                    else ""
+                ),
+                season_number=item.season_number,
+                episode_number=item.episode_number,
                 metadata=TrackMetadata(
                     file_format=suffix.casefold().lstrip("."),
                     last_modified=item.modified_ns // 1_000_000_000,
@@ -166,13 +186,14 @@ def merge_remote(library: HostMediaLibrary, catalog: RemoteCatalog) -> HostMedia
                     total_discs=item.total_discs,
                     location=str(item.path),
                     comment=item.comment,
+                    description=item.description,
                 ),
             )
         )
         sources.append(
             HostMediaSource(
                 item.path,
-                HostMediaFileKind.AUDIO,
+                HostMediaFileKind.VIDEO if item.video else HostMediaFileKind.AUDIO,
                 item.size_bytes,
                 item.modified_ns,
                 acoustic_fingerprint=item.identity,

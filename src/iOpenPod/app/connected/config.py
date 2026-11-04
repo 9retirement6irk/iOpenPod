@@ -43,6 +43,20 @@ class PathMapping:
     host: str
 
 
+class PlexVideoUse(StrEnum):
+    """What a Plex movie or TV library is used for on the iPod."""
+
+    MOVIES = "movies"
+    TV_SHOWS = "tv_shows"
+    MUSIC_VIDEOS = "music_videos"
+
+
+@dataclass(frozen=True, slots=True)
+class PlexVideoSection:
+    key: str  # the Plex library (section) key
+    use: PlexVideoUse
+
+
 @dataclass(frozen=True, slots=True)
 class PlexConfig:
     server_id: str = ""
@@ -53,6 +67,8 @@ class PlexConfig:
     sync_ratings: bool = False
     # Music libraries (Plex section keys) left out of Sync; new ones are included.
     skipped_sections: tuple[str, ...] = ()
+    # Video libraries used in Sync and what for; new ones are left out.
+    video_sections: tuple[PlexVideoSection, ...] = ()
 
 
 class ImmichPickKind(StrEnum):
@@ -195,6 +211,7 @@ def _decode[T](cls: type[T], raw: object) -> T:
 _ITEM_TYPES: dict[tuple[type, str], type] = {
     (PlexConfig, "picks"): PlexPick,
     (PlexConfig, "mappings"): PathMapping,
+    (PlexConfig, "video_sections"): PlexVideoSection,
     (ImmichConfig, "picks"): ImmichPick,
     (GrimmoryConfig, "picks"): GrimmoryPick,
     (GrimmoryConfig, "marks"): GrimmoryMark,
@@ -236,6 +253,13 @@ def _value(current: object, raw: object, owner: type, name: str) -> object | Non
     return None
 
 
+_ENUMS: dict[str, type[StrEnum]] = {
+    "PlexPickKind": PlexPickKind,
+    "ImmichPickKind": ImmichPickKind,
+    "PlexVideoUse": PlexVideoUse,
+}
+
+
 def _record(cls: type, raw: object) -> object | None:
     if not isinstance(raw, dict):
         return None
@@ -244,8 +268,8 @@ def _record(cls: type, raw: object) -> object | None:
     for item in fields(cls):
         value = data.get(item.name)
         annotation = str(item.type)
-        if annotation in {"PlexPickKind", "ImmichPickKind"}:
-            enum_type = PlexPickKind if annotation == "PlexPickKind" else ImmichPickKind
+        enum_type = _ENUMS.get(annotation)
+        if enum_type is not None:
             if not isinstance(value, str):
                 return None
             try:
@@ -330,5 +354,7 @@ __all__ = [
     "PlexConfig",
     "PlexPick",
     "PlexPickKind",
+    "PlexVideoSection",
+    "PlexVideoUse",
     "TagMatch",
 ]

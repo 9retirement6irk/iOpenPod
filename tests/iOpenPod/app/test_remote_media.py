@@ -292,3 +292,90 @@ def test_a_song_synced_on_another_computer_shows_as_ticked_and_unchanged(
     (track,) = host.snapshot.tracks
     assert selection.track_on_ipod(track.track_id)
     assert selection.track_check_state(track.track_id) is Qt.CheckState.Checked
+
+
+@pytest.mark.skipif(
+    any(shutil.which(tool) is None for tool in ("ffmpeg", "ffprobe")),
+    reason="Video preparation requires FFmpeg and FFprobe",
+)
+def test_sync_downloads_and_converts_a_remote_tv_episode(tmp_path: Path) -> None:
+    """A Plex episode is downloaded during Sync and converted like a Host video."""
+
+    import subprocess
+    from threading import Event
+
+    from tests.iOpenPod.app.services.test_library_resources import build_device
+    from tests.iOpenPod.app.test_sync_execution import (
+        _request,  # pyright: ignore[reportPrivateUsage]
+    )
+
+    from iOpenPod.app.host_media_library import HostMediaFileKind, HostMediaSource
+    from iOpenPod.app.sync_execution import SyncExecutionStatus, SyncExecutor
+
+    made = tmp_path / "server.mkv"
+    subprocess.run(
+        [
+            "ffmpeg", "-v", "error", "-y",
+            "-f", "lavfi", "-i", "testsrc=s=320x240:r=25",
+            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100",
+            "-t", "2", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            "-c:a", "aac", str(made),
+        ],
+        check=True,
+        capture_output=True,
+    )  # fmt: skip
+    cached = tmp_path / "Connected/Plex/TV Shows/Show/Season 01/S01E02 - Pilot [20].mkv"
+    episode = item(
+        cached,
+        "plex:s:20",
+        title="Pilot",
+        artist="Show",
+        album="Season 1",
+        album_artist="Show",
+        track_number=2,
+        length_ms=2_000,
+        media_type=MediaType.TV_SHOW,
+        show="Show",
+        season_number=1,
+        episode_number=2,
+        description="Day one.",
+    )
+    downloads: list[HostMediaFileKind] = []
+
+    class Downloader:
+        def materialize(
+            self, source: HostMediaSource, checkpoint: object, progress: object
+        ) -> HostMediaSource:
+            downloads.append(source.kind)
+            cached.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(made, cached)
+            stat = cached.stat()
+            return replace(
+                source, size_bytes=stat.st_size, modified_ns=stat.st_mtime_ns
+            )
+
+    device = build_device(tmp_path)
+    try:
+        host = merge_remote(_host_library((), (), ()), RemoteCatalog((episode,)))
+        request = replace(_request(device, host), remote=Downloader())
+        assert [i.action for i in request.plan.items] == [SyncPlanAction.ADD]
+        result = SyncExecutor(device.coordinator).execute(
+            request, lambda _: None, Event()
+        )
+        assert result.status is SyncExecutionStatus.SUCCESS, result.issues
+        assert downloads == [HostMediaFileKind.VIDEO]
+        assert result.active is not None
+        (track,) = (t for t in result.active.library.tracks if t.title == "Pilot")
+        assert MediaType.TV_SHOW in track.media_types
+        assert (track.show, track.season_number, track.episode_number) == (
+            "Show",
+            1,
+            2,
+        )
+        assert track.metadata.location.endswith((".m4v", ".mp4"))
+        assert result.helper is not None
+        synced = next(t for t in result.helper.tracks if t.track_id == track.track_id)
+        assert synced.acoustic_fingerprint == episode.identity
+        assert synced.sync is not None and synced.sync.was_transcoded
+    finally:
+        device.coordinator.close()

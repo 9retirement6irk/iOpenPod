@@ -34,6 +34,7 @@ from iOpenPod.app.connected.config import (
     ImmichPickKind,
     ImmichSize,
     PathMapping,
+    PlexVideoUse,
     TagMatch,
 )
 from iOpenPod.app.connected.grimmory_sso import CALLBACK
@@ -65,6 +66,7 @@ if TYPE_CHECKING:
     from iOpenPod.app.connected.memos import MemosSummary
     from iOpenPod.app.connected.plex import (
         PlexClient,
+        PlexSection,
         PlexServer,
         PlexServerChoice,
     )
@@ -326,7 +328,7 @@ class PlexPage(_ConnectedPage):
         mappings_layout.addWidget(self._mappings)
         mappings_layout.addLayout(_row(add_mapping, remove_mapping))
 
-        music = QGroupBox(self.tr("Music"), self)
+        music = QGroupBox(self.tr("Music and video"), self)
         open_folder = _button(
             self.tr("Show downloaded music"), music, ActionButtonKind.QUIET
         )
@@ -335,16 +337,16 @@ class PlexPage(_ConnectedPage):
         music_layout.addWidget(
             _description(
                 self.tr(
-                    "All your Plex music and playlists appear in Sync with Host's media list, beside your computer's music. Check what goes on the iPod there; songs download only when Sync copies them. Downloads are kept within the media cache limit in Settings → Sync."
+                    "All your Plex music and playlists appear in Sync with Host's media list, beside your computer's music, and so do the movie and TV libraries you choose below. Check what goes on the iPod there; items download only when Sync copies them, and videos are converted for the iPod using your video settings. Downloads are kept within the media cache limit in Settings → Sync."
                 ),
                 music,
             )
         )
-        self._libraries = QListWidget(music)
+        self._libraries = QWidget(music)
         self._libraries.setObjectName("plexLibraries")
-        self._libraries.setMaximumHeight(160)
-        self._libraries.itemChanged.connect(self._library_toggled)
-        self._libraries_label = QLabel(self.tr("Music libraries to use"), music)
+        self._library_form = QFormLayout(self._libraries)
+        self._library_form.setContentsMargins(0, 0, 0, 0)
+        self._libraries_label = QLabel(self.tr("Plex libraries to use"), music)
         music_layout.addWidget(self._libraries_label)
         music_layout.addWidget(self._libraries)
         music_layout.addLayout(_row(open_folder))
@@ -432,7 +434,7 @@ class PlexPage(_ConnectedPage):
             )
             self._load_libraries()
         elif operation == "plex-sections":
-            self._show_libraries(cast("tuple[tuple[str, str], ...]", value))
+            self._show_libraries(cast("tuple[PlexSection, ...]", value))
         elif operation == "plex-ratings-plan":
             self._review_ratings(cast("RatingPlan", value))
         elif operation == "plex-ratings-send":
@@ -457,7 +459,7 @@ class PlexPage(_ConnectedPage):
 
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
-        if not self._libraries.count() and self.controller.config.plex.server_id:
+        if not self._library_form.rowCount() and self.controller.config.plex.server_id:
             self._load_libraries()
 
     def _load_libraries(self) -> None:
@@ -466,28 +468,59 @@ class PlexPage(_ConnectedPage):
         self.start("plex-sections")
         self.controller.plex_sections()
 
-    def _show_libraries(self, sections: tuple[tuple[str, str], ...]) -> None:
-        skipped = set(self.controller.config.plex.skipped_sections)
-        self._libraries.blockSignals(True)
-        self._libraries.clear()
-        for key, title in sections:
-            self._libraries.addItem(_checkable(title, key, key not in skipped))
-        self._libraries.blockSignals(False)
-        many = len(sections) > 1
-        self._libraries_label.setVisible(many)
-        self._libraries.setVisible(many)
+    def _show_libraries(self, sections: tuple[PlexSection, ...]) -> None:
+        config = self.controller.config.plex
+        skipped = set(config.skipped_sections)
+        videos = {video.key: video.use.value for video in config.video_sections}
+        while self._library_form.rowCount():
+            self._library_form.removeRow(0)
+        choices = {
+            "artist": ((self.tr("Music"), "music"),),
+            "movie": (
+                (self.tr("Movies"), PlexVideoUse.MOVIES.value),
+                (self.tr("Music videos"), PlexVideoUse.MUSIC_VIDEOS.value),
+            ),
+            "show": ((self.tr("TV shows"), PlexVideoUse.TV_SHOWS.value),),
+        }
+        for section in sections:
+            options = choices.get(section.kind)
+            if options is None:
+                continue
+            box = QComboBox(self._libraries)
+            box.setObjectName(f"plexLibrary-{section.key}")
+            for label, value in (*options, (self.tr("Don't use"), "")):
+                box.addItem(label, value)
+            current = (
+                ("" if section.key in skipped else "music")
+                if section.kind == "artist"
+                else videos.get(section.key, "")
+            )
+            box.setCurrentIndex(max(0, box.findData(current)))
+            box.currentIndexChanged.connect(
+                lambda _index, key=section.key, kind=section.kind, combo=box: (
+                    self._library_changed(key, kind, str(combo.currentData()))
+                )
+            )
+            self._library_form.addRow(section.title, box)
+        shown = bool(self._library_form.rowCount())
+        self._libraries_label.setVisible(shown)
+        self._libraries.setVisible(shown)
 
-    def _library_toggled(self, entry: QListWidgetItem) -> None:
-        self.controller.set_plex_section_included(
-            str(entry.data(_ROLE)), entry.checkState() == Qt.CheckState.Checked
-        )
+    def _library_changed(self, key: str, kind: str, value: str) -> None:
+        if kind == "artist":
+            self.controller.set_plex_section_included(key, value == "music")
+        else:
+            self.controller.set_plex_video_use(
+                key, PlexVideoUse(value) if value else None
+            )
         self.say(self.tr("Saved. The change applies at the next Sync with Host."))
 
     def _forget(self) -> None:
         if self._scrobbling.plex_connected:
             self._scrobbling.disconnect_service(Service.PLEX)
         self.controller.forget(SecretKey.PLEX)
-        self._libraries.clear()
+        while self._library_form.rowCount():
+            self._library_form.removeRow(0)
         self._libraries_label.hide()
         self._libraries.hide()
 

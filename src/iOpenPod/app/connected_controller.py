@@ -28,6 +28,8 @@ from iOpenPod.app.connected.config import (
     GrimmoryPick,
     ImmichPick,
     PlexPick,
+    PlexVideoSection,
+    PlexVideoUse,
 )
 from iOpenPod.app.connected.grimmory import (
     GrimmoryClient,
@@ -586,10 +588,24 @@ class ConnectedController(QObject):
         return self._start("plex-stars", lambda job: work(server, job))
 
     def plex_sections(self) -> None:
-        """List the server's music libraries for the Plex page's choice."""
+        """List the server's music, movie and TV libraries for the Plex page."""
 
-        self.run_plex(
-            "plex-sections", lambda server, _job: self.plex.music_sections(server)
+        self.run_plex("plex-sections", lambda server, _job: self.plex.sections(server))
+
+    def set_plex_video_use(self, key: str, use: PlexVideoUse | None) -> None:
+        """Use a movie or TV library for movies, TV shows or music videos, or not."""
+
+        kept = [v for v in self._config.plex.video_sections if v.key != key]
+        if use is not None:
+            kept.append(PlexVideoSection(key, use))
+        self.update_config(
+            replace(
+                self._config,
+                plex=replace(
+                    self._config.plex,
+                    video_sections=tuple(sorted(kept, key=lambda v: v.key)),
+                ),
+            )
         )
 
     def set_plex_section_included(self, key: str, included: bool) -> None:
@@ -722,6 +738,9 @@ class ConnectedController(QObject):
             server=server,
             mappings=self._config.plex.mappings,
             plex_skip=self._config.plex.skipped_sections,
+            plex_videos={
+                video.key: video.use.value for video in self._config.plex.video_sections
+            },
             grimmory=grimmory,
         )
 
