@@ -29,8 +29,9 @@ class StubPlex:
         self.offline = False
 
     def library_tracks(
-        self, _server: PlexServer, _cancelled: Event
+        self, _server: PlexServer, _cancelled: Event, *, skip: Iterable[str] = ()
     ) -> tuple[PlexTrack, ...]:
+        self.skipped = tuple(skip)
         if self.offline:
             from iOpenPod.app.connected.http import ConnectedError
 
@@ -260,3 +261,29 @@ def test_grimmory_audiobooks_are_listed_and_tagged_on_download(tmp_path: Path) -
     # Audiobook details were remembered, so only the list is fetched again.
     infos = [c for c in transport.calls if "/info" in c[1]]
     assert len(infos) == 1
+
+
+def test_chosen_libraries_genres_and_playlists(tmp_path: Path) -> None:
+    from dataclasses import replace
+
+    one, two = tracks()
+    one = replace(one, genre="Rock", year=1997, section="1")
+    two = replace(two, section="1")
+    client = StubPlex((one, two))
+    downloader = ConnectedRemote(
+        tmp_path / "Connected",
+        tmp_path / "catalog.json",
+        plex=client,  # type: ignore[arg-type]
+        server=SERVER,
+        plex_skip=("2",),
+    )
+    catalog = downloader.catalog(Event())
+    assert client.skipped == ("2",)
+    assert (catalog.items[0].genre, catalog.items[0].year) == ("Rock", 1997)
+
+    # A playlist of songs only from a left-out library is left out too.
+    client.tracks = (one,)
+    (playlist,) = remote(tmp_path, client).catalog(Event()).playlists
+    assert [str(p) for p in playlist.members] == [str(catalog.items[0].path)]
+    client.tracks = ()
+    assert remote(tmp_path, client).catalog(Event()).playlists == ()

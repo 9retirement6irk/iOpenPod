@@ -546,7 +546,12 @@ class ConnectedController(QObject):
 
         def work(server: PlexServer, job: _Job) -> StarsSent:
             job.signals.progress.emit(self.tr("Comparing star ratings with Plex…"))
-            plan = plan_ratings(tracks, self.plex.library_tracks(server, job.cancelled))
+            plan = plan_ratings(
+                tracks,
+                self.plex.library_tracks(
+                    server, job.cancelled, skip=self._config.plex.skipped_sections
+                ),
+            )
             failed = 0
             for index, change in enumerate(plan.to_plex, start=1):
                 if job.cancelled.is_set():
@@ -567,6 +572,26 @@ class ConnectedController(QObject):
         server = self._plex_server
         return self._start("plex-stars", lambda job: work(server, job))
 
+    def plex_sections(self) -> None:
+        """List the server's music libraries for the Plex page's choice."""
+
+        self.run_plex(
+            "plex-sections", lambda server, _job: self.plex.music_sections(server)
+        )
+
+    def set_plex_section_included(self, key: str, included: bool) -> None:
+        skipped = [k for k in self._config.plex.skipped_sections if k != key]
+        if not included:
+            skipped.append(key)
+        self.update_config(
+            replace(
+                self._config,
+                plex=replace(
+                    self._config.plex, skipped_sections=tuple(sorted(skipped))
+                ),
+            )
+        )
+
     def plex_ratings_plan(self, tracks: tuple[Track, ...]) -> None:
         """Compare the Library Workspace's Tracks with Plex ratings."""
 
@@ -576,7 +601,12 @@ class ConnectedController(QObject):
 
         def work(server: PlexServer, job: _Job) -> RatingPlan:
             job.signals.progress.emit(self.tr("Reading your Plex music library…"))
-            return plan_ratings(tracks, self.plex.library_tracks(server, job.cancelled))
+            return plan_ratings(
+                tracks,
+                self.plex.library_tracks(
+                    server, job.cancelled, skip=self._config.plex.skipped_sections
+                ),
+            )
 
         self.run_plex("plex-ratings-plan", work)
 
@@ -678,6 +708,7 @@ class ConnectedController(QObject):
             plex=self.plex if server is not None else None,
             server=server,
             mappings=self._config.plex.mappings,
+            plex_skip=self._config.plex.skipped_sections,
             grimmory=grimmory,
         )
 

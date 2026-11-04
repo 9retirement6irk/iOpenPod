@@ -346,3 +346,47 @@ def test_download_items_carry_refresh_revisions() -> None:
 
 def test_choice_dataclass_is_hashable() -> None:
     assert hash(PlexServerChoice("a", "b", True, "t", ("u",)))
+
+
+def test_library_tracks_take_album_genres_and_skip_chosen_libraries() -> None:
+    def genre(name: str) -> list[dict[str, str]]:
+        return [{"tag": name}]
+
+    tracked = row("1", "Airbag")
+    tracked |= {"parentRatingKey": "9", "grandparentRatingKey": "7"}
+    artist_only = row("2", "Creep", album="Pablo Honey")
+    artist_only |= {"parentRatingKey": "8", "grandparentRatingKey": "7"}
+    own_genre = row("3", "Lucky") | {"parentRatingKey": "9", "Genre": genre("Art Rock")}
+    sections = f"GET {SERVER.uri}/library/sections"
+    transport = FakeTransport(
+        {
+            sections: container(
+                [],
+                Directory=[
+                    {"key": "1", "type": "artist", "title": "Music"},
+                    {"key": "2", "type": "artist", "title": "Audiobooks"},
+                    {"key": "3", "type": "movie", "title": "Movies"},
+                ],
+            ),
+            f"{sections}/1/all?type=9": container(
+                [
+                    {"ratingKey": "9", "year": 1997, "Genre": genre("Alternative")},
+                    {"ratingKey": "8", "year": 1993},
+                ]
+            ),
+            f"{sections}/1/all?type=8": container(
+                [{"ratingKey": "7", "Genre": genre("Rock")}]
+            ),
+            f"{sections}/1/all?type=10": container([tracked, artist_only, own_genre]),
+            f"{sections}/2/all": container([row("50", "Chapter 1")]),
+        }
+    )
+    client = PlexClient("t", transport)
+    assert client.music_sections(SERVER) == (("1", "Music"), ("2", "Audiobooks"))
+    tracks = client.library_tracks(SERVER, Event(), skip=("2",))
+    assert [(t.rating_key, t.genre, t.year, t.section) for t in tracks] == [
+        ("1", "Alternative", 1997, "1"),
+        ("2", "Rock", 1993, "1"),
+        ("3", "Art Rock", 1997, "1"),
+    ]
+    assert not any("/sections/2/" in call[1] for call in transport.calls)

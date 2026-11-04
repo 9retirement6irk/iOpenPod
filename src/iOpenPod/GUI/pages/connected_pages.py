@@ -341,7 +341,16 @@ class PlexPage(_ConnectedPage):
                 music,
             )
         )
+        self._libraries = QListWidget(music)
+        self._libraries.setObjectName("plexLibraries")
+        self._libraries.setMaximumHeight(160)
+        self._libraries.itemChanged.connect(self._library_toggled)
+        self._libraries_label = QLabel(self.tr("Music libraries to use"), music)
+        music_layout.addWidget(self._libraries_label)
+        music_layout.addWidget(self._libraries)
         music_layout.addLayout(_row(open_folder))
+        self._libraries_label.hide()
+        self._libraries.hide()
         self.body.addWidget(account)
         self.body.addWidget(music)
         self.body.addWidget(plays)
@@ -422,6 +431,9 @@ class PlexPage(_ConnectedPage):
                     "Connected to {name}. Its music appears in Sync with Host."
                 ).format(name=server.name)
             )
+            self._load_libraries()
+        elif operation == "plex-sections":
+            self._show_libraries(cast("tuple[tuple[str, str], ...]", value))
         elif operation == "plex-ratings-plan":
             self._review_ratings(cast("RatingPlan", value))
         elif operation == "plex-ratings-send":
@@ -444,10 +456,41 @@ class PlexPage(_ConnectedPage):
             self.start("plex-connect")
             self.controller.plex_connect_manual(address)
 
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+        if not self._libraries.count() and self.controller.config.plex.server_id:
+            self._load_libraries()
+
+    def _load_libraries(self) -> None:
+        if self.controller.busy:
+            return
+        self.start("plex-sections")
+        self.controller.plex_sections()
+
+    def _show_libraries(self, sections: tuple[tuple[str, str], ...]) -> None:
+        skipped = set(self.controller.config.plex.skipped_sections)
+        self._libraries.blockSignals(True)
+        self._libraries.clear()
+        for key, title in sections:
+            self._libraries.addItem(_checkable(title, key, key not in skipped))
+        self._libraries.blockSignals(False)
+        many = len(sections) > 1
+        self._libraries_label.setVisible(many)
+        self._libraries.setVisible(many)
+
+    def _library_toggled(self, entry: QListWidgetItem) -> None:
+        self.controller.set_plex_section_included(
+            str(entry.data(_ROLE)), entry.checkState() == Qt.CheckState.Checked
+        )
+        self.say(self.tr("Saved. The change applies at the next Sync with Host."))
+
     def _forget(self) -> None:
         if self._scrobbling.plex_connected:
             self._scrobbling.disconnect_service(Service.PLEX)
         self.controller.forget(SecretKey.PLEX)
+        self._libraries.clear()
+        self._libraries_label.hide()
+        self._libraries.hide()
 
     # --- path mappings ---------------------------------------------------------------
 

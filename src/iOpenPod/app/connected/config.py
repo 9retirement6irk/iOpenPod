@@ -51,6 +51,8 @@ class PlexConfig:
     picks: tuple[PlexPick, ...] = ()
     mappings: tuple[PathMapping, ...] = ()
     sync_ratings: bool = False
+    # Music libraries (Plex section keys) left out of Sync; new ones are included.
+    skipped_sections: tuple[str, ...] = ()
 
 
 class ImmichPickKind(StrEnum):

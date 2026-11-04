@@ -6058,6 +6058,10 @@ Usa Editar para revisar sus reglas.</translation>
         <translation>Toda tu música y tus listas de Plex aparecen en la lista de medios de «Sincronizar con el equipo», junto a la música de tu equipo. Marca allí lo que va al iPod; las canciones se descargan solo cuando la sincronización las copia. Las descargas se guardan dentro del límite de la caché de medios en Ajustes → Sincronizar.</translation>
     </message>
     <message>
+        <source>Music libraries to use</source>
+        <translation>Bibliotecas de música que se usan</translation>
+    </message>
+    <message>
         <source>Signed in as {name} · {server}</source>
         <translation>Sesión iniciada como {name} · {server}</translation>
     </message>
@@ -6104,6 +6108,10 @@ Usa Editar para revisar sus reglas.</translation>
     <message>
         <source>Address, for example http://192.168.1.10:32400</source>
         <translation>Dirección, por ejemplo http://192.168.1.10:32400</translation>
+    </message>
+    <message>
+        <source>Saved. The change applies at the next Sync with Host.</source>
+        <translation>Guardado. El cambio se aplica en la próxima sincronización con el equipo.</translation>
     </message>
     <message>
         <source>Star ratings already match. {unmatched} songs weren&apos;t found in Plex.</source>

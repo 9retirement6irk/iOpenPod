@@ -13,7 +13,7 @@ import shutil
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import TYPE_CHECKING, cast
 from urllib.parse import quote, urlencode
@@ -138,6 +138,11 @@ class PlexTrack:
     user_rating: float | None = None
     view_count: int = 0
     album_thumb: str = ""
+    album_key: str = ""
+    artist_key: str = ""
+    section: str = ""  # the music library it is in
+    year: int = 0
+    genre: str = ""
 
     @property
     def extension(self) -> str:
@@ -514,16 +519,50 @@ class PlexClient:
         )
 
     def library_tracks(
-        self, server: PlexServer, cancelled: Event | None = None
+        self,
+        server: PlexServer,
+        cancelled: Event | None = None,
+        *,
+        skip: Iterable[str] = (),
     ) -> tuple[PlexTrack, ...]:
+        """Every Track in the music libraries not in ``skip`` (library keys).
+
+        Plex lists genres on albums and artists rather than on Tracks, so each
+        Track takes its album's genre and year, else its artist's genre.
+        """
+
+        skipped = set(skip)
         tracks: list[PlexTrack] = []
         for section, _title in self.music_sections(server):
-            rows = self._paged(
-                server, f"/library/sections/{quote(section)}/all?type=10", cancelled
-            )
-            tracks.extend(
-                track for row in rows if (track := parse_track(row)) is not None
-            )
+            if section in skipped:
+                continue
+            base = f"/library/sections/{quote(section)}/all"
+            albums = {
+                _str(row.get("ratingKey")): (
+                    _first_tag(row.get("Genre")),
+                    _int(row.get("year")),
+                )
+                for row in self._paged(server, f"{base}?type=9", cancelled)
+            }
+            artists = {
+                _str(row.get("ratingKey")): _first_tag(row.get("Genre"))
+                for row in self._paged(server, f"{base}?type=8", cancelled)
+            }
+            for row in self._paged(server, f"{base}?type=10", cancelled):
+                track = parse_track(row)
+                if track is None:
+                    continue
+                album_genre, album_year = albums.get(track.album_key, ("", 0))
+                tracks.append(
+                    replace(
+                        track,
+                        section=section,
+                        genre=track.genre
+                        or album_genre
+                        or artists.get(track.artist_key, ""),
+                        year=track.year or album_year,
+                    )
+                )
         return tuple(tracks)
 
     # --- media -------------------------------------------------------------------
@@ -748,7 +787,21 @@ def parse_track(row: Mapping[str, object]) -> PlexTrack | None:
         else None,
         view_count=_int(row.get("viewCount")),
         album_thumb=_str(row.get("parentThumb")),
+        album_key=_str(row.get("parentRatingKey")),
+        artist_key=_str(row.get("grandparentRatingKey")),
+        section=_str(row.get("librarySectionID")),
+        year=_int(row.get("parentYear")) or _int(row.get("year")),
+        genre=_first_tag(row.get("Genre")),
     )
+
+
+def _first_tag(value: object) -> str:
+    """The first tag of a Plex tag list such as ``Genre``."""
+
+    for item in _objects(value):
+        if tag := _str(item.get("tag")).strip():
+            return tag
+    return ""
 
 
 def map_server_path(server_path: str, mappings: Iterable[PathMapping]) -> Path | None:

@@ -81,8 +81,9 @@ same book take turns as the side that moved.
 
 ## Plex and Grimmory are streamed into Sync
 
-Plex and Grimmory no longer use Selections. Before each Sync, their whole catalogs
-are listed (every Plex song and audio playlist, every Grimmory audiobook track)
+Plex and Grimmory no longer use Selections. Before each Sync, their catalogs
+are listed (every Plex song and audio playlist from the music libraries chosen
+on the Plex page, every Grimmory audiobook track)
 and merged into the Host Media Library after the scan as Remote Items, so they
 appear in Sync's media list beside the Host's own files and are checked there.
 Nothing is downloaded until Sync Execution prepares a checked item: the download
@@ -107,6 +108,12 @@ The last listing is remembered, with audiobook details and downloaded sizes, so 
 server that cannot be reached still shows its items. The Plex and Grimmory
 folders are no longer registered as scanned Host folders. Immich keeps its
 Selections.
+
+Plex lists genres on albums and artists, not on Tracks, so a Plex Remote Item
+takes its album's genre and year, else its artist's genre. A library left out on
+the Plex page (for example an audiobook library, when Grimmory provides audiobooks)
+contributes no items, and its songs are dropped from Plex playlists; a playlist
+left empty is not listed. New libraries are included until left out.
 
 ## iPod Extras are published through Storage
 

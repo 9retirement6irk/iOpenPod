@@ -35,7 +35,7 @@ class FakePlex(PlexClient):
         self.library_reads = 0
 
     def library_tracks(
-        self, server: PlexServer, cancelled: object = None
+        self, server: PlexServer, cancelled: object = None, *, skip: object = ()
     ) -> tuple[PlexTrack, ...]:
         self.library_reads += 1
         return (track("1", "One"), track("2", "Two"), track("3", "Three"))

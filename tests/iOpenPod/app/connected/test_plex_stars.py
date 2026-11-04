@@ -46,7 +46,9 @@ def test_ipod_stars_go_to_plex_and_plex_only_stars_wait(tmp_path: Path) -> None:
         )
         rated: list[tuple[str, float]] = []
 
-        def library(_server: PlexServer, _cancelled: Event) -> tuple[PlexTrack, ...]:
+        def library(
+            _server: PlexServer, _cancelled: Event, *, skip: object = ()
+        ) -> tuple[PlexTrack, ...]:
             return (
                 plex("1", "A", "Band", "Album", 200_000, rating=4.0),
                 plex("2", "B", "Band", "Album", 200_000, rating=6.0),

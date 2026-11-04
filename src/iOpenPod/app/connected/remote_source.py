@@ -188,6 +188,7 @@ class ConnectedRemote:
         plex: PlexClient | None = None,
         server: PlexServer | None = None,
         mappings: Iterable[PathMapping] = (),
+        plex_skip: Iterable[str] = (),
         grimmory: GrimmoryClient | None = None,
     ) -> None:
         self.root = root
@@ -195,6 +196,7 @@ class ConnectedRemote:
         self._memory = _load_memory(memory)
         self._plex, self._server = plex, server
         self._mappings = tuple(mappings)
+        self._plex_skip = frozenset(plex_skip)
         self._grimmory = grimmory
         self._specs: dict[str, _Spec] = {}
         self._lock = threading.Lock()
@@ -347,7 +349,7 @@ class ConnectedRemote:
         issues: list[str] = []
         progress("Plex: listing your music…")
         try:
-            tracks = plex.library_tracks(server, cancelled)
+            tracks = plex.library_tracks(server, cancelled, skip=self._plex_skip)
             listed = plex.playlists(server)
             playlists = [
                 (item.title, plex.playlist_tracks(server, item.key, cancelled))
@@ -380,6 +382,14 @@ class ConnectedRemote:
                 )
                 for row in self._memory.plex_playlists
             ]
+            tracks = tuple(t for t in tracks if t.section not in self._plex_skip)
+        # Playlists keep only songs from the chosen libraries; empty ones are left out.
+        included = {track.rating_key for track in tracks}
+        playlists = [
+            (title, kept)
+            for title, members in playlists
+            if (kept := tuple(t for t in members if t.rating_key in included))
+        ]
         folder = self.plex_folder
         owned = load_owned(folder)
         thumbs: dict[str, tuple[str, Callable[[Path], None]]] = {}
@@ -418,6 +428,8 @@ class ConnectedRemote:
                     track_number=track.track_number,
                     disc_number=track.disc_number,
                     length_ms=track.duration_ms,
+                    genre=track.genre,
+                    year=track.year,
                 )
             )
         lists: list[RemotePlaylist] = []

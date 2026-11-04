@@ -6058,6 +6058,10 @@ Prüfen Sie ihre Regeln mit „Bearbeiten“.</translation>
         <translation>Deine gesamte Plex-Musik und alle Wiedergabelisten erscheinen in der Medienliste von „Mit Computer synchronisieren“, neben der Musik deines Computers. Wähle dort aus, was auf den iPod kommt; Titel werden erst geladen, wenn die Synchronisation sie kopiert. Downloads werden im Rahmen des Medien-Cache-Limits unter Einstellungen → Synchronisieren behalten.</translation>
     </message>
     <message>
+        <source>Music libraries to use</source>
+        <translation>Zu verwendende Musikmediatheken</translation>
+    </message>
+    <message>
         <source>Signed in as {name} · {server}</source>
         <translation>Angemeldet als {name} · {server}</translation>
     </message>
@@ -6104,6 +6108,10 @@ Prüfen Sie ihre Regeln mit „Bearbeiten“.</translation>
     <message>
         <source>Address, for example http://192.168.1.10:32400</source>
         <translation>Adresse, zum Beispiel http://192.168.1.10:32400</translation>
+    </message>
+    <message>
+        <source>Saved. The change applies at the next Sync with Host.</source>
+        <translation>Gespeichert. Die Änderung gilt ab der nächsten Synchronisation mit dem Computer.</translation>
     </message>
     <message>
         <source>Star ratings already match. {unmatched} songs weren&apos;t found in Plex.</source>

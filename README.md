@@ -34,8 +34,8 @@ See [iPod compatibility](#ipod-compatibility) before getting started.
 This fork adds pages under **Connected** in the sidebar. They sync from your own
 servers without exporting anything by hand:
 
-* **Plex**: sign in with your Plex account, and all your Plex music and playlists
-  appear in **Sync with Host**'s media list beside your computer's music. Check
+* **Plex**: sign in with your Plex account, and your Plex music and playlists (from
+  the music libraries you choose) appear in **Sync with Host**'s media list beside your computer's music. Check
   what goes on the iPod there; songs download only when Sync copies them.
   **Scrobble now** and Sync send iPod plays to Plex (they show up in Play
   History as your iPod), and Scrobble now also sets Plex stars from the iPod's.
