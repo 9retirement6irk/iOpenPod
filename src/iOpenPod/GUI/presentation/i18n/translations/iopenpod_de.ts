@@ -6245,6 +6245,14 @@ Prüfen Sie ihre Regeln mit „Bearbeiten“.</translation>
         <translation>Zu verwendende Plex-Mediatheken</translation>
     </message>
     <message>
+        <source>Include music videos from Plex&apos;s music video folders</source>
+        <translation>Musikvideos aus den Musikvideo-Ordnern von Plex einbeziehen</translation>
+    </message>
+    <message>
+        <source>Videos Plex keeps with your artists and songs, beside the music or in Settings → Extras → Global music videos path. They&apos;re listed in Sync&apos;s Music Videos page.</source>
+        <translation>Videos, die Plex bei Ihren Interpreten und Titeln führt, neben der Musik oder unter Einstellungen → Extras → Globaler Musikvideo-Pfad. Sie erscheinen auf der Seite „Musikvideos“ der Synchronisation.</translation>
+    </message>
+    <message>
         <source>Music</source>
         <translation>Musik</translation>
     </message>

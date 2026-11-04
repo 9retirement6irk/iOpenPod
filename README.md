@@ -77,6 +77,14 @@ choose what it's for:
 * **Movie libraries:** *Movies*, *Music videos* or *Don't use*.
 * **TV libraries:** *TV shows* or *Don't use*.
 
+**Music videos from Plex's music video folders.** Plex can also keep music
+videos with your artists and songs instead of in a library: beside the music, or
+in the server's **Global music videos path** (Plex **Settings → Extras**). Tick
+**Include music videos from Plex's music video folders** on the Plex page and
+they're listed on Sync's Music Videos page too, for the music libraries in use.
+Music, lyric and live music videos come along; interviews, concerts and other
+extras don't.
+
 Music libraries start in use; video libraries start unused because videos are
 large. Songs keep their album's genre and year, and Plex playlists come along with
 the songs you've chosen. TV episodes keep their show, season and episode number,

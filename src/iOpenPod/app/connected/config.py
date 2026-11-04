@@ -69,6 +69,9 @@ class PlexConfig:
     skipped_sections: tuple[str, ...] = ()
     # Video libraries used in Sync and what for; new ones are left out.
     video_sections: tuple[PlexVideoSection, ...] = ()
+    # Music videos Plex attached to artists and songs (beside the music or in its
+    # Global music videos path), from the music libraries in use.
+    music_videos: bool = False
 
 
 class ImmichPickKind(StrEnum):

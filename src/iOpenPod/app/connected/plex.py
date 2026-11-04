@@ -121,6 +121,8 @@ class PlexItem:
 
 
 _SECTION_TYPES = frozenset({"artist", "movie", "show"})
+# Plex's extras that are music videos (named -video, -lyrics and -live).
+_MUSIC_VIDEO_SUBTYPES = frozenset({"musicVideo", "lyricMusicVideo", "liveMusicVideo"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,6 +161,10 @@ class PlexTrack:
     show: str = ""
     summary: str = ""
     thumb: str = ""  # the poster or season art to show with it
+    # A song's own music video ("/library/metadata/<key>"), and whether this
+    # is a music video Plex attached to an artist or song rather than a library item.
+    extra_key: str = ""
+    extra: bool = False
 
     @property
     def extension(self) -> str:
@@ -619,6 +625,81 @@ class PlexClient:
                 )
         return tuple(tracks)
 
+    def music_videos(
+        self,
+        server: PlexServer,
+        tracks: Iterable[PlexTrack],
+        cancelled: Event | None = None,
+    ) -> tuple[PlexTrack, ...]:
+        """Music videos Plex attached to these songs' artists and to the songs.
+
+        Plex finds them beside the music or in the server's Global music videos
+        path (Settings → Extras) and keeps them as extras, not in a library. Each
+        artist's extras are read, and each song's own video by its
+        ``primaryExtraKey``; only music, lyric and live music videos are kept.
+        """
+
+        artists: dict[str, tuple[str, str]] = {}
+        songs: dict[str, tuple[str, str]] = {}
+        for track in tracks:
+            name = track.album_artist or track.artist
+            if track.artist_key and track.artist_key not in artists:
+                artists[track.artist_key] = (name, track.section)
+            key = track.extra_key.rstrip("/").rsplit("/", 1)[-1]
+            if key.isdigit() and key not in songs:
+                songs[key] = (track.artist or name, track.section)
+
+        def check() -> None:
+            if cancelled is not None and cancelled.is_set():
+                raise ConnectedError("Cancelled.")
+
+        def artist_extras(key: str) -> list[dict[str, object]]:
+            check()
+            try:
+                page = self._get(
+                    server, f"/library/metadata/{quote(key)}/extras", timeout=60
+                )
+            except ConnectedError:
+                return []  # one artist failing doesn't hide the others
+            return _objects(page.get("Metadata"))
+
+        found: dict[str, PlexTrack] = {}
+
+        def add(row: Mapping[str, object], artist: str, section: str) -> None:
+            if _str(row.get("subtype")) not in _MUSIC_VIDEO_SUBTYPES:
+                return
+            video = parse_video({**row, "originalTitle": artist}, "music_videos")
+            if video is None or video.rating_key in found:
+                return
+            title = video.title
+            prefix = f"{artist} - "
+            if artist and title.casefold().startswith(prefix.casefold()):
+                title = title[len(prefix) :].strip() or title
+            found[video.rating_key] = replace(
+                video, title=title, section=section, extra=True
+            )
+
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            for (artist, section), rows in zip(
+                artists.values(), pool.map(artist_extras, artists), strict=True
+            ):
+                for row in rows:
+                    add(row, artist, section)
+        keys = list(songs)
+        for start in range(0, len(keys), 50):
+            check()
+            batch = keys[start : start + 50]
+            try:
+                page = self._get(
+                    server, f"/library/metadata/{','.join(batch)}", timeout=60
+                )
+            except ConnectedError:
+                continue
+            for row in _objects(page.get("Metadata")):
+                artist, section = songs.get(_str(row.get("ratingKey")), ("", ""))
+                add(row, artist, section)
+        return tuple(found.values())
+
     # --- media -------------------------------------------------------------------
 
     def fetch_track(
@@ -846,6 +927,7 @@ def parse_track(row: Mapping[str, object]) -> PlexTrack | None:
         section=_str(row.get("librarySectionID")),
         year=_int(row.get("parentYear")) or _int(row.get("year")),
         genre=_first_tag(row.get("Genre")),
+        extra_key=_str(row.get("primaryExtraKey")),
     )
 
 

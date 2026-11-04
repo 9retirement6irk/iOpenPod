@@ -124,6 +124,14 @@ the iPod. Each movie and music video is cached in its own folder beside its
 poster, and episodes share their season's folder and art. Music videos without
 a separate artist take one from an "Artist - Title" name.
 
+Plex can also keep music videos as extras of artists and songs, found beside the
+music or in the server's Global music videos path, outside any library. When the
+Plex page's music video switch is on, each in-use music library's artists have
+their extras read, and songs with a `primaryExtraKey` have their own video read
+in batches; only extras of the `musicVideo`, `lyricMusicVideo` and
+`liveMusicVideo` subtypes are kept, as music video Remote Items under the artist
+they belong to. An artist whose extras can't be read is skipped, not fatal.
+
 ## Sync with Host chooses everything
 
 Connected pages set a source up (addresses, sign-ins, uploads); Sync with Host's

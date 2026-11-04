@@ -3,7 +3,7 @@
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from PySide6.QtWidgets import QComboBox
+from PySide6.QtWidgets import QCheckBox, QComboBox
 from tests.iOpenPod.GUI.application_shell_test_support import APPLICATION
 
 from iOpenPod.app.connected.config import (
@@ -69,6 +69,11 @@ def test_each_library_gets_a_use(tmp_path: Path) -> None:
         )
         choose("4", "")
         assert [v.key for v in controller.config.plex.video_sections] == ["3", "5"]
+        # Music videos Plex attached to artists and songs are a separate switch.
+        extras = page.findChild(QCheckBox, "plexMusicVideos")
+        assert extras is not None and not extras.isChecked()
+        extras.setChecked(True)
+        assert controller.config.plex.music_videos
         # The choices survive a restart.
         reloaded = ConnectedConfigStore(AtomicHostFile(tmp_path / "connected.json"))
         assert (

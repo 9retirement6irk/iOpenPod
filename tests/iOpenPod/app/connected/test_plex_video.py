@@ -15,6 +15,7 @@ from tests.iOpenPod.app.connected.test_remote_source import (
 from tests.iOpenPod.app.test_sync_plan import _host_library
 
 from iOpenPod.app.connected.config import PlexVideoUse
+from iOpenPod.app.connected.http import ConnectedError
 from iOpenPod.app.connected.plex import PlexClient, PlexSection, PlexTrack
 from iOpenPod.app.connected.remote_source import ConnectedRemote, video_relative
 from iOpenPod.app.host_media_library import HostMediaFileKind, HostMediaSource
@@ -255,3 +256,135 @@ def test_chosen_video_libraries_become_remote_videos(tmp_path: Path) -> None:
     assert [item.title for item in offline.items] == ["Heat"]
     assert offline.issues
     assert RemoteCatalog() == RemoteCatalog()
+
+
+def clip(key: str, title: str, subtype: str) -> dict[str, object]:
+    return {
+        "ratingKey": key,
+        "type": "clip",
+        "title": title,
+        "subtype": subtype,
+        "extraType": 4,
+        "duration": 200_000,
+        "thumb": f"/thumb/{key}",
+        "updatedAt": 3,
+        "Media": part(key),
+    }
+
+
+def test_music_videos_attached_to_artists_and_songs_are_found() -> None:
+    """Plex keeps videos from its Global music videos path as artist and song
+    extras; music, lyric and live music videos are kept, other extras aren't."""
+
+    from iOpenPod.app.connected.plex import PlexTrack
+
+    metadata = f"GET {SERVER.uri}/library/metadata"
+    transport = FakeTransport(
+        {
+            f"{metadata}/100/extras": container(
+                [
+                    clip("901", "Radiohead - Karma Police", "musicVideo"),
+                    clip("902", "No Surprises (Lyrics)", "lyricMusicVideo"),
+                    clip("903", "Interview 1997", "interview"),
+                    clip("904", "Live at Glastonbury", "concert"),
+                ]
+            ),
+            f"{metadata}/200/extras": ConnectedError("HTTP 500", 500),
+            f"{metadata}/905,901": container(
+                [
+                    clip("905", "Paranoid Android", "liveMusicVideo"),
+                    clip("901", "Radiohead - Karma Police", "musicVideo"),
+                ]
+            ),
+        }
+    )
+
+    def song(key: str, artist: str, artist_key: str, extra: str = "") -> PlexTrack:
+        return PlexTrack(
+            key,
+            "Song",
+            artist,
+            artist,
+            "Album",
+            1,
+            1,
+            1_000,
+            f"/library/parts/{key}/a.flac",
+            "",
+            1,
+            "flac",
+            1,
+            artist_key=artist_key,
+            section="1",
+            extra_key=extra,
+        )
+
+    found = PlexClient("t", transport).music_videos(
+        SERVER,
+        (
+            song("1", "Radiohead", "100", "/library/metadata/905"),
+            song("2", "Radiohead", "100", "/library/metadata/901"),
+            song("3", "Broken Server", "200"),  # its extras fail; the rest still come
+        ),
+        Event(),
+    )
+    by_key = {video.rating_key: video for video in found}
+    assert set(by_key) == {"901", "902", "905"}
+    karma = by_key["901"]
+    assert (karma.artist, karma.title, karma.media) == (
+        "Radiohead",
+        "Karma Police",
+        "music_videos",
+    )
+    assert karma.extra and karma.section == "1" and karma.thumb == "/thumb/901"
+    assert by_key["905"].title == "Paranoid Android"
+    assert video_relative(karma) == (
+        "Music Videos/Radiohead - Karma Police [901]/Radiohead - Karma Police.mkv"
+    )
+
+
+class ExtrasPlex(VideoPlex):
+    def __init__(self, extras: tuple[PlexTrack, ...]) -> None:
+        super().__init__(())
+        self.extras = extras
+        self.asked = 0
+
+    def music_videos(
+        self, _server: object, _tracks: object, _cancelled: Event
+    ) -> tuple[PlexTrack, ...]:
+        self.asked += 1
+        return self.extras
+
+
+def test_music_videos_join_sync_only_when_switched_on(tmp_path: Path) -> None:
+    from iOpenPod.app.connected.plex import parse_video
+
+    video = parse_video(clip("901", "Karma Police", "musicVideo"), "music_videos")
+    assert video is not None
+    extra = replace(video, artist="Radiohead", section="1", extra=True)
+    client = ExtrasPlex((extra,))
+
+    def remote(enabled: bool, skip: tuple[str, ...] = ()) -> ConnectedRemote:
+        return ConnectedRemote(
+            tmp_path / "Connected",
+            tmp_path / "catalog.json",
+            plex=client,  # type: ignore[arg-type]
+            server=SERVER,
+            plex_skip=skip,
+            plex_music_videos=enabled,
+        )
+
+    assert remote(False).catalog(Event()).items == ()
+    assert client.asked == 0
+    (item,) = remote(True).catalog(Event()).items
+    assert item.media_type is MediaType.MUSIC_VIDEO and item.artist == "Radiohead"
+    assert item.video
+
+    # Offline, the remembered videos follow the switch and the music libraries.
+    def unreachable(*_args: object, **_kwargs: object) -> tuple[PlexTrack, ...]:
+        raise ConnectedError("Could not reach plex")
+
+    client.library_tracks = unreachable  # type: ignore[method-assign]
+    assert [i.title for i in remote(True).catalog(Event()).items] == ["Karma Police"]
+    assert remote(False).catalog(Event()).items == ()
+    assert remote(True, skip=("1",)).catalog(Event()).items == ()

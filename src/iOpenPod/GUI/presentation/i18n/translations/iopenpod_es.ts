@@ -6245,6 +6245,14 @@ Usa Editar para revisar sus reglas.</translation>
         <translation>Bibliotecas de Plex que se usan</translation>
     </message>
     <message>
+        <source>Include music videos from Plex&apos;s music video folders</source>
+        <translation>Incluir los videos musicales de las carpetas de videos musicales de Plex</translation>
+    </message>
+    <message>
+        <source>Videos Plex keeps with your artists and songs, beside the music or in Settings → Extras → Global music videos path. They&apos;re listed in Sync&apos;s Music Videos page.</source>
+        <translation>Videos que Plex guarda con tus artistas y canciones, junto a la música o en Ajustes → Extras → Ruta global de videos musicales. Aparecen en la página Videos musicales de la sincronización.</translation>
+    </message>
+    <message>
         <source>Music</source>
         <translation>Música</translation>
     </message>

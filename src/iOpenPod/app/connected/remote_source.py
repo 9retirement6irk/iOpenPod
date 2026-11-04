@@ -195,6 +195,7 @@ class ConnectedRemote:
         mappings: Iterable[PathMapping] = (),
         plex_skip: Iterable[str] = (),
         plex_videos: Mapping[str, str] | None = None,
+        plex_music_videos: bool = False,
         grimmory: GrimmoryClient | None = None,
     ) -> None:
         self.root = root
@@ -205,6 +206,7 @@ class ConnectedRemote:
         self._plex_skip = frozenset(plex_skip)
         # Video library key → PlexVideoUse value; only these libraries are listed.
         self._plex_videos = dict(plex_videos or {})
+        self._plex_music_videos = plex_music_videos
         self._grimmory = grimmory
         self._specs: dict[str, _Spec] = {}
         self._lock = threading.Lock()
@@ -220,6 +222,13 @@ class ConnectedRemote:
         return self.root / AUDIOBOOKS_FOLDER
 
     # --- listing -------------------------------------------------------------------
+
+    def _wanted(self, video: PlexTrack) -> bool:
+        """Whether a remembered video still belongs to the chosen libraries."""
+
+        if video.extra:
+            return self._plex_music_videos and video.section not in self._plex_skip
+        return self._plex_videos.get(video.section) == video.media
 
     def catalog(
         self, cancelled: Event, progress: Callable[[str], None] = lambda _t: None
@@ -363,6 +372,9 @@ class ConnectedRemote:
                 if self._plex_videos
                 else ()
             )
+            if self._plex_music_videos:
+                progress("Plex: looking for music videos…")
+                videos = (*videos, *plex.music_videos(server, tracks, cancelled))
             listed = plex.playlists(server)
             playlists = [
                 (item.title, plex.playlist_tracks(server, item.key, cancelled))
@@ -402,8 +414,7 @@ class ConnectedRemote:
             videos = tuple(
                 video
                 for row in self._memory.plex_videos
-                if (video := _plex_track(row))
-                and self._plex_videos.get(video.section) == video.media
+                if (video := _plex_track(row)) and self._wanted(video)
             )
         # Playlists keep only songs from the chosen libraries; empty ones are left out.
         included = {track.rating_key for track in tracks}

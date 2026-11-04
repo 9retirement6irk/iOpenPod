@@ -351,8 +351,20 @@ class PlexPage(_ConnectedPage):
             QFormLayout.FieldGrowthPolicy.FieldsStayAtSizeHint
         )
         self._libraries_label = QLabel(self.tr("Plex libraries to use"), music)
+        self._music_videos = QCheckBox(
+            self.tr("Include music videos from Plex's music video folders"), music
+        )
+        self._music_videos.setObjectName("plexMusicVideos")
+        self._music_videos.setToolTip(
+            self.tr(
+                "Videos Plex keeps with your artists and songs, beside the music or in Settings → Extras → Global music videos path. They're listed in Sync's Music Videos page."
+            )
+        )
+        self._music_videos.setChecked(self.controller.config.plex.music_videos)
+        self._music_videos.toggled.connect(self._music_videos_toggled)
         music_layout.addWidget(self._libraries_label)
         music_layout.addWidget(self._libraries)
+        music_layout.addWidget(self._music_videos)
         music_layout.addLayout(_row(open_folder))
         self._libraries_label.hide()
         self._libraries.hide()
@@ -518,6 +530,10 @@ class PlexPage(_ConnectedPage):
             self.controller.set_plex_video_use(
                 key, PlexVideoUse(value) if value else None
             )
+        self.say(self.tr("Saved. The change applies at the next Sync with Host."))
+
+    def _music_videos_toggled(self, enabled: bool) -> None:
+        self.controller.set_plex_music_videos(enabled)
         self.say(self.tr("Saved. The change applies at the next Sync with Host."))
 
     def _forget(self) -> None:

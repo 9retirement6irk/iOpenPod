@@ -592,6 +592,16 @@ class ConnectedController(QObject):
 
         self.run_plex("plex-sections", lambda server, _job: self.plex.sections(server))
 
+    def set_plex_music_videos(self, enabled: bool) -> None:
+        """Include the music videos Plex attached to artists and songs."""
+
+        self.update_config(
+            replace(
+                self._config,
+                plex=replace(self._config.plex, music_videos=enabled),
+            )
+        )
+
     def set_plex_video_use(self, key: str, use: PlexVideoUse | None) -> None:
         """Use a movie or TV library for movies, TV shows or music videos, or not."""
 
@@ -741,6 +751,7 @@ class ConnectedController(QObject):
             plex_videos={
                 video.key: video.use.value for video in self._config.plex.video_sections
             },
+            plex_music_videos=self._config.plex.music_videos,
             grimmory=grimmory,
         )
 
