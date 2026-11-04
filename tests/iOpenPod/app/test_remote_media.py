@@ -298,8 +298,14 @@ def test_a_song_synced_on_another_computer_shows_as_ticked_and_unchanged(
     any(shutil.which(tool) is None for tool in ("ffmpeg", "ffprobe")),
     reason="Video preparation requires FFmpeg and FFprobe",
 )
-def test_sync_downloads_and_converts_a_remote_tv_episode(tmp_path: Path) -> None:
-    """A Plex episode is downloaded during Sync and converted like a Host video."""
+@pytest.mark.parametrize(
+    "media_type", [MediaType.TV_SHOW, MediaType.MUSIC_VIDEO, MediaType.VIDEO]
+)
+def test_sync_downloads_and_converts_a_remote_video(
+    tmp_path: Path, media_type: MediaType
+) -> None:
+    """A Plex video is downloaded during Sync, converted like a Host video, and
+    written with its media type, so it lands in the iPod's matching Videos menu."""
 
     import subprocess
     from threading import Event
@@ -334,10 +340,10 @@ def test_sync_downloads_and_converts_a_remote_tv_episode(tmp_path: Path) -> None
         album_artist="Show",
         track_number=2,
         length_ms=2_000,
-        media_type=MediaType.TV_SHOW,
-        show="Show",
-        season_number=1,
-        episode_number=2,
+        media_type=media_type,
+        show="Show" if media_type is MediaType.TV_SHOW else "",
+        season_number=1 if media_type is MediaType.TV_SHOW else 0,
+        episode_number=2 if media_type is MediaType.TV_SHOW else 0,
         description="Day one.",
     )
     downloads: list[HostMediaFileKind] = []
@@ -365,13 +371,19 @@ def test_sync_downloads_and_converts_a_remote_tv_episode(tmp_path: Path) -> None
         assert result.status is SyncExecutionStatus.SUCCESS, result.issues
         assert downloads == [HostMediaFileKind.VIDEO]
         assert result.active is not None
-        (track,) = (t for t in result.active.library.tracks if t.title == "Pilot")
-        assert MediaType.TV_SHOW in track.media_types
-        assert (track.show, track.season_number, track.episode_number) == (
-            "Show",
-            1,
-            2,
-        )
+        # Read the committed database back from the iPod, as the firmware would.
+        from iPodDB.library import IPodLibrary
+
+        database = device.root / "iPod_Control/iTunes/iTunesDB"
+        reread = IPodLibrary.parse(database.read_bytes()).snapshot
+        (track,) = (t for t in reread.tracks if t.title == "Pilot")
+        assert track.media_types == (media_type,)
+        if media_type is MediaType.TV_SHOW:
+            assert (track.show, track.season_number, track.episode_number) == (
+                "Show",
+                1,
+                2,
+            )
         assert track.metadata.location.endswith((".m4v", ".mp4"))
         assert result.helper is not None
         synced = next(t for t in result.helper.tracks if t.track_id == track.track_id)
