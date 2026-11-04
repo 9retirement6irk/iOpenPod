@@ -6233,6 +6233,10 @@ Prüfen Sie ihre Regeln mit „Bearbeiten“.</translation>
         <translation>Musik und Video</translation>
     </message>
     <message>
+        <source>Show downloads</source>
+        <translation>Downloads anzeigen</translation>
+    </message>
+    <message>
         <source>All your Plex music and playlists appear in Sync with Host&apos;s media list, beside your computer&apos;s music, and so do the movie and TV libraries you choose below. Check what goes on the iPod there; items download only when Sync copies them, and videos are converted for the iPod using your video settings. Downloads are kept within the media cache limit in Settings → Sync.</source>
         <translation>Ihre gesamte Plex-Musik und alle Wiedergabelisten erscheinen in der Medienliste von „Mit Computer synchronisieren“ neben der Musik Ihres Computers, ebenso die Film- und TV-Mediatheken, die Sie unten wählen. Dort haken Sie an, was auf den iPod kommt; Objekte werden erst geladen, wenn die Synchronisation sie kopiert, und Videos werden mit Ihren Videoeinstellungen für den iPod umgewandelt. Downloads werden innerhalb der Grenze des Mediencaches unter Einstellungen → Synchronisation behalten.</translation>
     </message>
@@ -6246,7 +6250,7 @@ Prüfen Sie ihre Regeln mit „Bearbeiten“.</translation>
     </message>
     <message>
         <source>Show downloaded music</source>
-        <translation>Geladene Musik anzeigen</translation>
+        <translation type="vanished">Geladene Musik anzeigen</translation>
     </message>
     <message>
         <source>All your Plex music and playlists appear in Sync with Host&apos;s media list, beside your computer&apos;s music. Check what goes on the iPod there; songs download only when Sync copies them. Downloads are kept within the media cache limit in Settings → Sync.</source>

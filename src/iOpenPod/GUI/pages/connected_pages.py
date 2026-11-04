@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QInputDialog,
     QLabel,
     QLineEdit,
@@ -309,7 +310,9 @@ class PlexPage(_ConnectedPage):
                 self.tr("Same folder on this computer"),
             ]
         )
-        self._mappings.horizontalHeader().setStretchLastSection(True)
+        self._mappings.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
         self._mappings.setMaximumHeight(120)
         self._mappings.itemChanged.connect(self._save_mappings)
         add_mapping = _button(self.tr("Add"), mappings, ActionButtonKind.QUIET)
@@ -329,9 +332,7 @@ class PlexPage(_ConnectedPage):
         mappings_layout.addLayout(_row(add_mapping, remove_mapping))
 
         music = QGroupBox(self.tr("Music and video"), self)
-        open_folder = _button(
-            self.tr("Show downloaded music"), music, ActionButtonKind.QUIET
-        )
+        open_folder = _button(self.tr("Show downloads"), music, ActionButtonKind.QUIET)
         open_folder.clicked.connect(lambda: self.open_folder(ConnectedSource.PLEX))
         music_layout = QVBoxLayout(music)
         music_layout.addWidget(
@@ -346,6 +347,9 @@ class PlexPage(_ConnectedPage):
         self._libraries.setObjectName("plexLibraries")
         self._library_form = QFormLayout(self._libraries)
         self._library_form.setContentsMargins(0, 0, 0, 0)
+        self._library_form.setFieldGrowthPolicy(
+            QFormLayout.FieldGrowthPolicy.FieldsStayAtSizeHint
+        )
         self._libraries_label = QLabel(self.tr("Plex libraries to use"), music)
         music_layout.addWidget(self._libraries_label)
         music_layout.addWidget(self._libraries)
@@ -488,6 +492,7 @@ class PlexPage(_ConnectedPage):
                 continue
             box = QComboBox(self._libraries)
             box.setObjectName(f"plexLibrary-{section.key}")
+            box.setMinimumWidth(220)
             for label, value in (*options, (self.tr("Don't use"), "")):
                 box.addItem(label, value)
             current = (

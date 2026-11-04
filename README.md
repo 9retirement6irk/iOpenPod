@@ -1,309 +1,218 @@
-# iOpenPod: Free iPod Manager and iTunes Alternative
-
-**Your music. Your iPod.**
-
-[![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg?style=plastic)](https://github.com/TheRealSavi/iOpenPod/blob/main/LICENSE)
-[![Platform: Win | Mac | Linux](https://img.shields.io/badge/Platform-Win%20%7C%20Mac%20%7C%20Linux-2ea44f.svg?style=plastic)](#download-and-install)
-[![GitHub: Download latest](https://img.shields.io/badge/GitHub-Download%20latest-0a6fdb?style=plastic)](https://github.com/TheRealSavi/iOpenPod/releases/latest)
-[![GitHub Stars](https://img.shields.io/github/stars/TheRealSavi/iOpenPod?style=plastic\&color=6e5494)](https://github.com/TheRealSavi/iOpenPod/stargazers)
-[![PyPI Downloads](https://img.shields.io/pypi/dm/iopenpod?style=plastic\&color=0a6fdb\&cacheSeconds=86400)](https://pypi.org/project/iopenpod/)
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=plastic)](https://discord.gg/9Yy499Tf5d)
-
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/johngibbons)
-
-iOpenPod is a free, open-source iPod manager and iTunes alternative for
-**Windows, macOS, and Linux**. Sync music from folders on your computer without
-iTunes, browse the library already on your iPod, and edit metadata and playlists.
-Sync Review lets you choose what gets added, updated, or removed.
-
-The target devices are filesystem-accessible **iPod classic, iPod mini, iPod nano,
-and earlier full-size iPods**. Audio, video, photo, and podcast capabilities depend
-on the model. Media conversion uses separately installed FFmpeg and FFprobe.
-See [iPod compatibility](#ipod-compatibility) before getting started.
-
-[Website](https://iopenpod.com) ·
-[Install help](https://iopenpod.com/install-help/) ·
-[iPod guides](https://iopenpod.com/guides/) ·
-[Discord](https://discord.gg/9Yy499Tf5d) ·
-[Support development](https://ko-fi.com/johngibbons)
-
-![iOpenPod album library with album artwork and the selected album track list](https://raw.githubusercontent.com/TheRealSavi/iOpenPod/main/website/screenshots/iop2/album-library.webp)
-
-## This fork: Connected Sources
-
-This fork adds pages under **Connected** in the sidebar. They sync from your own
-servers without exporting anything by hand:
-
-* **Plex**: sign in with your Plex account, and your Plex music and playlists (from
-  the music libraries you choose) appear in **Sync with Host**'s media list beside your computer's music. Check
-  what goes on the iPod there; songs download only when Sync copies them.
-  On the Plex page, set each movie or TV library to **Movies**, **Music videos**
-  or **TV shows** and its videos join Sync's Movies, Music Videos and TV Shows
-  pages on iPods that play video. They're converted for the iPod with your video
-  settings, which can take a while for long films.
-  **Scrobble now** and Sync send iPod plays to Plex (they show up in Play
-  History as your iPod), and Scrobble now also sets Plex stars from the iPod's.
-  Turn that off in Settings → Sync → Scrobbling. Star ratings can also be synced
-  both ways from the Plex page.
-* **Immich**: pick Favorites, albums, people, or individual photos, with previews.
-* **Grimmory**: sign in with your Grimmory account (or with single sign-on, after
-  adding `iopenpod://oauth2-callback` to Grimmory's Mobile Redirect URIs and as a
-  redirect address for Grimmory in your identity provider), and all your audiobooks appear
-  in Sync's media list, downloaded only when Sync copies them. Listening progress
-  stays in step: where you stopped on the
-  iPod goes to Grimmory, and where you stopped in Grimmory becomes the iPod's
-  bookmark.
-* **Notes**: Memos notes with chosen tags go straight into Extras → Notes
-  (Memos 26.10 and earlier).
-* **Calendars**: `.ics` files and calendar links go to Extras → Calendars.
-* **Contacts**: upload `.vcf` files (from your phone, Google Contacts, iCloud or
-  Outlook) and they go to Extras → Contacts.
-
-**Sync with Host** does it all. Set each source up on its page under Connected;
-then, in Sync's media list, the **CONNECTED** section chooses Immich albums,
-people and Favorites (**Update photos** downloads them and ticks their photos,
-keeping your other ticks), Memos tags and single memos, calendars, and contacts.
-Notes, calendars and contacts are written to the iPod at the end of the Sync.
-
-Plex and Grimmory downloads are kept in `~/Music/iOpenPod Connected` up to the
-media cache limit in Settings → Sync (or removed after each Sync when the cache is
-off). Immich picks are downloaded there and refreshed when you start **Sync with
-Host**. Everything goes through the normal Sync Review. Sign-ins
-and keys are kept in your system keychain. See
-[ADR-0900](docs/adr/0900-add-connected-sources-and-ipod-extras.md) for the design.
-
-Builds of this fork check
-[this fork's releases](https://github.com/9retirement6irk/iOpenPod/releases) for
-updates, never upstream iOpenPod's, so an update can't replace them with a version
-without Connected Sources. When a newer fork release is published, **Check for
-updates** links to its download page. The download links below are upstream's.
-
-## Download and install
-
-<!-- markdownlint-disable MD033 -->
-
-<a href="https://get.microsoft.com/installer/download/9p2lxchhwlg9?referrer=appbadge" target="_self" >
-    <img src="https://get.microsoft.com/images/en-us%20dark.svg" width="200"/>
-</a>
-<!-- markdownlint-enable MD033 -->
-
-Native downloads for Windows, macOS, and Linux are available on the
-[latest release page](https://github.com/TheRealSavi/iOpenPod/releases/latest).
-Choose your platform below; these downloads do not require a separate Python installation.
-See the [installation guide](https://iopenpod.com/install-help/) for setup and troubleshooting.
-
-| Platform              | Latest release assets                                                           | Installation                                                           |
-| --------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Windows x64           | [Windows x86\_64 ZIP](https://github.com/TheRealSavi/iOpenPod/releases/latest)  | Extract `iOpenPod.exe` and run it.                                     |
-| macOS · Apple Silicon | [macOS arm64 DMG](https://github.com/TheRealSavi/iOpenPod/releases/latest)      | Open the image and drag `iOpenPod.app` to Applications.                |
-| macOS · Intel         | [macOS x86\_64 DMG](https://github.com/TheRealSavi/iOpenPod/releases/latest)    | Open the image and drag `iOpenPod.app` to Applications.                |
-| Linux x64             | [Linux x86\_64 tar.gz](https://github.com/TheRealSavi/iOpenPod/releases/latest) | Extract the complete folder and run its top-level `iOpenPod` launcher. |
-
-On Windows, keep the file name as `iOpenPod.exe` and place it in a folder you can write to
-on a fixed NTFS drive for in-app updates. Windows users can also install through
-[Microsoft Store](https://apps.microsoft.com/detail/9P2LXCHHWLG9).
-
-On macOS, launch from Applications after copying the app and ejecting the DMG.
-The build targets macOS 12.3 or later. Current downloads are ad-hoc signed and not
-notarized. Follow the [Mac setup guide](https://iopenpod.com/install-help/#native-macos)
-for first-launch approval in **System Settings → Privacy & Security**. Choose a
-DMG to install; the ZIPs labeled `sparkle-update` are reserved for the built-in updater.
-
-On Linux, extract into a folder you can write to, preserve executable permissions,
-and keep the whole `iOpenPod` folder together. Always start its top-level launcher,
-including after an update. The binary is built on Ubuntu 24.04 and requires glibc
-2.39 or later plus desktop libraries.
-
-If Linux does not launch the app, run its top-level launcher from a terminal to
-see the startup error. For device-access problems, the Device Picker includes the
-underlying error. **Settings → About** shows a copyable log file path even if
-**Open Log Folder** fails. The default Linux log is
-`~/.local/state/iOpenPod/iopenpod.log`, or `$XDG_STATE_HOME/iOpenPod/iopenpod.log`
-when `XDG_STATE_HOME` is configured; a custom log setting takes precedence.
-
-Linux device selection also validates that persistent Host recovery storage is
-separate from the selected iPod. Unsupported or incomplete storage layouts are
-blocked with a diagnostic. Btrfs recovery is supported when every member device can
-be verified as separate from the iPod; loop-backed recovery remains unsupported.
-See [the backing-storage contract](docs/adr/0191-compare-live-linux-physical-backing.md)
-and [Btrfs recovery support](docs/adr/0193-resolve-btrfs-recovery-through-all-member-devices.md)
-for supported layouts and remaining Linux acceptance work.
-
-Mac App Store, Flathub, and Snap Store remain planned. Check the
-[website](https://iopenpod.com/#install) for channel availability.
-
-### Updating a GitHub installation
-
-iOpenPod checks for updates at launch. You can also use **Settings → About →
-Check for updates**. About shows your current version and Install Channel.
-
-* **Windows and Linux:** choose **Update now** to download the update, then
-  **Restart to install** when ready. Save any Library Draft and finish running
-  workflows first. Close other iOpenPod instances before restarting.
-
-* **macOS:** choose **Update now** after saving your work, then follow the built-in
-  updater's installation and relaunch prompts.
-
-Installation requires your choice. If an older build only offers **Open download
-page**, or cannot update itself, install the latest download from above manually.
-Older Linux directory bundles should be replaced by extracting the new archive
-into a fresh folder.
-Microsoft Store installations update through the Store.
-
-### Install from PyPI with uv
-
-First [install uv](https://docs.astral.sh/uv/getting-started/installation/),
-then run:
-
-```shell
-uv tool install iopenpod
-```
-
-Launch the app with `iopenpod`. For updates, choose **Update now**, then
-**Restart to install** in the app. Or manually run
-
-```shell
-uv tool upgrade iopenpod
-```
-
-### Media tools
-
-**FFmpeg and FFprobe** are installed separately for media conversion and inspection.
-**Chromaprint's fpcalc** is optional, installed separately, and enables acoustic
-matching during Sync.
-
-The startup popup or **Settings → Media Tools → Set Up Media Tools** can install
-missing tools after you choose **Install Missing Tools**. Native setup uses WinGet,
-Homebrew, or a supported Linux package manager.
-
-## What you can do
-
-* **Albums, artists, genres, and tracks.** Browse artwork, search your collection,
-  and edit metadata and ratings.
-
-* **Playlists and Smart Playlists.** Arrange tracks, organize playlist folders,
-  and create rule-based selections.
-
-* **Click wheel games and Phase.** Install the full preserved game collection
-  without a virtual machine, and create a Phase Playlist with audio analysis
-  generated from your music.
-
-* **Automatic media conversion.** Convert audio and video when needed and prepare
-  artwork for your iPod model. Choose how incoming media is encoded in Settings.
-
-* **Playback and Synesthesia.** Listen to supported tracks with desktop media
-  controls and explore music-reactive visuals.
-
-* **Photos.** Browse Photo Albums, inspect device-sized images, and export retained
-  originals and supported image representations.
-
-* **Podcasts.** Find shows, manage subscriptions, and refresh feeds and artwork.
-  Online discovery requires an internet connection.
-
-* **Scrobbling.** Optionally submit iPod music plays to Last.fm and ListenBrainz.
-
-* **Backup Snapshots.** Capture, browse, annotate, export, and restore local backups.
-  Interrupted writes expose explicit recovery actions.
-
-* **Appearance and conversion settings.** Choose light, dark, or system appearance
-  and configure how incoming media is prepared.
-
-Library edits save automatically by default. Enable **Draft all changes** to review
-and save those edits together. Sync always has its own selection and review flow.
-
-| Track metadata                                                                                                                                                                                | Track artwork                                                                                                                                                                             |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ![Edit Track dialog with title, artist, album, genre, composer, and track metadata](https://raw.githubusercontent.com/TheRealSavi/iOpenPod/main/website/screenshots/iop2/track-metadata.webp) | ![Edit Track artwork tab with cover art and controls to choose or clear artwork](https://raw.githubusercontent.com/TheRealSavi/iOpenPod/main/website/screenshots/iop2/track-artwork.webp) |
-
-| Smart Playlists                                                                                                                                                              | Backup Snapshots                                                                                                                                                                         |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ![Smart Playlist editor with rules for music released before 2000](https://raw.githubusercontent.com/TheRealSavi/iOpenPod/main/website/screenshots/iop2/smart-playlist.webp) | ![Backups page with saved Backup Snapshots and restore actions for the selected iPod](https://raw.githubusercontent.com/TheRealSavi/iOpenPod/main/website/screenshots/iop2/backups.webp) |
-
-![Audio transcoding settings for encoder, bitrate, lossless conversion, and spoken-word media](https://raw.githubusercontent.com/TheRealSavi/iOpenPod/main/website/screenshots/iop2/audio-transcoding-settings.webp)
-
-## Click wheel games and Phase
-
-### Install click wheel games without a virtual machine
-
-Start with one click on **Install Games** in the Games page. iOpenPod downloads
-the full preserved click wheel game collection and prepares game authorization
-for your iPod. Choose **Select all → Add** to install the collection, or pick
-individual games. No virtual machine is required.
-
-The first download needs an internet connection; later visits reuse the files
-on your computer. Game compatibility depends on your iPod model and firmware.
-
-![Games page showing installed click wheel games and the Install Games button](https://raw.githubusercontent.com/TheRealSavi/iOpenPod/main/website/screenshots/iop2/click-wheel-games.webp)
-
-### Make a Phase Playlist from your music
-
-With Phase installed, create a Phase Playlist or mark an existing playlist with
-**Use as the Phase Playlist**. Add your songs and save. iOpenPod generates the
-audio analysis the game uses to turn your music into gameplay, and reuses matching
-analysis on later saves.
-
-The analyzer detects beats and musical attacks, with an emphasis on audible
-percussion. With the optional music analysis model installed, it also separates
-estimated vocals, drums, guitar, bass, piano, and other sounds, and recognizes
-recurring musical phrases. These help it follow the rhythm and prominent parts
-of a song. Acoustic analysis works without the optional model. Use **Settings →
-Media Tools → Set Up Phase Analysis** to download optional instrument analysis;
-setup can use several gigabytes. If optional analysis cannot run, iOpenPod uses
-acoustic analysis. Audio decoding uses your configured FFmpeg executable.
-
-![Phase Playlist with its game icon, track list, and Phase banner](https://raw.githubusercontent.com/TheRealSavi/iOpenPod/main/website/screenshots/iop2/phase-playlist.webp)
-
-## How to use
-
-1. **Connect your iPod** and select it in the device picker. Your operating system
-   must be able to mount and access it. Browse your library, play tracks, or edit
-   metadata and playlists.
-2. **Capture a Backup Snapshot** of the data you want to preserve.
-3. **Choose Sync with Host**, add media folders, and select what to scan.
-4. **Select your media**, then review additions, updates, and removals. Removal
-   candidates start unchecked.
-5. **Sync Selected** prepares compatible media and publishes verified changes.
-   Use the app’s eject action when you are finished.
-
-Optional acoustic matching helps recognize the same recording after format or
-metadata changes. Sync can also recognize media from a previous successful Sync
-without generating a new fingerprint.
-
-| Media folders                                                                                                                                                                              | Sync selection                                                                                                                                                                                 |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ![Choose Media Folders dialog with per-folder media types and subfolder scanning](https://raw.githubusercontent.com/TheRealSavi/iOpenPod/main/website/screenshots/iop2/media-folders.webp) | ![Sync media selection with albums grouped as selected, mixed, and deselected](https://raw.githubusercontent.com/TheRealSavi/iOpenPod/main/website/screenshots/iop2/sync-media-selection.webp) |
-
-![Sync Review with selected additions, unchecked removals, and items needing attention](https://raw.githubusercontent.com/TheRealSavi/iOpenPod/main/website/screenshots/iop2/sync-change-review.webp)
-
-## iPod compatibility
-
-iOpenPod targets these iPod families. Available features depend on the model.
-
-| Family                | Target                                             |
-| --------------------- | -------------------------------------------------- |
-| iPod and iPod classic | Full-size generations 1–5.5 and the classic family |
-| iPod mini             | 1st and 2nd generation                             |
-| iPod nano             | 1st–7th generation                                 |
-
-**iPod shuffle, iPod touch, and iPhone are not yet supported.** The computer
-must already be able to read and write the iPod’s filesystem.
-
-### Guides for your iPod
-
-* [Sync an iPod without iTunes](https://iopenpod.com/guides/sync-ipod-without-itunes/)
-  — choose media folders and review your first Sync.
-* [Check iPod compatibility](https://iopenpod.com/guides/ipod-compatibility/)
-  — understand model and filesystem requirements.
-* [Put FLAC music on an iPod](https://iopenpod.com/guides/flac-to-ipod/)
-  — convert supported source files for your model during Sync.
-* [Troubleshoot an iPod that is not detected](https://iopenpod.com/guides/ipod-not-detected/)
-  — check the connection and whether the computer can access the device.
-
-![Photo Library with the Manage Albums dialog and selected photo inspector](https://raw.githubusercontent.com/TheRealSavi/iOpenPod/main/website/screenshots/iop2/photo-albums.webp)
-
-## Develop and contribute
-
-Clone the repository, open its directory, and use the locked UV environment:
+# iOpenPod, Connected Sources edition
+
+**Your servers. Your iPod. One Sync.**
+
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg?style=plastic)](LICENSE)
+[![Platform: Win | Mac | Linux](https://img.shields.io/badge/Platform-Win%20%7C%20Mac%20%7C%20Linux-2ea44f.svg?style=plastic)](#install)
+[![Download latest](https://img.shields.io/badge/GitHub-Download%20latest-0a6fdb?style=plastic)](https://github.com/9retirement6irk/iOpenPod/releases/latest)
+[![Upstream: iOpenPod](https://img.shields.io/badge/Upstream-TheRealSavi%2FiOpenPod-6e5494?style=plastic)](https://github.com/TheRealSavi/iOpenPod)
+
+This is a fork of [iOpenPod](https://github.com/TheRealSavi/iOpenPod), the free,
+open-source iPod manager for **Windows, macOS and Linux**. It keeps everything
+iOpenPod does and adds **Connected Sources**: your Plex music and video, Grimmory
+audiobooks, Immich photos, Memos notes, calendars and contacts all go onto your iPod
+in one **Sync with Host**, with nothing exported by hand.
+
+![Sync with Host's media list with Plex albums beside the computer's music, and the CONNECTED section for Immich, Notes, Calendars and Contacts](docs/screenshots/fork/sync-plex-music.webp)
+
+* [What this fork adds](#what-this-fork-adds)
+* [One Sync for everything](#one-sync-for-everything)
+* [Plex: music, playlists, movies and TV](#plex-music-playlists-movies-and-tv)
+* [Grimmory: audiobooks and listening progress](#grimmory-audiobooks-and-listening-progress)
+* [Immich: photos](#immich-photos)
+* [Notes, calendars and contacts](#notes-calendars-and-contacts)
+* [Downloads and the media cache](#downloads-and-the-media-cache)
+* [Privacy and safety](#privacy-and-safety)
+* [Install](#install)
+* [Everything else iOpenPod does](#everything-else-iopenpod-does)
+* [Develop](#develop)
+* [License and credits](#license-and-credits)
+
+## What this fork adds
+
+| Source | What reaches your iPod | Set up on |
+| ------ | ---------------------- | --------- |
+| [Plex](https://www.plex.tv/) | Music, playlists, movies, TV shows and music videos; plays and star ratings go back to Plex | Connected → Plex |
+| [Grimmory](https://github.com/grimmory-tools/grimmory) | Audiobooks, with listening progress kept in step both ways | Connected → Grimmory |
+| [Immich](https://immich.app/) | Photos from Favorites, albums, people or single photos | Connected → Immich |
+| [Memos](https://usememos.com/) | Notes from the tags you choose, in Extras → Notes | Connected → Notes |
+| Calendars | `.ics` files and subscription links, in Extras → Calendars | Connected → Calendars |
+| Contacts | vCard (`.vcf`) files, in Extras → Contacts | Connected → Contacts |
+
+Each source is optional. Set up the ones you use; the rest stay out of the way.
+
+## One Sync for everything
+
+Set each source up once on its page under **Connected** in the sidebar. From then
+on, **Sync with Host** is the only button you need: it lists your Plex and
+Grimmory media beside your computer's music, and its **CONNECTED** section chooses
+photos, notes, calendars and contacts. Everything goes through the usual Sync
+Review, so nothing changes on the iPod until you say so.
+
+* **Music, video and audiobooks** from Plex and Grimmory appear on Sync's Albums,
+  Tracks, Movies, TV Shows, Music Videos and Audiobooks pages. Tick what you want;
+  each item downloads only when Sync copies it.
+* **Photos:** tick Immich Favorites, albums or people. **Update photos** downloads
+  them and rescans, keeping every other tick you've made, and their photos are
+  ticked for you.
+* **Notes:** tick Memos tags, and open a tag to leave out single memos.
+* **Calendars and contacts:** tick each calendar, or each contact file or person.
+
+Notes, calendars and contacts are written to the iPod at the end of the Sync,
+replacing only what iOpenPod put there before. Notes you wrote yourself stay put.
+
+| Photos from Immich | Notes from Memos |
+| ------------------ | ---------------- |
+| ![Sync's Immich checklist with Favorites, albums and people, and the Update photos button](docs/screenshots/fork/sync-connected-immich.webp) | ![Sync's Notes checklist with Memos tags and the memos under each one](docs/screenshots/fork/sync-connected-notes.webp) |
+
+![Sync's Contacts checklist with two uploaded vCard files and the people in each](docs/screenshots/fork/sync-connected-contacts.webp)
+
+## Plex: music, playlists, movies and TV
+
+Sign in with your Plex account and choose a server. Then, for each Plex library,
+choose what it's for:
+
+* **Music libraries:** *Music* or *Don't use*. Leave out an audiobook library if
+  Grimmory provides your audiobooks.
+* **Movie libraries:** *Movies*, *Music videos* or *Don't use*.
+* **TV libraries:** *TV shows* or *Don't use*.
+
+Music libraries start in use; video libraries start unused because videos are
+large. Songs keep their album's genre and year, and Plex playlists come along with
+the songs you've chosen. TV episodes keep their show, season and episode number,
+and movies and music videos get their posters. Videos are converted for the iPod
+with your existing video settings, so long films take a while. They only appear
+for iPods that play video.
+
+**Plays and stars go back to Plex.** **Scrobble now** and every Sync send the
+iPod's plays to Plex, where they show up in Play History as your iPod. Scrobble
+now also gives Plex songs the iPod's star ratings. Turn this off in **Settings →
+Sync → Scrobbling**. To bring Plex-only stars onto the iPod, use **Sync star
+ratings now…** on the Plex page, which shows the changes for you to review first.
+
+If your music share is mounted on your computer, add it under **Shared folders**
+and iOpenPod copies files from it instead of downloading them through Plex.
+
+| Plex page | TV shows in Sync |
+| --------- | ---------------- |
+| ![Plex page with a chosen use for each library: Music, Movies, TV shows or Don't use](docs/screenshots/fork/connected-plex.webp) | ![Sync's TV Shows page with Plex shows ready to tick](docs/screenshots/fork/sync-plex-tv.webp) |
+
+## Grimmory: audiobooks and listening progress
+
+Sign in with your Grimmory username and password, or with **Sign In with SSO**,
+the way Grimmory's mobile apps do. For single sign-on, add
+`iopenpod://oauth2-callback` once in Grimmory (**Settings → Authentication →
+Mobile Redirect URIs**) and as an allowed redirect in your identity provider.
+
+All your Grimmory audiobooks then appear on Sync's Audiobooks page, downloaded
+only when Sync copies them. Downloaded books remember which Grimmory book they
+came from, and **listening progress stays in step**: before each Sync, where you
+stopped on the iPod goes to Grimmory. **Sync Progress Now** also works the other
+way, so where you stopped in Grimmory becomes the iPod's bookmark. Whichever side
+you listened on most recently wins.
+
+Tested with Grimmory 3.5.
+
+| Grimmory page | Audiobooks in Sync |
+| ------------- | ------------------ |
+| ![Grimmory page signed in, with SSO and listening progress options](docs/screenshots/fork/connected-grimmory.webp) | ![Sync's Audiobooks page with Grimmory books, one ticked](docs/screenshots/fork/sync-grimmory-audiobooks.webp) |
+
+## Immich: photos
+
+Connect with your server address and an API key (Immich → **Account Settings → API
+Keys**, with `album.read`, `asset.read`, `asset.view`, `person.read`, and
+`asset.download` for full-size photos). Choose Favorites, albums and people in
+Sync, or open one on the Immich page and tick single photos, with previews.
+
+Photos are saved as JPEG at iPod size, or full size if you prefer. Videos are
+skipped.
+
+## Notes, calendars and contacts
+
+These go into the iPod's **Extras** menu.
+
+* **Notes from Memos** (Memos 26.10 and earlier). Connect with an access token
+  (Memos → **Settings → My Account → Access Tokens**) and pick tags; `#work`
+  includes nested tags like `#work/meetings`. Each memo becomes a note titled by
+  its first line, right at the top of Notes. Long memos are split into parts,
+  because the iPod shows 4 KB per note and up to 1,000 notes.
+* **Calendars.** Add `.ics` files, or subscription links (`https://` or
+  `webcal://`, such as Google Calendar's secret iCal address), which are
+  downloaded fresh at each Sync. You can leave out events that ended long ago.
+* **Contacts.** Add `.vcf` files exported from your phone, Google Contacts, iCloud
+  or Outlook. Each contact becomes its own card the iPod can read (up to 5,000),
+  so one bad card can't hide the rest. Photos inside contacts are left out
+  because the iPod can't show them.
+
+## Downloads and the media cache
+
+Plex and Grimmory downloads are kept in `~/Music/iOpenPod Connected`, up to a size
+limit you choose in **Settings → Sync** (20 GB to start). When the cache is full,
+the downloads synced least recently are removed first. Turn **Keep downloads
+between Syncs** off and each Sync removes its downloads when it finishes.
+
+Syncing from more than one computer works: a Plex song or Grimmory book already on
+the iPod is recognized on any computer, even one that hasn't downloaded it, so it
+shows as ticked and isn't copied again.
+
+![Settings → Sync with the Plex scrobbling switch and the media cache settings](docs/screenshots/fork/settings-sync.webp)
+
+## Privacy and safety
+
+* Sign-ins, API keys, access tokens and calendar links are kept in your system
+  keychain (Windows Credential Manager, macOS Keychain or the Secret Service on
+  Linux), never in iOpenPod's settings files.
+* iOpenPod talks only to the servers you set up. Nothing goes anywhere else.
+* Sync Review shows every change before it happens, and Extras are written with
+  the same verified, recoverable writes as the rest of iOpenPod.
+
+## Install
+
+Download the latest build for your system from
+[this fork's releases](https://github.com/9retirement6irk/iOpenPod/releases/latest):
+
+| Platform | Download | Installation |
+| -------- | -------- | ------------ |
+| Windows x64 | Windows x86\_64 ZIP | Extract `iOpenPod.exe` and run it. |
+| macOS, Apple Silicon | macOS arm64 DMG | Open the image and drag `iOpenPod.app` to Applications. |
+| macOS, Intel | macOS x86\_64 DMG | Open the image and drag `iOpenPod.app` to Applications. |
+| Linux x64 | Linux x86\_64 tar.gz | Extract the whole folder and run its top-level `iOpenPod` launcher. |
+
+The macOS builds aren't notarized; approve the first launch in **System Settings →
+Privacy & Security** (see upstream's
+[Mac setup guide](https://iopenpod.com/install-help/#native-macos)). On Linux the
+build needs glibc 2.39 or later.
+
+**Media tools.** FFmpeg and FFprobe are needed for converting media, and
+Chromaprint's `fpcalc` is optional for acoustic matching. **Settings → Media
+Tools → Set Up Media Tools** can install them for you.
+
+**Updates.** Builds of this fork check *this fork's* releases, never upstream's,
+so an update can never replace them with a version without Connected Sources.
+When a newer release is out, **Settings → About → Check for updates** links to its
+download page. This fork isn't on the Microsoft Store or PyPI; those are
+upstream's.
+
+## Everything else iOpenPod does
+
+Everything from upstream iOpenPod is here, and the fork keeps up with its
+releases:
+
+* Browse albums, artists, genres and tracks; edit metadata, artwork and ratings.
+* Playlists, playlist folders and Smart Playlists.
+* Automatic audio and video conversion for your iPod model.
+* Photos, podcasts, Backup Snapshots, playback and Synesthesia visuals.
+* Click wheel games without a virtual machine, and Phase Playlists from your music.
+* Scrobbling to Last.fm and ListenBrainz, alongside Plex.
+
+It works with **iPod classic, iPod mini, iPod nano and earlier full-size iPods**
+that your computer can read and write. iPod shuffle, iPod touch and iPhone aren't
+supported. See the [upstream README](https://github.com/TheRealSavi/iOpenPod#readme)
+and [iopenpod.com](https://iopenpod.com) for guides on these features.
+
+## Develop
+
+Clone the repository and use the locked UV environment:
 
 ```shell
 uv sync --locked
@@ -311,13 +220,7 @@ uv run python scripts/prepare_qt_typing.py
 uv run iopenpod
 ```
 
-The typing preparation command gives Pylance and Mypy the same corrected Qt 6.9.3
-annotations on macOS without replacing the runtime. Run it after syncing or
-recreating the environment; VS Code's **Environment: Sync** and **Typecheck: Mypy**
-tasks include it. Newer Qt versions use their bundled stubs. See
-[development typing](typings/README.md) for details and remaining platform diagnostics.
-
-Before submitting changes, run the repository checks:
+Before pushing, run the checks:
 
 ```shell
 uv lock --check
@@ -328,101 +231,34 @@ uv run mypy
 uv run pytest
 ```
 
-Full-suite runs use eight workers with whole-file scheduling by default, including
-`uv run pytest tests` and `uv run pytest .` from the repository root. A focused
-test path, `-k`, `-m`, `--lf`, or collection-only run defaults to serial. Add `-n8` to
-parallelize a focused run; use `-n0` only when diagnosing a failure. CI and VS Code
-inherit the same default. See the [test scheduling decision](docs/adr/0197-default-full-suite-tests-to-eight-workers.md).
+Start with [AGENTS.md](AGENTS.md), [CONTEXT.md](CONTEXT.md) and
+[GLOSSARY.md](GLOSSARY.md). The fork's design is recorded in
+[ADR-0900](docs/adr/0900-add-connected-sources-and-ipod-extras.md); fork decision
+records are numbered from 0900 so upstream merges never collide.
 
-Hardware testing, platform testing, reproducible bug reports, and focused pull
-requests all help. For bug reports, include your iPod model, operating system,
-iOpenPod version, and steps to reproduce the problem.
+The screenshots above are the real app rendered with fictional sample data and
+servers. Recreate them with:
 
-Keep each pull request focused on one change. Discuss proposed work in an issue or
-on [Discord](https://discord.gg/9Yy499Tf5d) before starting, especially for major
-changes, so we can agree on the approach.
+```shell
+uv run python -m scripts.capture_fork_screenshots
+```
 
-The application ships as one distribution with four internal boundaries:
-
-| Package               | Responsibility                                 |
-| --------------------- | ---------------------------------------------- |
-| `src/iOpenPod`        | Application workflows, state, and GUI          |
-| `src/device_registry` | iPod identity and capabilities                 |
-| `src/iPodDB`          | iPod database formats                          |
-| `src/storage`         | Safe filesystem and removable-media operations |
-
-Read [AGENTS.md](https://github.com/TheRealSavi/iOpenPod/blob/main/AGENTS.md), the [project context](https://github.com/TheRealSavi/iOpenPod/blob/main/CONTEXT.md), and the
-[documentation map](https://github.com/TheRealSavi/iOpenPod/blob/main/docs/README.md) before making substantial changes.
-[Packaging](https://github.com/TheRealSavi/iOpenPod/blob/main/docs/packaging.md) covers native builds and store release gates;
-[website maintenance](https://github.com/TheRealSavi/iOpenPod/blob/main/website/README.md) covers screenshots and channel activation.
-
-## Related projects
-
-* [libgpod](https://github.com/gtkpod/libgpod) - C library for iPod database access (the reference implementation this project learned from)
-
-* [gtkpod](https://github.com/gtkpod/gtkpod) - GTK+ iPod manager
-
-* [Rockbox](https://www.rockbox.org/) - Open-source firmware replacement for iPods
-
-## Coming from iTunes or another iPod manager?
-
-iOpenPod works with the library on your iPod and media folders on your computer.
-Start by browsing the existing library and capturing a Backup Snapshot, then choose
-what to bring over in Sync Review.
-
-* **No separate libgpod installation.** iOpenPod uses its own Python iPod database
-  implementation, informed by libgpod and gtkpod research.
-
-* **All features are free.** Donations support development without unlocking features.
-
-* **Review before writing.** Sync shows planned changes, with removals unchecked by
-  default. Backup Snapshots are user-controlled, and interrupted writes have
-  explicit recovery actions.
-
-***
-
-## Star history
-
-<!-- markdownlint-disable MD033 -->
-
-<a href="https://www.star-history.com/?repos=therealsavi%2Fiopenpod&type=timeline&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=therealsavi/iopenpod&type=timeline&theme=dark&legend=top-left&sealed_token=aMCIa4pbVoIhlxj9qK6fW6xT1G5WPmVyftpcUHMTDCF-jNcb-ZD5ewReZkCnZxjUqpEYILAoYH1UP1nYDNyqT1PbhUaA09JI1Lrq1EZ2-mO9bYPn3EWaHyBxmimY3pGYha3MHx1aNeAXRuF0UoijWcDkCgvNBHYDbZNCLG6zG8wx6tDuSh8cmrTN0uas" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=therealsavi/iopenpod&type=timeline&legend=top-left&sealed_token=aMCIa4pbVoIhlxj9qK6fW6xT1G5WPmVyftpcUHMTDCF-jNcb-ZD5ewReZkCnZxjUqpEYILAoYH1UP1nYDNyqT1PbhUaA09JI1Lrq1EZ2-mO9bYPn3EWaHyBxmimY3pGYha3MHx1aNeAXRuF0UoijWcDkCgvNBHYDbZNCLG6zG8wx6tDuSh8cmrTN0uas" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=therealsavi/iopenpod&type=timeline&legend=top-left&sealed_token=aMCIa4pbVoIhlxj9qK6fW6xT1G5WPmVyftpcUHMTDCF-jNcb-ZD5ewReZkCnZxjUqpEYILAoYH1UP1nYDNyqT1PbhUaA09JI1Lrq1EZ2-mO9bYPn3EWaHyBxmimY3pGYha3MHx1aNeAXRuF0UoijWcDkCgvNBHYDbZNCLG6zG8wx6tDuSh8cmrTN0uas" />
- </picture>
-</a>
-
-<!-- markdownlint-enable MD033 -->
-
-***
-
-## Support
-
-iOpenPod is free and open source. Donations are optional and help support development.
-
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/johngibbons)
+**Releasing.** Raise `version` in `pyproject.toml` (and `uv.lock`), push to
+`main`, then run **Actions → Build and release** on `main` with **Publish**
+ticked. The workflow creates the `v<version>` tag and the release itself.
 
 ## License and credits
 
-Licensed under **GPL-3.0-or-later**. All features are free; optional
-[donations](https://ko-fi.com/johngibbons) support development without unlocking
-features. See [LICENSE](https://github.com/TheRealSavi/iOpenPod/blob/main/LICENSE), [COPYING.md](https://github.com/TheRealSavi/iOpenPod/blob/main/COPYING.md), and
-[ACKNOWLEDGEMENTS.md](https://github.com/TheRealSavi/iOpenPod/blob/main/ACKNOWLEDGEMENTS.md) for the license grant and third-party
-credits, including HASHAB, libgpod, and gtkpod research. The application icon has
-separate permission terms documented with its assets.
+Licensed under **GPL-3.0-or-later**, like upstream. See [LICENSE](LICENSE),
+[COPYING.md](COPYING.md) and [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md).
 
-Special thanks to [Dylan Staley (@dstaley)](https://github.com/dstaley/hashab)
-for the HASHAB WebAssembly implementation used by iOpenPod.
+iOpenPod is created by [John Gibbons](https://github.com/TheRealSavi) and its
+contributors; consider [supporting upstream development](https://ko-fi.com/johngibbons).
+Thanks to [Dylan Staley](https://github.com/dstaley/hashab) for the HASHAB
+WebAssembly implementation, [dotm5](https://github.com/dotm5/Genius-Mix-Research)
+for Genius research, and [Olsro](https://github.com/Olsro/ipodclickwheelgamespreservationproject)
+for preserving iPod click wheel games.
 
-Thanks to [dotm5](https://github.com/dotm5) and their
-[Genius-Mix-Research](https://github.com/dotm5/Genius-Mix-Research) repository for
-helping us understand native Genius Data.
-
-Thanks to [Olsro](https://github.com/Olsro) for organizing and preserving iPod
-click wheel games through the
-[iPod Clickwheel Games Preservation Project](https://github.com/Olsro/ipodclickwheelgamespreservationproject).
-iOpenPod's game binary downloads are sourced from this repository.
-
-Independent software, not affiliated with or endorsed by Apple Inc. iPod and
-iTunes are trademarks of Apple Inc.
+Plex, Grimmory, Immich and Memos are independent projects; this fork isn't
+affiliated with or endorsed by them. Independent software, not affiliated with or
+endorsed by Apple Inc. iPod and iTunes are trademarks of Apple Inc.
