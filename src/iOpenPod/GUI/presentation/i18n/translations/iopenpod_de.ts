@@ -862,7 +862,7 @@
     </message>
     <message>
         <source>Send calendars to iPod</source>
-        <translation>Kalender an iPod senden</translation>
+        <translation type="vanished">Kalender an iPod senden</translation>
     </message>
     <message>
         <source>Calendar files</source>
@@ -913,16 +913,20 @@
         <translation>Termine weglassen, die vor über einem Jahr endeten</translation>
     </message>
     <message>
+        <source>Calendars appear in Extras → Calendars on iPods that have it. Sync with Host sends the ones ticked there, replacing only the calendars iOpenPod put on the iPod.</source>
+        <translation>Kalender erscheinen unter Extras → Kalender auf iPods, die das unterstützen. „Mit Computer synchronisieren“ überträgt die dort angehakten und ersetzt nur die Kalender, die iOpenPod auf den iPod gelegt hat.</translation>
+    </message>
+    <message>
         <source>Calendars appear in Extras → Calendars on iPods that have it. Each send replaces only the calendars iOpenPod put there.</source>
-        <translation>Kalender erscheinen unter Extras → Kalender auf iPods, die diese Funktion haben. Jedes Senden ersetzt nur die Kalender, die iOpenPod dort abgelegt hat.</translation>
+        <translation type="vanished">Kalender erscheinen unter Extras → Kalender auf iPods, die diese Funktion haben. Jedes Senden ersetzt nur die Kalender, die iOpenPod dort abgelegt hat.</translation>
     </message>
     <message>
         <source>{count} calendars on the iPod ({dropped} old events left out).</source>
-        <translation>{count} Kalender auf dem iPod ({dropped} alte Termine weggelassen).</translation>
+        <translation type="vanished">{count} Kalender auf dem iPod ({dropped} alte Termine weggelassen).</translation>
     </message>
     <message>
         <source>Eject the iPod, then look in Extras → Calendars.</source>
-        <translation>Wirf den iPod aus und sieh unter Extras → Kalender nach.</translation>
+        <translation type="vanished">Wirf den iPod aus und sieh unter Extras → Kalender nach.</translation>
     </message>
     <message>
         <source>Add calendars</source>
@@ -947,6 +951,21 @@
     <message>
         <source>Name on the iPod (optional)</source>
         <translation>Name auf dem iPod (optional)</translation>
+    </message>
+</context>
+<context>
+    <name>CalendarsSyncPage</name>
+    <message>
+        <source>Calendars</source>
+        <translation>Kalender</translation>
+    </message>
+    <message>
+        <source>Ticked calendars are sent at the end of the Sync; links are downloaded fresh each time. Add files and links on the Calendars page under Connected.</source>
+        <translation>Angehakte Kalender werden am Ende der Synchronisation übertragen; Links werden jedes Mal neu geladen. Dateien und Links fügen Sie auf der Seite „Kalender“ unter „Verbunden“ hinzu.</translation>
+    </message>
+    <message>
+        <source>No calendars added yet.</source>
+        <translation>Noch keine Kalender hinzugefügt.</translation>
     </message>
 </context>
 <context>
@@ -1200,8 +1219,24 @@
         <translation>Hörfortschritt wird aus Grimmory gelesen…</translation>
     </message>
     <message>
+        <source>That contacts file is larger than 20 MB.</source>
+        <translation>Diese Kontaktdatei ist größer als 20 MB.</translation>
+    </message>
+    <message>
+        <source>Added {count} contacts from {name}.</source>
+        <translation>{count} Kontakte aus {name} hinzugefügt.</translation>
+    </message>
+    <message>
+        <source>Writing contacts to the iPod…</source>
+        <translation>Kontakte werden auf den iPod geschrieben …</translation>
+    </message>
+    <message>
+        <source>{count} contacts didn&apos;t fit.</source>
+        <translation>{count} Kontakte passten nicht mehr darauf.</translation>
+    </message>
+    <message>
         <source>Connect an iPod to send notes.</source>
-        <translation>Verbinde einen iPod, um Notizen zu senden.</translation>
+        <translation type="vanished">Verbinde einen iPod, um Notizen zu senden.</translation>
     </message>
     <message>
         <source>Reading memos…</source>
@@ -1217,7 +1252,7 @@
     </message>
     <message>
         <source>Connect an iPod to send calendars.</source>
-        <translation>Verbinde einen iPod, um Kalender zu senden.</translation>
+        <translation type="vanished">Verbinde einen iPod, um Kalender zu senden.</translation>
     </message>
     <message>
         <source>Downloading calendar {index} of {total}…</source>
@@ -1252,6 +1287,60 @@
     <message>
         <source>Unique artwork: %1 · Selected Tracks: %2</source>
         <translation>Unterschiedliche Cover: %1 · Ausgewählte Titel: %2</translation>
+    </message>
+</context>
+<context>
+    <name>ContactsPage</name>
+    <message>
+        <source>Contacts</source>
+        <translation>Kontakte</translation>
+    </message>
+    <message>
+        <source>Contact files</source>
+        <translation>Kontaktdateien</translation>
+    </message>
+    <message>
+        <source>Add vCard file…</source>
+        <translation>vCard-Datei hinzufügen …</translation>
+    </message>
+    <message>
+        <source>Remove</source>
+        <translation>Entfernen</translation>
+    </message>
+    <message>
+        <source>Add .vcf files exported from your phone, Google Contacts, iCloud or Outlook. Choose which contacts go on the iPod in Sync with Host; they appear in Extras → Contacts. Photos in contacts are left out because the iPod can&apos;t show them.</source>
+        <translation>Fügen Sie .vcf-Dateien hinzu, die Sie aus Ihrem Telefon, Google Kontakte, iCloud oder Outlook exportiert haben. Welche Kontakte auf den iPod kommen, wählen Sie in „Mit Computer synchronisieren“; sie erscheinen unter Extras → Kontakte. Fotos in Kontakten werden weggelassen, weil der iPod sie nicht anzeigen kann.</translation>
+    </message>
+    <message>
+        <source>{name}  ·  {count} contacts</source>
+        <translation>{name}  ·  {count} Kontakte</translation>
+    </message>
+    <message>
+        <source>Add contacts</source>
+        <translation>Kontakte hinzufügen</translation>
+    </message>
+    <message>
+        <source>vCard files (*.vcf *.vcard);;All files (*)</source>
+        <translation>vCard-Dateien (*.vcf *.vcard);;Alle Dateien (*)</translation>
+    </message>
+</context>
+<context>
+    <name>ContactsSyncPage</name>
+    <message>
+        <source>Contacts</source>
+        <translation>Kontakte</translation>
+    </message>
+    <message>
+        <source>Ticked contacts are sent at the end of the Sync and appear in Extras → Contacts. Add vCard files on the Contacts page under Connected.</source>
+        <translation>Angehakte Kontakte werden am Ende der Synchronisation übertragen und erscheinen unter Extras → Kontakte. vCard-Dateien fügen Sie auf der Seite „Kontakte“ unter „Verbunden“ hinzu.</translation>
+    </message>
+    <message>
+        <source>{ticked} of {total} contacts will go on the iPod.</source>
+        <translation>{ticked} von {total} Kontakten kommen auf den iPod.</translation>
+    </message>
+    <message>
+        <source>No contacts added yet.</source>
+        <translation>Noch keine Kontakte hinzugefügt.</translation>
     </message>
 </context>
 <context>
@@ -2618,6 +2707,49 @@
     </message>
 </context>
 <context>
+    <name>ImmichSyncPage</name>
+    <message>
+        <source>Photos from Immich</source>
+        <translation>Fotos aus Immich</translation>
+    </message>
+    <message>
+        <source>Tick Favorites, albums or people. Update photos to download them; their photos are then ticked in Photos, and your other ticks are kept. Photos picked one by one on the Immich page are included too.</source>
+        <translation>Haken Sie Favoriten, Alben oder Personen an. Mit „Fotos aktualisieren“ werden sie geladen; ihre Fotos sind dann unter „Fotos“ angehakt, und Ihre übrigen Haken bleiben erhalten. Einzeln auf der Immich-Seite gewählte Fotos sind ebenfalls dabei.</translation>
+    </message>
+    <message>
+        <source>Update photos</source>
+        <translation>Fotos aktualisieren</translation>
+    </message>
+    <message>
+        <source>Connect Immich on its page under Connected first.</source>
+        <translation>Verbinden Sie zuerst Immich auf seiner Seite unter „Verbunden“.</translation>
+    </message>
+    <message>
+        <source>★ Favorites</source>
+        <translation>★ Favoriten</translation>
+    </message>
+    <message>
+        <source>Albums</source>
+        <translation>Alben</translation>
+    </message>
+    <message>
+        <source>People</source>
+        <translation>Personen</translation>
+    </message>
+    <message>
+        <source>{count} items</source>
+        <translation>{count} Objekte</translation>
+    </message>
+    <message>
+        <source>{count} photos picked one by one are included too.</source>
+        <translation>{count} einzeln gewählte Fotos sind ebenfalls dabei.</translation>
+    </message>
+    <message>
+        <source>Update photos to bring these changes into this Sync.</source>
+        <translation>Aktualisieren Sie die Fotos, um diese Änderungen in diese Synchronisation zu übernehmen.</translation>
+    </message>
+</context>
+<context>
     <name>LibraryDragGridView</name>
     <message>
         <source>Drag selected cards to a Playlist, the Queue, or the Player. Hold Shift while dragging empty space to box select.</source>
@@ -3205,6 +3337,10 @@
         <translation>Wählen Sie einen aktiven iPod aus und warten Sie, bis der aktuelle Export abgeschlossen ist.</translation>
     </message>
     <message>
+        <source>Wait for the current task to finish, then update photos.</source>
+        <translation>Warten Sie, bis die aktuelle Aufgabe fertig ist, und aktualisieren Sie dann die Fotos.</translation>
+    </message>
+    <message>
         <source>Plex: set stars on {count} songs from the iPod.</source>
         <translation>Plex: Sterne für {count} Titel vom iPod übernommen.</translation>
     </message>
@@ -3215,6 +3351,10 @@
     <message>
         <source>{count} songs rated only in Plex can get their stars on the Plex page.</source>
         <translation>{count} nur in Plex bewertete Titel können ihre Sterne über die Plex-Seite erhalten.</translation>
+    </message>
+    <message>
+        <source>On the iPod: {notes} notes, {calendars} calendars, {contacts} contacts.</source>
+        <translation>Auf dem iPod: {notes} Notizen, {calendars} Kalender, {contacts} Kontakte.</translation>
     </message>
     <message>
         <source>Plex stars: {problem}</source>
@@ -3247,6 +3387,10 @@
     <message>
         <source>Sync Unavailable</source>
         <translation>Synchronisierung nicht verfügbar</translation>
+    </message>
+    <message>
+        <source>Sending notes, calendars and contacts to the iPod…</source>
+        <translation>Notizen, Kalender und Kontakte werden auf den iPod übertragen …</translation>
     </message>
     <message>
         <source>Recovery Unavailable</source>
@@ -4272,6 +4416,10 @@
         <translation>Kalender</translation>
     </message>
     <message>
+        <source>Contacts</source>
+        <translation>Kontakte</translation>
+    </message>
+    <message>
         <source>Backups</source>
         <translation>Backups</translation>
     </message>
@@ -4296,7 +4444,7 @@
     </message>
     <message>
         <source>Send notes to iPod</source>
-        <translation>Notizen an iPod senden</translation>
+        <translation type="vanished">Notizen an iPod senden</translation>
     </message>
     <message>
         <source>Memos server</source>
@@ -4339,8 +4487,12 @@
         <translation>Memos mit allen diesen Tags</translation>
     </message>
     <message>
+        <source>Picking #work also includes nested tags like #work/meetings. Each memo becomes a note titled by its first line, directly in the iPod&apos;s Notes list; long memos are split into parts because the iPod shows 4 KB per note and up to 1,000 notes. Sync with Host sends them, and lets you leave out single memos.</source>
+        <translation>Wenn Sie #arbeit wählen, sind auch verschachtelte Tags wie #arbeit/besprechungen dabei. Jedes Memo wird eine Notiz mit seiner ersten Zeile als Titel, direkt in der Notizenliste des iPod; lange Memos werden geteilt, weil der iPod 4 KB pro Notiz und bis zu 1.000 Notizen anzeigt. „Mit Computer synchronisieren“ überträgt sie und lässt Sie einzelne Memos weglassen.</translation>
+    </message>
+    <message>
         <source>Picking #work also includes nested tags like #work/meetings. Each memo becomes a note titled by its first line, directly in the iPod&apos;s Notes list; long memos are split into parts because the iPod shows 4 KB per note and up to 1,000 notes.</source>
-        <translation>Wenn du #work wählst, werden auch verschachtelte Tags wie #work/meetings einbezogen. Jedes Memo wird eine Notiz mit seiner ersten Zeile als Titel, direkt in der Notizenliste des iPod; lange Memos werden in Teile aufgeteilt, da der iPod 4 KB pro Notiz und bis zu 1000 Notizen anzeigt.</translation>
+        <translation type="vanished">Wenn du #work wählst, werden auch verschachtelte Tags wie #work/meetings einbezogen. Jedes Memo wird eine Notiz mit seiner ersten Zeile als Titel, direkt in der Notizenliste des iPod; lange Memos werden in Teile aufgeteilt, da der iPod 4 KB pro Notiz und bis zu 1000 Notizen anzeigt.</translation>
     </message>
     <message>
         <source>Reading your memos…</source>
@@ -4352,15 +4504,46 @@
     </message>
     <message>
         <source>{notes} notes on the iPod from {matched} of {total} memos ({written} files written, {removed} removed).</source>
-        <translation>{notes} Notizen auf dem iPod aus {matched} von {total} Memos ({written} Dateien geschrieben, {removed} entfernt).</translation>
+        <translation type="vanished">{notes} Notizen auf dem iPod aus {matched} von {total} Memos ({written} Dateien geschrieben, {removed} entfernt).</translation>
     </message>
     <message>
         <source>{count} memos didn&apos;t fit: the iPod shows at most 1,000 notes.</source>
-        <translation>{count} Memos passten nicht: Der iPod zeigt höchstens 1.000 Notizen.</translation>
+        <translation type="vanished">{count} Memos passten nicht: Der iPod zeigt höchstens 1.000 Notizen.</translation>
     </message>
     <message>
         <source>Eject the iPod, then look in Extras → Notes.</source>
-        <translation>Wirf den iPod aus und sieh unter Extras → Notizen nach.</translation>
+        <translation type="vanished">Wirf den iPod aus und sieh unter Extras → Notizen nach.</translation>
+    </message>
+</context>
+<context>
+    <name>NotesSyncPage</name>
+    <message>
+        <source>Notes from Memos</source>
+        <translation>Notizen aus Memos</translation>
+    </message>
+    <message>
+        <source>Memos with all of the ticked tags become notes.</source>
+        <translation>Memos mit allen angehakten Tags werden zu Notizen.</translation>
+    </message>
+    <message>
+        <source>Memos with any of the ticked tags become notes.</source>
+        <translation>Memos mit einem der angehakten Tags werden zu Notizen.</translation>
+    </message>
+    <message>
+        <source>Open a tag to leave out single memos. Notes are sent at the end of the Sync.</source>
+        <translation>Öffnen Sie ein Tag, um einzelne Memos wegzulassen. Notizen werden am Ende der Synchronisation übertragen.</translation>
+    </message>
+    <message>
+        <source>Connect Memos on the Notes page under Connected first.</source>
+        <translation>Verbinden Sie zuerst Memos auf der Seite „Notizen“ unter „Verbunden“.</translation>
+    </message>
+    <message>
+        <source>(untitled memo)</source>
+        <translation>(Memo ohne Titel)</translation>
+    </message>
+    <message>
+        <source>{count} memos will go on the iPod.</source>
+        <translation>{count} Memos kommen auf den iPod.</translation>
     </message>
 </context>
 <context>
@@ -8993,6 +9176,10 @@ Playlists: %3</translation>
     <message>
         <source>Photo Database repair</source>
         <translation>Reparatur der Fotodatenbank</translation>
+    </message>
+    <message>
+        <source>Notes, calendars and contacts</source>
+        <translation>Notizen, Kalender und Kontakte</translation>
     </message>
     <message numerus="yes">
         <source>%n Podcast(s) will sync using their saved settings. Episodes may be added or removed.</source>
@@ -13959,10 +14146,25 @@ Ein Neustart von iOpenPod entfernt keine bereits von udev zwischengespeicherten 
     </message>
 </context>
 <context>
+    <name>_SyncConnectedPage</name>
+    <message>
+        <source>Loading…</source>
+        <translation>Wird geladen …</translation>
+    </message>
+    <message>
+        <source>Another Connected Source task is running. Open this page again in a moment.</source>
+        <translation>Eine andere Aufgabe einer verbundenen Quelle läuft. Öffnen Sie diese Seite gleich noch einmal.</translation>
+    </message>
+</context>
+<context>
     <name>_SyncLibraryNavigation</name>
     <message>
         <source>HOST MEDIA</source>
         <translation>MEDIEN AUF DEM COMPUTER</translation>
+    </message>
+    <message>
+        <source>CONNECTED</source>
+        <translation>VERBUNDEN</translation>
     </message>
     <message>
         <source>Deselect all media</source>

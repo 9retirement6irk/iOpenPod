@@ -273,6 +273,14 @@ class _SyncLibraryNavigation(QFrame):
             contents_layout.addWidget(button)
             if page_id is PageId.TRACKS:
                 contents_layout.addWidget(self.playlist_tree)
+        self._connected_heading = QLabel(contents)
+        self._connected_heading.setObjectName("sidebarSectionLabel")
+        self._connected_heading.hide()
+        contents_layout.addSpacing(LAYOUT.space_sm)
+        contents_layout.addWidget(self._connected_heading)
+        self._connected_buttons: dict[PageId, NavigationButton] = {}
+        self._contents = contents
+        self._contents_layout = contents_layout
         contents_layout.addStretch(1)
 
         scroll = QScrollArea(self)
@@ -306,9 +314,26 @@ class _SyncLibraryNavigation(QFrame):
         for page_id, button in self._buttons.items():
             button.setVisible(page_id in pages)
 
+    def add_connected(self, page_id: PageId, glyph: str) -> None:
+        """A CONNECTED entry (photos, notes, calendars, contacts) below the media."""
+
+        button = NavigationButton(page_label(page_id), glyph, self._contents)
+        button.setProperty("syncPageId", page_id.value)
+        button.clicked.connect(
+            lambda _checked=False, value=page_id.value: self.pageRequested.emit(value)
+        )
+        self._group.addButton(button)
+        self._connected_buttons[page_id] = button
+        # Before the closing stretch.
+        self._contents_layout.insertWidget(self._contents_layout.count() - 1, button)
+        self._connected_heading.show()
+
     def set_current_page(self, page_id: PageId) -> None:
         self._group.setExclusive(False)
-        for candidate, button in self._buttons.items():
+        for candidate, button in (
+            *self._buttons.items(),
+            *self._connected_buttons.items(),
+        ):
             button.setChecked(candidate is page_id)
         self._group.setExclusive(True)
         if page_id is not PageId.PLAYLISTS:
@@ -316,7 +341,11 @@ class _SyncLibraryNavigation(QFrame):
 
     def retranslate_ui(self) -> None:
         self._heading.setText(self.tr("HOST MEDIA"))
-        for page_id, button in self._buttons.items():
+        self._connected_heading.setText(self.tr("CONNECTED"))
+        for page_id, button in (
+            *self._buttons.items(),
+            *self._connected_buttons.items(),
+        ):
             button.setText(page_label(page_id))
         self._refresh_media_selection()
 
@@ -370,6 +399,8 @@ class SyncWorkspace(QWidget):
         self.browser: HostLibraryBrowser | None = None
         self._stream_profile: DeviceProfile | None = None
         self._stream_dialog: MediaStreamsDialog | None = None
+        self._connected_pages: dict[PageId, QWidget] = {}
+        self._extras_pending = False
 
         self._title = QLabel(self)
         self._title.setObjectName("syncWorkspaceTitle")
@@ -577,6 +608,19 @@ class SyncWorkspace(QWidget):
             (PageId.PLAYLISTS, *(page_id for page_id, _glyph in _LIBRARY_NAVIGATION))
         )
 
+    def add_connected_page(self, page_id: PageId, glyph: str, page: QWidget) -> None:
+        """Show a Connected Source checklist under CONNECTED in the media list."""
+
+        self._connected_pages[page_id] = page
+        self._library_stack.addWidget(page)
+        self._library_navigation.add_connected(page_id, glyph)
+
+    def set_extras_pending(self, pending: bool) -> None:
+        """Notes, calendars or contacts will be sent, so Sync has work to do."""
+
+        self._extras_pending = pending
+        self._refresh_review_summary()
+
     def show_scan(self, detail: str, *, host_scan: bool = True) -> None:
         self._scan_issues.load(())
         self._podcast_execution = False
@@ -628,6 +672,10 @@ class SyncWorkspace(QWidget):
         browser = self._ensure_browser()
         browser.load(library)
         self.selection.reset(library, comparison)
+        for page in self._connected_pages.values():
+            reset = getattr(page, "reset", None)
+            if callable(reset):
+                reset()  # read the servers again on the next visit
         self._refresh_stream_error()
         self._stream_error_label.setVisible(bool(self.selection.preference_error))
         self._show_library_page(PageId.ALBUMS.value)
@@ -799,10 +847,15 @@ class SyncWorkspace(QWidget):
             self.stageChanged.emit()
 
     def _show_library_page(self, value: str) -> None:
+        page_id = PageId(value)
+        connected = self._connected_pages.get(page_id)
+        if connected is not None:
+            self._library_stack.setCurrentWidget(connected)
+            self._library_navigation.set_current_page(page_id)
+            return
         browser = self.browser
         if browser is None:
             return
-        page_id = PageId(value)
         page = browser.page_widgets.get(page_id)
         if page is None:
             return
@@ -932,6 +985,7 @@ class SyncWorkspace(QWidget):
             or self._artwork_repairs_pending
             or self._photos_repairs_pending
             or pending_duplicates
+            or self._extras_pending
         )
         refresh_only = self._library_refresh_available and not selected_work
         self._execute.setText(
@@ -980,6 +1034,8 @@ class SyncWorkspace(QWidget):
             summary += " · " + self.tr("Artwork repair")
         if self._photos_repairs_pending:
             summary += " · " + self.tr("Photo Database repair")
+        if self._extras_pending:
+            summary += " · " + self.tr("Notes, calendars and contacts")
         if refresh_only:
             summary = self.tr("Refresh Library")
         self._review_summary.setText(summary)

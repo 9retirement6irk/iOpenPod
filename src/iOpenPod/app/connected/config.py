@@ -119,6 +119,8 @@ class MemosConfig:
     match: TagMatch = TagMatch.ANY
     only_mine: bool = True
     include_archived: bool = False
+    # Memos (by name) unticked under their tags in Sync with Host.
+    skipped_memos: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,6 +135,23 @@ class CalendarFile:
 class CalendarsConfig:
     files: tuple[CalendarFile, ...] = ()
     trim_days: int = 30
+    # Calendars unticked in Sync with Host: "file:<filename>" or "link:<digest>".
+    skipped: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ContactsFile:
+    """An uploaded vCard file, stored as a Host file next to this configuration."""
+
+    name: str
+    filename: str
+
+
+@dataclass(frozen=True, slots=True)
+class ContactsConfig:
+    files: tuple[ContactsFile, ...] = ()
+    # Contacts (by their key) unticked in Sync with Host.
+    skipped: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,6 +165,7 @@ class ConnectedConfig:
     cache_limit_gb: int = 20
     memos: MemosConfig = field(default_factory=MemosConfig)
     calendars: CalendarsConfig = field(default_factory=CalendarsConfig)
+    contacts: ContactsConfig = field(default_factory=ContactsConfig)
 
     def root(self) -> Path:
         if self.folder_root:
@@ -179,6 +199,7 @@ _ITEM_TYPES: dict[tuple[type, str], type] = {
     (GrimmoryConfig, "picks"): GrimmoryPick,
     (GrimmoryConfig, "marks"): GrimmoryMark,
     (CalendarsConfig, "files"): CalendarFile,
+    (ContactsConfig, "files"): ContactsFile,
 }
 
 
@@ -295,6 +316,8 @@ __all__ = [
     "CalendarsConfig",
     "ConnectedConfig",
     "ConnectedConfigStore",
+    "ContactsConfig",
+    "ContactsFile",
     "GrimmoryConfig",
     "GrimmoryMark",
     "GrimmoryPick",

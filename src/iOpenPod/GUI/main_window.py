@@ -4,7 +4,7 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from PySide6.QtCore import QByteArray, QCoreApplication, QEvent, QSize, Qt, QTimer, QUrl
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
@@ -32,6 +32,7 @@ from iOpenPod.app.connected.config import ConnectedConfigStore
 from iOpenPod.app.connected_controller import (
     ConnectedController,
     ConnectedSource,
+    ExtrasSent,
     StarsSent,
     SyncPreparation,
 )
@@ -111,6 +112,7 @@ from iOpenPod.GUI.pages.backup_page import BackupPage
 from iOpenPod.GUI.pages.collection_page import CollectionPage
 from iOpenPod.GUI.pages.connected_pages import (
     CalendarsPage,
+    ContactsPage,
     GrimmoryPage,
     ImmichPage,
     NotesPage,
@@ -141,6 +143,12 @@ from iOpenPod.GUI.presentation.podcast_artwork_provider import (
     PodcastArtworkPixmapProvider,
 )
 from iOpenPod.GUI.presentation.theme.tokens import LAYOUT
+from iOpenPod.GUI.sync_connected_pages import (
+    CalendarsSyncPage,
+    ContactsSyncPage,
+    ImmichSyncPage,
+    NotesSyncPage,
+)
 from iOpenPod.GUI.sync_workspace import SyncStage, SyncWorkspace
 from iOpenPod.GUI.widgets.album_grid import AlbumGridView
 from iOpenPod.GUI.widgets.collection_grid import CollectionGridView
@@ -153,6 +161,9 @@ from iOpenPod.GUI.widgets.status_list import StatusListButton
 from iOpenPod.GUI.widgets.track_actions import TrackActions
 from iPodDB.library import MediaKind, Photo, Track, TrackFieldEdit
 from storage import HostPath, Storage
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -253,6 +264,12 @@ class MainWindow(QMainWindow):
         self._connected.progress.connect(self._connected_progress)
         self._connected.signInUrl.connect(self._open_sign_in_url)
         self._pending_sync_folders: tuple[HostMediaFolder, ...] | None = None
+        # The folders chosen for this Sync, so photos can be updated and rescanned.
+        self._sync_folders: tuple[HostMediaFolder, ...] = ()
+        # Ticks to put back after "Update photos" rescans: (known, selected).
+        self._kept_selection: tuple[frozenset[str], frozenset[str]] | None = None
+        # Connected steps that run one after another once Sync has finished.
+        self._after_sync: list[Callable[[], bool]] = []
         # Plex and Grimmory listed for the current Sync, merged after the scan.
         self._remote_catalog: RemoteCatalog | None = None
         self._stars_pending = False
@@ -570,6 +587,7 @@ class MainWindow(QMainWindow):
         )
         self._notes_page = NotesPage(self._connected, self._pages)
         self._calendars_page = CalendarsPage(self._connected, self._pages)
+        self._contacts_page = ContactsPage(self._connected, self._pages)
         self._page_widgets: dict[PageId, QWidget] = {
             PageId.DEVICE_SUMMARY: self._device_summary_page,
             PageId.ALBUMS: self._library_page,
@@ -594,6 +612,7 @@ class MainWindow(QMainWindow):
             PageId.GRIMMORY: self._grimmory_page,
             PageId.NOTES: self._notes_page,
             PageId.CALENDARS: self._calendars_page,
+            PageId.CONTACTS: self._contacts_page,
         }
         self._library_pages = (
             self._library_page,
@@ -624,6 +643,7 @@ class MainWindow(QMainWindow):
             self._grimmory_page,
             self._notes_page,
             self._calendars_page,
+            self._contacts_page,
         ):
             self._pages.addWidget(connected_page)
 
@@ -641,6 +661,28 @@ class MainWindow(QMainWindow):
             stream_preferences=context.stream_preferences,
         )
         self._workspaces.addWidget(self._sync_workspace)
+        self._sync_immich = ImmichSyncPage(self._connected, self._sync_workspace)
+        self._sync_immich.updateRequested.connect(self._update_immich_photos)
+        for page_id, glyph, checklist in (
+            (PageId.IMMICH, "photo", self._sync_immich),
+            (
+                PageId.NOTES,
+                "note",
+                NotesSyncPage(self._connected, self._sync_workspace),
+            ),
+            (
+                PageId.CALENDARS,
+                "calendar",
+                CalendarsSyncPage(self._connected, self._sync_workspace),
+            ),
+            (
+                PageId.CONTACTS,
+                "user",
+                ContactsSyncPage(self._connected, self._sync_workspace),
+            ),
+        ):
+            self._sync_workspace.add_connected_page(page_id, glyph, checklist)
+        self._connected.changed.connect(self._run_after_sync)
         self._host_drop = HostMediaDropTarget(self._pages, self._can_drop_host_media)
         self._host_drop.pathsDropped.connect(self._drop_host_media)
         self._pages.currentChanged.connect(self._host_drop.clear)
@@ -1751,9 +1793,38 @@ class MainWindow(QMainWindow):
             folders = dialog.folders
         finally:
             dialog.deleteLater()
+        self._sync_folders = folders
+        self._kept_selection = None
         if self._refresh_connected_sources(folders):
             return
         self._start_host_sync(folders)
+
+    def _update_immich_photos(self) -> None:
+        """Download the ticked albums, people and Favorites, then scan again.
+
+        Ticks and unticks made so far are put back on the same media afterwards.
+        """
+
+        if self._sync_controller.busy or self._connected.busy:
+            self._context.status.show(
+                "connected.refresh",
+                self.tr("Wait for the current task to finish, then update photos."),
+                timeout_ms=10_000,
+            )
+            return
+        selection = self._sync_workspace.selection
+        self._kept_selection = (selection.host_paths, selection.selected_host_paths)
+        immich = self._connected.folder(ConnectedSource.IMMICH)
+        self._connected.register_folder(ConnectedSource.IMMICH)
+        folders = self._sync_folders
+        if not any(
+            os.path.normcase(os.path.normpath(os.fspath(folder.path)))
+            == os.path.normcase(os.path.normpath(os.fspath(immich)))
+            for folder in folders
+        ):
+            folders = (*folders, HostMediaFolder(HostPath(immich)))
+        self._sync_folders = folders
+        self._refresh_connected_sources(folders)
 
     def _refresh_connected_sources(self, folders: tuple[HostMediaFolder, ...]) -> bool:
         """Before scanning: update Immich picks and list Plex and Grimmory.
@@ -1826,6 +1897,21 @@ class MainWindow(QMainWindow):
                 )
             self._context.status.show("plex.stars", " ".join(parts), timeout_ms=20_000)
             return
+        if operation == "extras-publish" and isinstance(_value, ExtrasSent):
+            parts = [
+                self.tr(
+                    "On the iPod: {notes} notes, {calendars} calendars, {contacts} contacts."
+                ).format(
+                    notes=_value.notes,
+                    calendars=_value.calendars,
+                    contacts=_value.contacts,
+                ),
+                *_value.issues[:3],
+            ]
+            self._context.status.show(
+                "connected.extras", " ".join(parts), timeout_ms=20_000
+            )
+            return
         folders = self._pending_sync_folders
         if operation == "prepare-sync" and folders is not None:
             self._pending_sync_folders = None
@@ -1881,6 +1967,7 @@ class MainWindow(QMainWindow):
                 PageId.GRIMMORY,
                 PageId.NOTES,
                 PageId.CALENDARS,
+                PageId.CONTACTS,
             )
             and self._context.device_controller.active_ipod is not None
             and not self._context.device_controller.busy
@@ -2102,6 +2189,7 @@ class MainWindow(QMainWindow):
                     else None,
                 )
                 self._sync_workspace.load_comparison(value, plan, active_ipod, ipod)
+                self._apply_connected_selection()
                 self._review_host = value
                 self._review_ipod = ipod
                 self._review_active = active_ipod
@@ -2115,6 +2203,29 @@ class MainWindow(QMainWindow):
             self.tr("Sync Comparison Unavailable"),
             self.tr("Select an Active iPod before building a Sync selection."),
         )
+
+    def _apply_connected_selection(self) -> None:
+        """Put back ticks kept over a photo update, and tick Immich's photos.
+
+        Everything in the Immich folder is there because an album, person or
+        Favorites was picked, so its photos join the Sync automatically.
+        """
+
+        selection = self._sync_workspace.selection
+        kept, self._kept_selection = self._kept_selection, None
+        if kept is not None:
+            selection.restore_host_selection(*kept)
+        if self._connected.config.immich.picks:
+            root = host_path_identity(
+                str(self._connected.folder(ConnectedSource.IMMICH))
+            )
+            selection.check_host_paths(
+                lambda path: (
+                    path.startswith(root + os.sep)
+                    and (kept is None or path not in kept[0])
+                )
+            )
+        self._sync_workspace.set_extras_pending(self._connected.has_extras)
 
     def _ipod_media_scan_failed(self, detail: str) -> None:
         self._pending_host_media_library = None
@@ -2227,8 +2338,18 @@ class MainWindow(QMainWindow):
     def _sync_finished(self, value: object) -> None:
         if not isinstance(value, SyncExecutionResult):
             return
+        host_sync = self._review_host is not None
+        if (
+            host_sync
+            and value.status
+            in {SyncExecutionStatus.SUCCESS, SyncExecutionStatus.PARTIAL}
+            and self._connected.has_extras
+        ):
+            # Notes, calendars and contacts go on once the media is in place.
+            self._after_sync.append(self._connected.publish_for_sync)
         # Keep Plex and Grimmory downloads within the cache limit, or remove them.
-        self._connected.trim_cache()
+        self._after_sync.append(self._connected.trim_cache)
+        self._run_after_sync()
         self._review_host = None
         self._review_ipod = None
         self._review_active = None
@@ -2242,6 +2363,19 @@ class MainWindow(QMainWindow):
             self._sync_workspace.show_execution()
         self._sync_workspace.execution.show_result(value)
         self.retranslate_ui()
+
+    def _run_after_sync(self) -> None:
+        """Start the next queued Connected step when the controller is free."""
+
+        while self._after_sync and not self._connected.busy:
+            step = self._after_sync.pop(0)
+            if step():
+                if step == self._connected.publish_for_sync:
+                    self._context.status.show(
+                        "connected.extras",
+                        self.tr("Sending notes, calendars and contacts to the iPod…"),
+                    )
+                return
 
     def _recover_sync(self) -> None:
         cleanup = self._sync_controller.needs_cleanup

@@ -30,6 +30,7 @@ class PageId(StrEnum):
     GRIMMORY = "grimmory"
     NOTES = "notes"
     CALENDARS = "calendars"
+    CONTACTS = "contacts"
     BACKUPS = "backups"
     NORMALIZE_TAGS = "normalize-tags"
     SETTINGS = "settings"
@@ -59,6 +60,7 @@ _PAGE_LABEL_SOURCES = cast(
         PageId.GRIMMORY: QT_TRANSLATE_NOOP("Navigation", "Grimmory"),
         PageId.NOTES: QT_TRANSLATE_NOOP("Navigation", "Notes"),
         PageId.CALENDARS: QT_TRANSLATE_NOOP("Navigation", "Calendars"),
+        PageId.CONTACTS: QT_TRANSLATE_NOOP("Navigation", "Contacts"),
         PageId.BACKUPS: QT_TRANSLATE_NOOP("Navigation", "Backups"),
         PageId.NORMALIZE_TAGS: QT_TRANSLATE_NOOP("Navigation", "Normalize Tags"),
         PageId.SETTINGS: QT_TRANSLATE_NOOP("Navigation", "Settings"),

@@ -115,10 +115,29 @@ the Plex page (for example an audiobook library, when Grimmory provides audioboo
 contributes no items, and its songs are dropped from Plex playlists; a playlist
 left empty is not listed. New libraries are included until left out.
 
+## Sync with Host chooses everything
+
+Connected pages set a source up (addresses, sign-ins, uploads); Sync with Host's
+media list chooses what goes on the iPod. Under CONNECTED, beside the Host media
+pages, are checklists for Immich (Favorites, albums, people), Notes (tags, with
+their memos underneath), Calendars (files and links) and Contacts (uploaded files,
+with their contacts underneath). Ticks are saved in the Connected Sources
+configuration as they change: Immich Selections, Memos tags and left-out memos,
+and left-out calendar and contact keys.
+
+Immich Photos are Host media. Updating photos downloads the ticked groups and
+scans again, putting back every tick and untick the person made on media the
+earlier scan had; Photos in the Immich folder are ticked, because only ticked
+groups put them there. Notes, calendars and contacts are not Host media: when
+any is set up, Sync counts them as work and, after a successful or partial Sync,
+publishes each kind that is set up, one after another, before trimming the media
+cache. A kind failing is reported and does not stop the others.
+
 ## iPod Extras are published through Storage
 
-Notes and calendars are not Library media. They are iPod Extras: plain files the
-firmware reads from the Volume's top-level `Notes` and `Calendars` folders. The
+Notes, calendars and contacts are not Library media. They are iPod Extras: plain
+files the firmware reads from the Volume's top-level `Notes`, `Calendars` and
+`Contacts` folders. The
 Application Layer plans one Storage Transaction per publication, guarded by the
 Extras Manifest at `iPod_Control/iOpenPod/extras-v1.json`, which records owned
 paths and their SHA-256 per section. New and changed owned files are written,
@@ -132,6 +151,13 @@ servers; 26.10 answers the old prefix with `410 Gone`. Every note is written dir
 in the iPod's `Notes` folder, once however many chosen tags it has, so it opens from
 the first Notes screen. Notes follow the Note Reader limits: UTF-8 header, 4 KB per file with numbered parts for longer memos, and
 1,000 notes in total counting foreign files.
+
+Contacts come from uploaded vCard files kept beside the configuration. Each
+contact becomes its own `.vcf` file so one malformed card cannot hide the rest:
+photos, logos, sounds and keys are dropped, vCard 4.0 is labelled 3.0 (whose
+common fields are the same), and lines end in CRLF. A contact is known by its UID,
+else by a digest of its cleaned card, so the same contact in two uploads is sent
+once. At most 5,000 contacts are written.
 
 ## Plex plays and ratings
 
@@ -171,6 +197,6 @@ generated with `scripts/update_feed.py`, its private half stored as the
 ## Consequences
 
 Selections cost Host disk space equal to the downloaded media. Physical-device
-acceptance of Notes and Calendars publication, and of Plex Play History attribution,
+acceptance of Notes, Calendars and Contacts publication, and of Plex Play History attribution,
 remains unverified; virtual-volume tests cover Extras publication and preservation of
 foreign files, and scripted HTTP tests cover each server protocol.

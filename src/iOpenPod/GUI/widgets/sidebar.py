@@ -72,6 +72,7 @@ _CONNECTED = (
     _NavigationDefinition(PageId.GRIMMORY, "book"),
     _NavigationDefinition(PageId.NOTES, "note"),
     _NavigationDefinition(PageId.CALENDARS, "calendar"),
+    _NavigationDefinition(PageId.CONTACTS, "user"),
 )
 _VIDEO_PAGES = frozenset(
     {

@@ -43,10 +43,15 @@ MAX_EXTRAS_FILES = 5_000
 class ExtrasSection(StrEnum):
     NOTES = "notes"
     CALENDARS = "calendars"
+    CONTACTS = "contacts"
 
     @property
     def folder(self) -> str:
-        return "Notes" if self is ExtrasSection.NOTES else "Calendars"
+        return {
+            ExtrasSection.NOTES: "Notes",
+            ExtrasSection.CALENDARS: "Calendars",
+            ExtrasSection.CONTACTS: "Contacts",
+        }[self]
 
 
 @dataclass(frozen=True, slots=True)

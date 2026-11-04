@@ -7,6 +7,7 @@ installation. Previews load on a separate small pool so browsing stays quick.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import threading
 import time
@@ -19,8 +20,10 @@ from iOpenPod.app.connected import calendars as calendar_files
 from iOpenPod.app.connected import grimmory_sso
 from iOpenPod.app.connected.config import (
     CalendarFile,
+    CalendarsConfig,
     ConnectedConfig,
     ConnectedConfigStore,
+    ContactsFile,
     GrimmoryMark,
     GrimmoryPick,
     ImmichPick,
@@ -71,13 +74,15 @@ from iOpenPod.app.host_media_folders import (
 )
 from iOpenPod.app.remote_media import RemoteCatalog
 from iOpenPod.app.scrobbling.models import Credentials
-from iOpenPod.app.services.ipod_extras import ExtrasFile, ExtrasResult, ExtrasSection
+from iOpenPod.app.services.ipod_extras import ExtrasFile, ExtrasSection
 from storage import HostPath
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable
     from pathlib import Path
 
+    from iOpenPod.app.connected.immich import ImmichCollection
+    from iOpenPod.app.connected.memos import Memo
     from iOpenPod.app.core.settings.service import SettingsService
     from iOpenPod.app.device_controller import DeviceController
     from iOpenPod.app.services.device_coordinator import DeviceCoordinator
@@ -123,6 +128,14 @@ class SyncPreparation:
     progress_sent: int = 0
     marks: tuple[GrimmoryMark, ...] = ()
     notes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ExtrasSent:
+    notes: int = 0
+    calendars: int = 0
+    contacts: int = 0
+    issues: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -830,6 +843,28 @@ class ConnectedController(QObject):
             replace(self._config, immich=replace(self._config.immich, picks=picks))
         )
 
+    def set_immich_pick(self, pick: ImmichPick, included: bool) -> None:
+        """Tick or untick one album, person or Favorites, keeping the other picks."""
+
+        picks = [
+            p
+            for p in self._config.immich.picks
+            if (p.kind, p.id) != (pick.kind, pick.id)
+        ]
+        if included:
+            picks.append(pick)
+        self.set_immich_picks(tuple(picks))
+
+    def list_immich(self) -> bool:
+        """Sync's Photos checklist: albums and people on the server (``sync-immich``)."""
+
+        client = self.immich()
+
+        def work(_job: _Job) -> tuple[tuple[ImmichCollection, ...], ...]:
+            return (client.albums(), client.people())
+
+        return self._start("sync-immich", work)
+
     # --- Grimmory -----------------------------------------------------------------------
 
     def grimmory(self) -> GrimmoryClient:
@@ -1091,33 +1126,41 @@ class ConnectedController(QObject):
 
         self._start("memos-connect", work)
 
-    def publish_notes(self) -> None:
-        active = self._devices.active_ipod
-        if active is None:
-            self.message.emit(self.tr("Connect an iPod to send notes."))
-            return
+    def list_memos(self) -> bool:
+        """Sync's Notes checklist: every memo that could be sent (``sync-memos``)."""
+
         config = self._config.memos
 
-        def work(job: _Job) -> object:
+        def work(job: _Job) -> tuple[Memo, ...]:
             client = self.memos()
-            job.signals.progress.emit(self.tr("Reading memos…"))
             memos = client.memos(
                 include_archived=config.include_archived, cancelled=job.cancelled
             )
-            if config.only_mine:
-                memos = only_mine(memos, client.current_user())
-            others = self._coordinator.count_foreign_extras(active, ExtrasSection.NOTES)
-            plan = plan_notes(memos, config, other_notes=others)
-            job.signals.progress.emit(self.tr("Writing notes to the iPod…"))
-            result = self._coordinator.publish_extras(
-                active,
-                ExtrasSection.NOTES,
-                tuple(ExtrasFile(item.relative, item.data) for item in plan.files),
-                job.cancelled,
+            return (
+                only_mine(memos, client.current_user()) if config.only_mine else memos
             )
-            return (plan, result)
 
-        self._start("notes-publish", work, exclusive=True)
+        return self._start("sync-memos", work)
+
+    def set_memo_tag(self, tag: str, included: bool) -> None:
+        kept = [t for t in self._config.memos.tags if t.casefold() != tag.casefold()]
+        if included:
+            kept.append(tag)
+        self.update_config(
+            replace(self._config, memos=replace(self._config.memos, tags=tuple(kept)))
+        )
+
+    def set_memos_included(self, names: Iterable[str], included: bool) -> None:
+        chosen = set(names)
+        skipped = [n for n in self._config.memos.skipped_memos if n not in chosen]
+        if not included:
+            skipped.extend(sorted(chosen))
+        self.update_config(
+            replace(
+                self._config,
+                memos=replace(self._config.memos, skipped_memos=tuple(skipped)),
+            )
+        )
 
     # --- Calendars ----------------------------------------------------------------------
 
@@ -1142,6 +1185,94 @@ class ConnectedController(QObject):
         if self.save_secret(SecretKey.CALENDARS, value):
             self._calendar_links = list(links)
             self.changed.emit()
+
+    # --- Contacts --------------------------------------------------------------------
+
+    def contacts_directory(self) -> Path:
+        return self._store.directory / "connected-contacts"
+
+    def add_contacts_file(self, source: Path) -> None:
+        from iOpenPod.app.connected.contacts import MAX_CONTACTS_BYTES, check_contacts
+
+        try:
+            data = source.read_bytes()
+        except OSError as error:
+            self.message.emit(str(error))
+            return
+        if len(data) > MAX_CONTACTS_BYTES:
+            self.message.emit(self.tr("That contacts file is larger than 20 MB."))
+            return
+        text = data.decode("utf-8-sig", errors="replace")
+        try:
+            count = check_contacts(text)
+        except ConnectedError as error:
+            self.message.emit(str(error))
+            return
+        directory = self.contacts_directory()
+        directory.mkdir(parents=True, exist_ok=True)
+        stem = safe_component(source.stem, "Contacts", limit=60)
+        filename, counter = f"{stem}.vcf", 2
+        existing = {item.filename.casefold() for item in self._config.contacts.files}
+        while filename.casefold() in existing:
+            filename, counter = f"{stem} ({counter}).vcf", counter + 1
+        (directory / filename).write_text(text, encoding="utf-8")
+        files = (
+            *self._config.contacts.files,
+            ContactsFile(source.stem or "Contacts", filename),
+        )
+        self.update_config(
+            replace(self._config, contacts=replace(self._config.contacts, files=files))
+        )
+        self.message.emit(
+            self.tr("Added {count} contacts from {name}.").format(
+                count=count, name=source.name
+            )
+        )
+
+    def remove_contacts_file(self, filename: str) -> None:
+        (self.contacts_directory() / filename).unlink(missing_ok=True)
+        files = tuple(
+            item for item in self._config.contacts.files if item.filename != filename
+        )
+        self.update_config(
+            replace(self._config, contacts=replace(self._config.contacts, files=files))
+        )
+
+    def contact_files(self) -> list[tuple[ContactsFile, str]]:
+        """Each uploaded contacts file with its vCard text (unreadable ones left out)."""
+
+        found: list[tuple[ContactsFile, str]] = []
+        for item in self._config.contacts.files:
+            try:
+                text = (self.contacts_directory() / item.filename).read_text(
+                    encoding="utf-8"
+                )
+            except OSError:
+                continue
+            found.append((item, text))
+        return found
+
+    def contact_uploads(self) -> list[tuple[str, str]]:
+        """``(file name shown, vCard text)`` for every uploaded contacts file."""
+
+        return [(item.name, text) for item, text in self.contact_files()]
+
+    def set_contacts_included(self, keys: Iterable[str], included: bool) -> None:
+        chosen = set(keys)
+        skipped = [k for k in self._config.contacts.skipped if k not in chosen]
+        if not included:
+            skipped.extend(chosen)
+        self.update_config(
+            replace(
+                self._config,
+                contacts=replace(self._config.contacts, skipped=tuple(sorted(skipped))),
+            )
+        )
+
+    def set_contact_included(self, key: str, included: bool) -> None:
+        self.set_contacts_included((key,), included)
+
+    # --- Calendars (files) ---------------------------------------------------------
 
     def calendar_directory(self) -> Path:
         return self._store.directory / "connected-calendars"
@@ -1186,73 +1317,198 @@ class ConnectedController(QObject):
             )
         )
 
-    def publish_calendars(self) -> None:
+    def calendar_choices(self) -> list[tuple[str, str]]:
+        """``(key, name)`` for each calendar file and link, for Sync's checklist."""
+
+        choices = [
+            (f"file:{item.filename}", item.name)
+            for item in self._config.calendars.files
+        ]
+        for index, (link, name) in enumerate(self.calendar_links(), start=1):
+            digest = hashlib.sha256(link.encode()).hexdigest()[:16]
+            choices.append(
+                (
+                    f"link:{digest}",
+                    name or calendar_files.redact(link) or f"Calendar {index}",
+                )
+            )
+        return choices
+
+    def set_calendar_included(self, key: str, included: bool) -> None:
+        skipped = [k for k in self._config.calendars.skipped if k != key]
+        if not included:
+            skipped.append(key)
+        self.update_config(
+            replace(
+                self._config,
+                calendars=replace(
+                    self._config.calendars, skipped=tuple(sorted(skipped))
+                ),
+            )
+        )
+
+    def _calendar_files(
+        self, job: _Job, config: CalendarsConfig, links: list[tuple[str, str]]
+    ) -> tuple[tuple[ExtrasFile, ...], int, list[str]]:
+        """The chosen calendars as iPod files, the events left out, and problems."""
+
+        directory = self.calendar_directory()
+        skipped = set(config.skipped)
+        sources: list[tuple[str, str]] = []
+        issues: list[str] = []
+        for item in config.files:
+            if f"file:{item.filename}" in skipped:
+                continue
+            try:
+                sources.append(
+                    (item.name, (directory / item.filename).read_text(encoding="utf-8"))
+                )
+            except OSError as error:
+                issues.append(f"{item.name}: {error}")
+        chosen = [
+            (link, name)
+            for link, name in links
+            if f"link:{hashlib.sha256(link.encode()).hexdigest()[:16]}" not in skipped
+        ]
+        for index, (link, name) in enumerate(chosen, start=1):
+            job.signals.progress.emit(
+                self.tr("Downloading calendar {index} of {total}…").format(
+                    index=index, total=len(chosen)
+                )
+            )
+            try:
+                text = calendar_files.fetch_calendar(link)
+            except ConnectedError as error:
+                issues.append(f"{calendar_files.redact(link)}: {error}")
+                continue
+            sources.append(
+                (
+                    name
+                    or calendar_files.calendar_info(text).name
+                    or f"Calendar {index}",
+                    text,
+                )
+            )
+        files: list[ExtrasFile] = []
+        used: set[str] = set()
+        dropped = 0
+        for name, text in sources:
+            trimmed = calendar_files.trim_calendar(text, config.trim_days)
+            dropped += trimmed.dropped
+            body = calendar_files.rename_calendar(trimmed.text, name)
+            stem = safe_component(name, "Calendar", limit=60)
+            filename, counter = f"{stem}.ics", 2
+            while filename.casefold() in used:
+                filename, counter = f"{stem} ({counter}).ics", counter + 1
+            used.add(filename.casefold())
+            files.append(ExtrasFile(filename, body.encode("utf-8")))
+        return tuple(files), dropped, issues
+
+    # --- Extras as part of Sync with Host ---------------------------------------------
+
+    @property
+    def has_extras(self) -> bool:
+        """Whether notes, calendars or contacts are set up to go on the iPod."""
+
+        config = self._config
+        return (
+            bool(config.memos.url and config.memos.tags)
+            or bool(config.calendars.files)
+            or bool(self.calendar_links())
+            or bool(config.contacts.files)
+        )
+
+    def publish_for_sync(self) -> bool:
+        """After Sync: write the chosen notes, calendars and contacts to the iPod.
+
+        Each kind replaces only the files iOpenPod put there before; a kind with
+        nothing set up is left alone, and one failing doesn't stop the others.
+        """
+
         active = self._devices.active_ipod
         if active is None:
-            self.message.emit(self.tr("Connect an iPod to send calendars."))
-            return
-        config = self._config.calendars
+            return False
+        config = self._config
         links = self.calendar_links()
-        directory = self.calendar_directory()
+        uploads = [text for _name, text in self.contact_uploads()]
+        notes = bool(config.memos.url and config.memos.tags)
+        calendars = bool(config.calendars.files or links)
+        contacts = bool(config.contacts.files)
+        if not (notes or calendars or contacts):
+            return False
 
-        def work(job: _Job) -> object:
-            sources: list[tuple[str, str]] = []
-            issues: list[str] = []
-            for item in config.files:
+        def work(job: _Job) -> ExtrasSent:
+            sent = ExtrasSent()
+            if notes:
+                job.signals.progress.emit(self.tr("Reading memos…"))
                 try:
-                    sources.append(
-                        (
-                            item.name,
-                            (directory / item.filename).read_text(encoding="utf-8"),
-                        )
+                    client = self.memos()
+                    memos = client.memos(
+                        include_archived=config.memos.include_archived,
+                        cancelled=job.cancelled,
                     )
-                except OSError as error:
-                    issues.append(f"{item.name}: {error}")
-            for index, (link, name) in enumerate(links, start=1):
-                job.signals.progress.emit(
-                    self.tr("Downloading calendar {index} of {total}…").format(
-                        index=index, total=len(links)
+                    if config.memos.only_mine:
+                        memos = only_mine(memos, client.current_user())
+                    others = self._coordinator.count_foreign_extras(
+                        active, ExtrasSection.NOTES
                     )
-                )
-                try:
-                    text = calendar_files.fetch_calendar(link)
+                    plan = plan_notes(memos, config.memos, other_notes=others)
+                    job.signals.progress.emit(self.tr("Writing notes to the iPod…"))
+                    result = self._coordinator.publish_extras(
+                        active,
+                        ExtrasSection.NOTES,
+                        tuple(ExtrasFile(i.relative, i.data) for i in plan.files),
+                        job.cancelled,
+                    )
+                    sent = replace(
+                        sent, notes=plan.notes, issues=(*sent.issues, *result.issues)
+                    )
+                except CancelledError:
+                    raise
                 except ConnectedError as error:
-                    issues.append(f"{calendar_files.redact(link)}: {error}")
-                    continue
-                sources.append(
-                    (
-                        name
-                        or calendar_files.calendar_info(text).name
-                        or f"Calendar {index}",
-                        text,
-                    )
+                    sent = replace(sent, issues=(*sent.issues, f"Notes: {error}"))
+            if calendars:
+                files, _dropped, issues = self._calendar_files(
+                    job, config.calendars, links
                 )
-            files: list[ExtrasFile] = []
-            used: set[str] = set()
-            dropped = 0
-            for name, text in sources:
-                trimmed = calendar_files.trim_calendar(text, config.trim_days)
-                dropped += trimmed.dropped
-                body = calendar_files.rename_calendar(trimmed.text, name)
-                stem = safe_component(name, "Calendar", limit=60)
-                filename, counter = f"{stem}.ics", 2
-                while filename.casefold() in used:
-                    filename, counter = f"{stem} ({counter}).ics", counter + 1
-                used.add(filename.casefold())
-                files.append(ExtrasFile(filename, body.encode("utf-8")))
-            job.signals.progress.emit(self.tr("Writing calendars to the iPod…"))
-            result = self._coordinator.publish_extras(
-                active, ExtrasSection.CALENDARS, tuple(files), job.cancelled
-            )
-            merged = ExtrasResult(
-                result.written,
-                result.unchanged,
-                result.removed,
-                (*issues, *result.issues),
-            )
-            return (len(files), dropped, merged)
+                job.signals.progress.emit(self.tr("Writing calendars to the iPod…"))
+                result = self._coordinator.publish_extras(
+                    active, ExtrasSection.CALENDARS, files, job.cancelled
+                )
+                sent = replace(
+                    sent,
+                    calendars=len(files),
+                    issues=(*sent.issues, *issues, *result.issues),
+                )
+            if contacts:
+                from iOpenPod.app.connected.contacts import plan_contacts
 
-        self._start("calendars-publish", work, exclusive=True)
+                planned, over = plan_contacts(uploads, config.contacts.skipped)
+                job.signals.progress.emit(self.tr("Writing contacts to the iPod…"))
+                result = self._coordinator.publish_extras(
+                    active,
+                    ExtrasSection.CONTACTS,
+                    tuple(ExtrasFile(c.relative, c.data) for c in planned),
+                    job.cancelled,
+                )
+                extra = (
+                    (self.tr("{count} contacts didn't fit.").format(count=over),)
+                    if over
+                    else ()
+                )
+                sent = replace(
+                    sent,
+                    contacts=len(planned),
+                    issues=(*sent.issues, *extra, *result.issues),
+                )
+            return sent
+
+        return self._start("extras-publish", work, exclusive=True)
 
 
-__all__ = ["ConnectedController", "ConnectedSource", "RefreshOutcome"]
+__all__ = [
+    "ConnectedController",
+    "ConnectedSource",
+    "ExtrasSent",
+    "RefreshOutcome",
+]

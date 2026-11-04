@@ -62,7 +62,7 @@ if TYPE_CHECKING:
         ImmichCollection,
         ImmichPhoto,
     )
-    from iOpenPod.app.connected.memos import MemosSummary, NotesPlan
+    from iOpenPod.app.connected.memos import MemosSummary
     from iOpenPod.app.connected.plex import (
         PlexClient,
         PlexServer,
@@ -72,7 +72,6 @@ if TYPE_CHECKING:
     from iOpenPod.app.connected_controller import ConnectedController
     from iOpenPod.app.library_workspace import LibraryWorkspace
     from iOpenPod.app.scrobbling.controller import ScrobbleController
-    from iOpenPod.app.services.ipod_extras import ExtrasResult
 
 _ROLE = Qt.ItemDataRole.UserRole
 
@@ -1124,11 +1123,6 @@ class NotesPage(_ConnectedPage):
         super().__init__(controller, "Notes", parent)
         self.setObjectName("connectedNotesPage")
         self._header.set_title(self.tr("Notes from Memos"))
-        self._send = _button(
-            self.tr("Send notes to iPod"), self, ActionButtonKind.PRIMARY
-        )
-        self._send.clicked.connect(self._publish)
-        self._header.add_action(self._send)
         config = controller.config.memos
         account = QGroupBox(self.tr("Memos server"), self)
         self._url = QLineEdit(config.url, account)
@@ -1172,7 +1166,7 @@ class NotesPage(_ConnectedPage):
         layout.addWidget(
             _description(
                 self.tr(
-                    "Picking #work also includes nested tags like #work/meetings. Each memo becomes a note titled by its first line, directly in the iPod's Notes list; long memos are split into parts because the iPod shows 4 KB per note and up to 1,000 notes."
+                    "Picking #work also includes nested tags like #work/meetings. Each memo becomes a note titled by its first line, directly in the iPod's Notes list; long memos are split into parts because the iPod shows 4 KB per note and up to 1,000 notes. Sync with Host sends them, and lets you leave out single memos."
                 ),
                 tags,
             )
@@ -1185,11 +1179,8 @@ class NotesPage(_ConnectedPage):
         self.refresh()
 
     def refresh(self) -> None:
-        if not hasattr(self, "_send"):
-            return
-        busy = self.controller.busy
-        self._connect.setEnabled(not busy)
-        self._send.setEnabled(not busy and bool(self.controller.config.memos.tags))
+        if hasattr(self, "_connect"):
+            self._connect.setEnabled(not self.controller.busy)
 
     def _connect_server(self) -> None:
         self.start("memos-connect")
@@ -1230,28 +1221,6 @@ class NotesPage(_ConnectedPage):
                     untagged=summary.untagged,
                 )
             )
-        elif operation == "notes-publish":
-            plan, result = cast("tuple[NotesPlan, ExtrasResult]", value)
-            lines = [
-                self.tr(
-                    "{notes} notes on the iPod from {matched} of {total} memos ({written} files written, {removed} removed)."
-                ).format(
-                    notes=plan.notes,
-                    matched=plan.matched,
-                    total=plan.total,
-                    written=result.written,
-                    removed=result.removed,
-                )
-            ]
-            if plan.skipped:
-                lines.append(
-                    self.tr(
-                        "{count} memos didn't fit: the iPod shows at most 1,000 notes."
-                    ).format(count=plan.skipped)
-                )
-            lines.extend(result.issues[:5])
-            lines.append(self.tr("Eject the iPod, then look in Extras → Notes."))
-            self.say("\n".join(lines))
 
     def _tag_toggled(self, _entry: QListWidgetItem) -> None:
         if self._loading:
@@ -1281,10 +1250,6 @@ class NotesPage(_ConnectedPage):
             )
         )
 
-    def _publish(self) -> None:
-        self.start("notes-publish")
-        self.controller.publish_notes()
-
 
 # --- Calendars ---------------------------------------------------------------------------
 
@@ -1296,11 +1261,6 @@ class CalendarsPage(_ConnectedPage):
         super().__init__(controller, "Calendars", parent)
         self.setObjectName("connectedCalendarsPage")
         self._header.set_title(self.tr("Calendars"))
-        self._send = _button(
-            self.tr("Send calendars to iPod"), self, ActionButtonKind.PRIMARY
-        )
-        self._send.clicked.connect(self._publish)
-        self._header.add_action(self._send)
         files = QGroupBox(self.tr("Calendar files"), self)
         self._files = QListWidget(files)
         self._files.setMaximumHeight(160)
@@ -1348,7 +1308,7 @@ class CalendarsPage(_ConnectedPage):
         self.body.addWidget(
             _description(
                 self.tr(
-                    "Calendars appear in Extras → Calendars on iPods that have it. Each send replaces only the calendars iOpenPod put there."
+                    "Calendars appear in Extras → Calendars on iPods that have it. Sync with Host sends the ones ticked there, replacing only the calendars iOpenPod put on the iPod."
                 ),
                 self,
             )
@@ -1359,10 +1319,7 @@ class CalendarsPage(_ConnectedPage):
         self.body.addStretch(1)
 
     def refresh(self) -> None:
-        if not hasattr(self, "_send"):
-            return
-        self._send.setEnabled(not self.controller.busy)
-        if self.isVisible():
+        if hasattr(self, "_links") and self.isVisible():
             self._render()
 
     def showEvent(self, event: QShowEvent) -> None:
@@ -1389,16 +1346,7 @@ class CalendarsPage(_ConnectedPage):
             self._links.addItem(entry)
 
     def handle(self, operation: str, value: object) -> None:
-        if operation == "calendars-publish":
-            count, dropped, result = cast("tuple[int, int, ExtrasResult]", value)
-            lines = [
-                self.tr(
-                    "{count} calendars on the iPod ({dropped} old events left out)."
-                ).format(count=count, dropped=dropped)
-            ]
-            lines.extend(result.issues[:5])
-            lines.append(self.tr("Eject the iPod, then look in Extras → Calendars."))
-            self.say("\n".join(lines))
+        return
 
     def _add_file(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(
@@ -1493,9 +1441,85 @@ class CalendarsPage(_ConnectedPage):
             )
         )
 
-    def _publish(self) -> None:
-        self.start("calendars-publish")
-        self.controller.publish_calendars()
+
+# --- Contacts ------------------------------------------------------------------------------
 
 
-__all__ = ["CalendarsPage", "GrimmoryPage", "ImmichPage", "NotesPage", "PlexPage"]
+class ContactsPage(_ConnectedPage):
+    """Upload vCard files; choosing contacts and sending them happen in Sync."""
+
+    def __init__(
+        self, controller: ConnectedController, parent: QWidget | None = None
+    ) -> None:
+        super().__init__(controller, "Contacts", parent)
+        self.setObjectName("connectedContactsPage")
+        self._header.set_title(self.tr("Contacts"))
+        files = QGroupBox(self.tr("Contact files"), self)
+        self._files = QListWidget(files)
+        self._files.setMaximumHeight(200)
+        add = _button(self.tr("Add vCard file…"), files)
+        add.clicked.connect(self._add_file)
+        remove = _button(self.tr("Remove"), files, ActionButtonKind.QUIET)
+        remove.clicked.connect(self._remove_file)
+        layout = QVBoxLayout(files)
+        layout.addWidget(self._files)
+        layout.addLayout(_row(add, remove))
+        self.body.addWidget(
+            _description(
+                self.tr(
+                    "Add .vcf files exported from your phone, Google Contacts, iCloud or Outlook. Choose which contacts go on the iPod in Sync with Host; they appear in Extras → Contacts. Photos in contacts are left out because the iPod can't show them."
+                ),
+                self,
+            )
+        )
+        self.body.addWidget(files)
+        self.body.addStretch(1)
+        self._render()
+
+    def refresh(self) -> None:
+        if hasattr(self, "_files"):
+            self._render()
+
+    def _render(self) -> None:
+        from iOpenPod.app.connected.contacts import parse_contacts
+
+        self._files.clear()
+        for item, text in self.controller.contact_files():
+            count = len(parse_contacts(text))
+            entry = QListWidgetItem(
+                self.tr("{name}  ·  {count} contacts").format(
+                    name=item.name, count=count
+                )
+            )
+            entry.setData(_ROLE, item.filename)
+            self._files.addItem(entry)
+
+    def handle(self, operation: str, value: object) -> None:
+        return
+
+    def _add_file(self) -> None:
+        paths, _filter = QFileDialog.getOpenFileNames(
+            self,
+            self.tr("Add contacts"),
+            str(Path.home()),
+            self.tr("vCard files (*.vcf *.vcard);;All files (*)"),
+        )
+        for path in paths:
+            self.controller.add_contacts_file(Path(path))
+        self._render()
+
+    def _remove_file(self) -> None:
+        row = self._files.currentRow()
+        if row >= 0:
+            self.controller.remove_contacts_file(str(self._files.item(row).data(_ROLE)))
+            self._render()
+
+
+__all__ = [
+    "CalendarsPage",
+    "ContactsPage",
+    "GrimmoryPage",
+    "ImmichPage",
+    "NotesPage",
+    "PlexPage",
+]

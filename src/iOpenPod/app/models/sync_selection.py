@@ -25,7 +25,7 @@ from iPodDB.library import PhotoRepresentationKind
 from storage import StorageError
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
 
     from iOpenPod.app.host_media_library import HostMediaLibrary
     from iOpenPod.app.media.stream_selection import MediaStreamSelection
@@ -184,6 +184,46 @@ class SyncSelection(QObject):
     @property
     def selected_host_count(self) -> int:
         return len(self._selected_host_paths)
+
+    @property
+    def selected_host_paths(self) -> frozenset[str]:
+        return frozenset(self._selected_host_paths)
+
+    @property
+    def host_paths(self) -> frozenset[str]:
+        """Host path identities of every scanned Track and Photo."""
+
+        return frozenset(chain(self._track_paths.values(), self._photo_paths.values()))
+
+    def restore_host_selection(
+        self, known: frozenset[str], selected: frozenset[str]
+    ) -> bool:
+        """After a rescan, put back earlier ticks and unticks on the same media.
+
+        Media the earlier scan didn't have keeps its new default.
+        """
+
+        current = self.host_paths
+        wanted = {
+            path
+            for path in current
+            if (
+                path in selected if path in known else path in self._selected_host_paths
+            )
+        }
+        if wanted == self._selected_host_paths:
+            return False
+        self._selected_host_paths = wanted
+        self._review_plan = None
+        self._excluded_review_items.intersection_update(self.review_plan.items)
+        self.hostSelectionChanged.emit()
+        self.changed.emit()
+        return True
+
+    def check_host_paths(self, keep: Callable[[str], bool]) -> bool:
+        """Tick every scanned Track or Photo whose Host path identity passes ``keep``."""
+
+        return self._set_paths((path for path in self.host_paths if keep(path)), True)
 
     @property
     def has_host_media(self) -> bool:

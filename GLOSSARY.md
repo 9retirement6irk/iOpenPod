@@ -146,7 +146,7 @@ normal lowercase conventions while retaining the same domain term.
 | **Media Cache** | Downloaded Remote Items kept in their Connected Source Folders between Syncs, up to a size limit, least recently synced removed first. | download folder, picks |
 | **Grimmory Link** | The `grimmory:` comment on an audiobook file iOpenPod downloaded from Grimmory, naming its book, book file, track index, track start, and book duration so its iPod Track can exchange listening progress. | book id tag |
 | **Progress Mark** | The iPod and Grimmory positions in one audiobook when the two last agreed; whichever side moved since then wins the next progress exchange. | sync state, last position |
-| **iPod Extras** | Non-Library files the firmware reads from top-level `Notes` and `Calendars` folders. They are published through Storage against an Extras Manifest of owned files. | Library media, iTunesDB content |
+| **iPod Extras** | Non-Library files the firmware reads from top-level `Notes`, `Calendars` and `Contacts` folders. They are published through Storage against an Extras Manifest of owned files. | Library media, iTunesDB content |
 
 ## Application workflows
 

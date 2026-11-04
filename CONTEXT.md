@@ -17,8 +17,9 @@ then beyond it.
 Connected Sources (this fork): Plex music and Grimmory audiobooks are listed in
 Sync's media list as Remote Items and downloaded only when Sync prepares them, kept
 in a size-limited Media Cache; Immich materializes Selections as a Host Media
-Library folder that Sync refreshes before scanning; and iPod Extras (Memos notes and
-calendars) publish through Storage with an ownership manifest. Plex is also a
+Library folder that Sync refreshes before scanning; and iPod Extras (Memos notes,
+calendars and vCard contacts) publish through Storage with an ownership manifest at
+the end of Sync with Host, whose CONNECTED checklists choose what goes on. Plex is also a
 Scrobbling service for iPod plays, with two-way star ratings. Virtual-volume and
 scripted-protocol tests cover the work; physical-device acceptance is unverified. See
 [ADR-0900](docs/adr/0900-add-connected-sources-and-ipod-extras.md).

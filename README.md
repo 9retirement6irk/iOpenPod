@@ -49,9 +49,17 @@ servers without exporting anything by hand:
   stays in step: where you stopped on the
   iPod goes to Grimmory, and where you stopped in Grimmory becomes the iPod's
   bookmark.
-* **Notes**: send Memos notes with chosen tags straight into Extras → Notes
+* **Notes**: Memos notes with chosen tags go straight into Extras → Notes
   (Memos 26.10 and earlier).
-* **Calendars**: send `.ics` files and calendar links to Extras → Calendars.
+* **Calendars**: `.ics` files and calendar links go to Extras → Calendars.
+* **Contacts**: upload `.vcf` files (from your phone, Google Contacts, iCloud or
+  Outlook) and they go to Extras → Contacts.
+
+**Sync with Host** does it all. Set each source up on its page under Connected;
+then, in Sync's media list, the **CONNECTED** section chooses Immich albums,
+people and Favorites (**Update photos** downloads them and ticks their photos,
+keeping your other ticks), Memos tags and single memos, calendars, and contacts.
+Notes, calendars and contacts are written to the iPod at the end of the Sync.
 
 Plex and Grimmory downloads are kept in `~/Music/iOpenPod Connected` up to the
 media cache limit in Settings → Sync (or removed after each Sync when the cache is

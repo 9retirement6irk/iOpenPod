@@ -447,7 +447,10 @@ def plan_notes(
     if not wanted:
         raise ConnectedError("Pick at least one Memos tag to sync.")
     matched: list[Memo] = []
+    skipped_memos = set(config.skipped_memos)
     for memo in memos:
+        if memo.name in skipped_memos:
+            continue  # unticked under its tag in Sync with Host
         hits = [
             want for want in wanted if any(tag_matches(tag, want) for tag in memo.tags)
         ]
