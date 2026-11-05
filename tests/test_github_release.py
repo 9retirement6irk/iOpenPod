@@ -217,9 +217,9 @@ def test_invalid_release_identity_fails_before_output(
     "relative",
     [
         "candidate-macos-15-intel/dist/iOpenPod-2.0.0-sparkle-update-macOS-x86_64.zip",
-        "candidate-macos-14/dist/iOpenPod-2.0.0-macOS-arm64.dmg",
+        "candidate-macos-15/dist/iOpenPod-2.0.0-macOS-arm64.dmg",
         "candidate-ubuntu-24.04/build/packaging/licenses/inventory.json",
-        "candidate-macos-14/build/packaging/macos-compatibility.json",
+        "candidate-macos-15/build/packaging/macos-compatibility.json",
         "candidate-windows-2022/dist/iopenpod-2.0.0.tar.gz",
     ],
 )
@@ -243,7 +243,7 @@ def test_checksum_mismatch_prevents_release(
     checksum = (
         release_root
         / "build/candidates"
-        / ("candidate-macos-14" if name.endswith(".dmg") else "candidate-windows-2022")
+        / ("candidate-macos-15" if name.endswith(".dmg") else "candidate-windows-2022")
         / "dist"
         / (name + ".sha256")
     )
@@ -265,7 +265,7 @@ def test_wrong_compatibility_report_prevents_release(
 ) -> None:
     path = (
         release_root
-        / "build/candidates/candidate-macos-14/build/packaging/macos-compatibility.json"
+        / "build/candidates/candidate-macos-15/build/packaging/macos-compatibility.json"
     )
     path.write_text(json.dumps(report))
     with pytest.raises(ValueError, match="compatibility report"):

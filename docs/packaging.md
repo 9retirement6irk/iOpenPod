@@ -331,7 +331,7 @@ onto that shortcut. The matching ZIP remains the Sparkle update archive. Native 
 mounts each image, checks its layout and app signature, and compares its executable
 with the frozen app. A DMG does not replace Developer ID signing or notarization.
 The standard native candidate targets **macOS 12.3 or later**. The workflow builds
-separate Apple Silicon (`macos-14`) and Intel (`macos-15-intel`) candidates. These
+separate Apple Silicon (`macos-15`) and Intel (`macos-15-intel`) candidates. These
 newer runners establish buildability and launch on their own OS; **execution on
 macOS 12.3 on each architecture remains pending acceptance**.
 
