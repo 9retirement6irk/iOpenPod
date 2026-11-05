@@ -9237,12 +9237,20 @@ Playlists: %3</translation>
         <translation>La sincronización de listas está desactivada. Se seguirán eliminando las referencias a las pistas que elimines.</translation>
     </message>
     <message>
+        <source>The Playlists ticked in Select Media are updated on the iPod. Untick one here to skip it this time.</source>
+        <translation>Las listas de reproducción marcadas en Seleccionar medios se actualizan en el iPod. Desmarca una aquí para omitirla esta vez.</translation>
+    </message>
+    <message>
+        <source>No Playlists chosen. Tick Playlists in Select Media to put them on the iPod.</source>
+        <translation>No hay listas de reproducción elegidas. Marca listas en Seleccionar medios para ponerlas en el iPod.</translation>
+    </message>
+    <message>
         <source>Choose which Playlists to update. Track selection stays separate.</source>
-        <translation>Elige qué listas actualizar. La selección de pistas es independiente.</translation>
+        <translation type="vanished">Elige qué listas actualizar. La selección de pistas es independiente.</translation>
     </message>
     <message>
         <source>No Host Playlists to sync.</source>
-        <translation>No hay listas del equipo para sincronizar.</translation>
+        <translation type="vanished">No hay listas del equipo para sincronizar.</translation>
     </message>
     <message>
         <source>Create</source>

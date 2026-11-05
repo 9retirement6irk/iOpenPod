@@ -256,8 +256,13 @@ class _SyncLibraryNavigation(QFrame):
         contents_layout.setSpacing(LAYOUT.space_3xs)
         contents_layout.addWidget(self._heading)
         self.playlist_tree = PlaylistTree(
-            playlists, contents, show_add_button=False, show_context_menu=False
+            playlists,
+            contents,
+            show_add_button=False,
+            show_context_menu=False,
+            checks=selection,
         )
+        selection.playlistsChanged.connect(self.playlist_tree.refresh_checks)
         self.playlist_tree.setObjectName("syncPlaylistSidebar")
         self.playlist_tree.set_drag_drop_enabled(False)
         for page_id, glyph in _LIBRARY_NAVIGATION:
@@ -672,6 +677,11 @@ class SyncWorkspace(QWidget):
         browser = self._ensure_browser()
         browser.load(library)
         self.selection.reset(library, comparison)
+        # Playlists synced before stay synced; others are ticked in Select Media.
+        self.selection.choose_playlists(
+            association.host_playlist_id
+            for association in ipod_media.playlist_associations
+        )
         for page in self._connected_pages.values():
             reset = getattr(page, "reset", None)
             if callable(reset):
@@ -710,7 +720,17 @@ class SyncWorkspace(QWidget):
 
     @property
     def playlist_choices(self) -> tuple[PlaylistSyncChoice, ...]:
-        return self._playlist_changes.choices
+        """Only Playlists ticked in Select Media sync; Review can still skip one."""
+
+        from iOpenPod.app.playlist_sync import PlaylistSyncChoice
+
+        choices = {c.host_playlist_id: c for c in self._playlist_changes.choices}
+        for playlist_id in self._unchosen_playlists():
+            choices[playlist_id] = PlaylistSyncChoice(playlist_id, included=False)
+        return tuple(choices.values())
+
+    def _unchosen_playlists(self) -> frozenset[int]:
+        return self.selection.playlist_ids - self.selection.chosen_playlist_ids
 
     def set_playlist_preview(
         self,
@@ -720,6 +740,8 @@ class SyncWorkspace(QWidget):
         """Present exact effects and skipped reasons without discarding row choices."""
         from iPodDB.library import LibrarySnapshot
 
+        unchosen = self._unchosen_playlists()
+        changes = tuple(row for row in changes if row.host_playlist_id not in unchosen)
         self._playlist_preview = changes
         self._playlist_changes.set_rows(changes, library or LibrarySnapshot())
         self._refresh_playlist_preview()
@@ -1084,10 +1106,12 @@ class SyncWorkspace(QWidget):
             )
         elif self._playlist_preview:
             detail = self.tr(
-                "Choose which Playlists to update. Track selection stays separate."
+                "The Playlists ticked in Select Media are updated on the iPod. Untick one here to skip it this time."
             )
         else:
-            detail = self.tr("No Host Playlists to sync.")
+            detail = self.tr(
+                "No Playlists chosen. Tick Playlists in Select Media to put them on the iPod."
+            )
         self._playlist_detail.setText(detail)
 
     @staticmethod

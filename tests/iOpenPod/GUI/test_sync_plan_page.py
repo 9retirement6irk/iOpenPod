@@ -576,6 +576,11 @@ def test_completed_scans_open_selection_with_matched_checked_and_host_only_unche
         assert window.statusBar().currentMessage() == "Host items selected for Sync: 1"
         assert workspace.selection.track_check_state(1) is Qt.CheckState.Checked
         assert workspace.selection.track_check_state(2) is Qt.CheckState.Unchecked
+        # Only the supported Playlist can be ticked; it isn't synced until it is.
+        assert workspace.selection.playlist_ids == {10}
+        assert workspace.selection.playlist_check_state(10) is Qt.CheckState.Unchecked
+        assert workspace.selection.playlist_check_state(11) is None
+        assert workspace.selection.set_playlist_checked(10, True)
         toggle = workspace.findChild(QPushButton, "toggleAllSyncMedia")
         assert toggle is not None
         revert = workspace.findChild(QPushButton, "revertSyncSelections")

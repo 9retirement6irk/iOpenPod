@@ -1,8 +1,11 @@
 """A familiar source-list sidebar for Playlists and nested folders."""
 
+from typing import Protocol
+
 from PySide6.QtCore import (
     QEvent,
     QModelIndex,
+    QObject,
     QPersistentModelIndex,
     QPoint,
     QRect,
@@ -19,6 +22,7 @@ from PySide6.QtGui import (
     QDragLeaveEvent,
     QDragMoveEvent,
     QDropEvent,
+    QKeyEvent,
     QKeySequence,
     QMouseEvent,
     QPainter,
@@ -188,7 +192,54 @@ class _PlaylistSectionButton(NavigationButton):
         )
 
 
+class PlaylistChecks(Protocol):
+    """Lets a tree show a checkbox on each Playlist that can be chosen."""
+
+    def playlist_check_state(self, playlist_id: int) -> Qt.CheckState | None: ...
+
+    def set_playlist_checked(self, playlist_id: int, checked: bool) -> bool: ...
+
+
+def _check_state(
+    checks: PlaylistChecks | None, index: QModelIndex | QPersistentModelIndex
+) -> Qt.CheckState | None:
+    if checks is None:
+        return None
+    playlist = index.data(PlaylistRole.PLAYLIST)
+    if not isinstance(playlist, Playlist):
+        return None
+    return checks.playlist_check_state(playlist.playlist_id)
+
+
+def _row_left(index: QModelIndex | QPersistentModelIndex, rect: QRect) -> int:
+    depth = 1
+    parent = index.parent()
+    while parent.isValid():
+        depth += 1
+        parent = parent.parent()
+    # Keep a readable label at narrow widths even for deeply nested folders.
+    return min(
+        LAYOUT.space_xs + depth * LAYOUT.space_md,
+        max(LAYOUT.space_xs, rect.width() // 3),
+    )
+
+
+def _check_rect(index: QModelIndex | QPersistentModelIndex, rect: QRect) -> QRect:
+    return QRect(
+        rect.left() + _row_left(index, rect) - LAYOUT.space_xs,
+        rect.top() + (rect.height() - LAYOUT.icon_size) // 2,
+        LAYOUT.icon_size,
+        LAYOUT.icon_size,
+    )
+
+
 class _PlaylistDelegate(QStyledItemDelegate):
+    def __init__(
+        self, parent: QObject | None = None, checks: PlaylistChecks | None = None
+    ) -> None:
+        super().__init__(parent)
+        self.checks = checks
+
     def paint(
         self,
         painter: QPainter,
@@ -226,16 +277,25 @@ class _PlaylistDelegate(QStyledItemDelegate):
                 LAYOUT.radius_control,
             )
 
-        depth = 1
-        parent = index.parent()
-        while parent.isValid():
-            depth += 1
-            parent = parent.parent()
-        # Keep a readable label at narrow widths even for deeply nested folders.
-        left = min(
-            LAYOUT.space_xs + depth * LAYOUT.space_md,
-            max(LAYOUT.space_xs, option.rect.width() // 3),
-        )
+        left = _row_left(index, option.rect)
+        state = _check_state(self.checks, index)
+        if state is not None:
+            box = QStyleOptionViewItem(option)
+            box.rect = _check_rect(index, option.rect)
+            box.state = (box.state & ~QStyle.StateFlag.State_HasFocus) | (
+                QStyle.StateFlag.State_On
+                if state is Qt.CheckState.Checked
+                else QStyle.StateFlag.State_Off
+            )
+            view.style().drawPrimitive(
+                QStyle.PrimitiveElement.PE_IndicatorItemViewItemCheck,
+                box,
+                painter,
+                view,
+            )
+        if self.checks is not None:
+            # Rows that can't be chosen keep their icons in line with the rest.
+            left += LAYOUT.icon_size + LAYOUT.space_2xs
         icon_rect = QRect(
             left,
             option.rect.top() + (option.rect.height() - LAYOUT.icon_size) // 2,
@@ -408,8 +468,40 @@ class _PlaylistView(QTreeView):
         # Disclosure and indentation are both drawn by the row delegate instead.
         pass
 
+    def _checks(self) -> PlaylistChecks | None:
+        delegate = self.itemDelegate()
+        return delegate.checks if isinstance(delegate, _PlaylistDelegate) else None
+
+    def _toggle(self, index: QModelIndex | QPersistentModelIndex) -> bool:
+        checks = self._checks()
+        state = _check_state(checks, index)
+        playlist = index.data(PlaylistRole.PLAYLIST)
+        if checks is None or state is None or not isinstance(playlist, Playlist):
+            return False
+        checks.set_playlist_checked(
+            playlist.playlist_id, state is not Qt.CheckState.Checked
+        )
+        self.viewport().update()
+        return True
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if event.key() == Qt.Key.Key_Space and self._toggle(self.currentIndex()):
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
     def mousePressEvent(self, event: QMouseEvent) -> None:
         index = self.indexAt(event.position().toPoint())
+        if (
+            event.button() == Qt.MouseButton.LeftButton
+            and index.isValid()
+            and _check_rect(index, self.visualRect(index))
+            .adjusted(-4, -4, 4, 4)
+            .contains(event.position().toPoint())
+            and self._toggle(index)
+        ):
+            event.accept()
+            return
         folder_clicked = (
             event.button() == Qt.MouseButton.LeftButton
             and index.isValid()
@@ -485,6 +577,7 @@ class PlaylistTree(QWidget):
         *,
         show_add_button: bool = True,
         show_context_menu: bool = True,
+        checks: PlaylistChecks | None = None,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("playlistSidebar")
@@ -531,7 +624,7 @@ class PlaylistTree(QWidget):
         self._tree = _PlaylistView(workspace, self)
         self._tree.setObjectName("playlistTree")
         self._tree.setModel(self._model)
-        self._tree.setItemDelegate(_PlaylistDelegate(self._tree))
+        self._tree.setItemDelegate(_PlaylistDelegate(self._tree, checks))
         self._tree.setHeaderHidden(True)
         self._tree.setFrameShape(QFrame.Shape.NoFrame)
         self._tree.setUniformRowHeights(True)
@@ -618,6 +711,11 @@ class PlaylistTree(QWidget):
         self._update_tree_height()
         self._tree.setCurrentIndex(index)
         self._tree.scrollTo(index)
+
+    def refresh_checks(self) -> None:
+        """Repaint checkboxes after the chosen Playlists change elsewhere."""
+
+        self._tree.viewport().update()
 
     def clear_selection(self) -> None:
         self._tree.clearSelection()

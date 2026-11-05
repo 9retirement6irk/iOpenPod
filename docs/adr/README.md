@@ -298,3 +298,4 @@ What becomes easier, harder, required, or prohibited?
 - [ADR-0231: Avoid Phase captures for content-checked cache hits](0231-avoid-phase-captures-for-content-checked-cache-hits.md)
 - [ADR-0232: Cache Phase input metadata across Library saves](0232-cache-phase-input-metadata-across-library-saves.md)
 - [ADR-0900: Add Connected Sources and iPod Extras](0900-add-connected-sources-and-ipod-extras.md) (this fork)
+- [ADR-0901: Choose Playlists in Select Media](0901-choose-playlists-in-select-media.md) (this fork)

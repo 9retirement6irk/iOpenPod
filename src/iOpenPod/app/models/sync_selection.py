@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import QObject, Qt, Signal
 
 from iOpenPod.app.media_stream_preferences import MediaStreamPreferences
+from iOpenPod.app.playlist_sync import playlist_sync_target
 from iOpenPod.app.sync_plan import (
     SyncDuplicateResolution,
     SyncPlan,
@@ -36,6 +37,7 @@ class SyncSelection(QObject):
     """Own desired iPod membership without mutating a Library Snapshot or plan."""
 
     hostSelectionChanged = Signal()
+    playlistsChanged = Signal()
     removalSelectionChanged = Signal()
     reviewSelectionChanged = Signal()
     changed = Signal()
@@ -62,6 +64,9 @@ class SyncSelection(QObject):
         self._excluded_review_items: set[SyncPlanItem] = set()
         self._review_plan: SyncPlan | None = None
         self._review_items: frozenset[SyncPlanItem] = frozenset()
+        # Host Playlists that can be synced, and the ones chosen to go on the iPod.
+        self._playlists: dict[int, tuple[int, ...]] = {}
+        self._chosen_playlists: set[int] = set()
 
     @property
     def comparison(self) -> SyncPlan:
@@ -427,6 +432,12 @@ class SyncSelection(QObject):
                 if path:
                     self._photo_paths[photo.photo_id] = host_path_identity(path)
 
+        self._playlists = {
+            playlist.playlist_id: playlist.track_ids
+            for playlist in library.snapshot.playlists
+            if playlist_sync_target(playlist)
+        }
+        self._chosen_playlists.intersection_update(self._playlists)
         self._initial_selected_host_paths = _matched_host_paths(comparison)
         self._on_ipod_host_paths = self._initial_selected_host_paths
         self._selected_host_paths = set(self._initial_selected_host_paths)
@@ -435,9 +446,73 @@ class SyncSelection(QObject):
         self._review_plan = None
         self._review_items = frozenset()
         self.hostSelectionChanged.emit()
+        self.playlistsChanged.emit()
         self.removalSelectionChanged.emit()
         self.reviewSelectionChanged.emit()
         self.changed.emit()
+
+    # --- Playlists ----------------------------------------------------------------
+
+    @property
+    def chosen_playlist_ids(self) -> frozenset[int]:
+        return frozenset(self._chosen_playlists)
+
+    @property
+    def playlist_ids(self) -> frozenset[int]:
+        """Every Host Playlist that can be synced."""
+
+        return frozenset(self._playlists)
+
+    def playlist_check_state(self, playlist_id: int) -> Qt.CheckState | None:
+        """Checked when the Playlist goes on the iPod; None when it can't be synced."""
+
+        if playlist_id not in self._playlists:
+            return None
+        if playlist_id in self._chosen_playlists:
+            return Qt.CheckState.Checked
+        return Qt.CheckState.Unchecked
+
+    def choose_playlists(self, playlist_ids: Iterable[int]) -> None:
+        """Mark Playlists as chosen without changing Track selection (defaults)."""
+
+        chosen = {i for i in playlist_ids if i in self._playlists}
+        if chosen - self._chosen_playlists:
+            self._chosen_playlists.update(chosen)
+            self.playlistsChanged.emit()
+            self.changed.emit()
+
+    def set_playlist_checked(self, playlist_id: int, checked: bool) -> bool:
+        """Choose a Playlist and tick its Tracks, or stop syncing it.
+
+        Unchoosing unticks only Tracks that aren't on the iPod and aren't in
+        another chosen Playlist, so it never plans removing anything.
+        """
+
+        tracks = self._playlists.get(playlist_id)
+        if tracks is None or (playlist_id in self._chosen_playlists) == checked:
+            return False
+        if checked:
+            self._chosen_playlists.add(playlist_id)
+            changed_tracks = self.set_tracks_checked(tracks, True)
+        else:
+            self._chosen_playlists.discard(playlist_id)
+            kept = {
+                track_id
+                for other in self._chosen_playlists
+                for track_id in self._playlists[other]
+            }
+            changed_tracks = self.set_tracks_checked(
+                (
+                    track_id
+                    for track_id in tracks
+                    if track_id not in kept and not self.track_on_ipod(track_id)
+                ),
+                False,
+            )
+        self.playlistsChanged.emit()
+        if not changed_tracks:
+            self.changed.emit()
+        return True
 
     def clear(self) -> None:
         self.preference_error = ""
@@ -454,7 +529,10 @@ class SyncSelection(QObject):
         self._excluded_review_items.clear()
         self._review_plan = None
         self._review_items = frozenset()
+        self._playlists.clear()
+        self._chosen_playlists.clear()
         self.hostSelectionChanged.emit()
+        self.playlistsChanged.emit()
         self.removalSelectionChanged.emit()
         self.reviewSelectionChanged.emit()
         self.changed.emit()

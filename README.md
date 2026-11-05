@@ -52,6 +52,9 @@ Review, so nothing changes on the iPod until you say so.
 * **Music, video and audiobooks** from Plex and Grimmory appear on Sync's Albums,
   Tracks, Movies, TV Shows, Music Videos and Audiobooks pages. Tick what you want;
   each item downloads only when Sync copies it.
+* **Playlists:** tick a Playlist in the sidebar to put it and all its songs on the
+  iPod. Playlists you've synced before stay ticked; unticking one never removes
+  songs already on the iPod.
 * **Photos:** tick Immich Favorites, albums or people. **Update photos** downloads
   them and rescans, keeping every other tick you've made, and their photos are
   ticked for you.
