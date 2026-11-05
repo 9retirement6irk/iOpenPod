@@ -30,7 +30,7 @@ from iOpenPod.app.sync_plan import (
     prepare_sync_plan,
     select_sync_plan,
 )
-from iPodDB.library import MediaType
+from iPodDB.library import LibrarySnapshot, MediaType, Track, TrackMetadata
 from storage import HostPath
 
 SHA = "a" * 64
@@ -391,3 +391,176 @@ def test_sync_downloads_and_converts_a_remote_video(
         assert synced.sync is not None and synced.sync.was_transcoded
     finally:
         device.coordinator.close()
+
+
+def _ipod_songs(*songs: tuple[int, str, str, str, int, int]) -> LibrarySnapshot:
+    """(id, title, artist, album, track number, length) for songs on the iPod."""
+
+    return LibrarySnapshot(
+        tracks=tuple(
+            Track(
+                identity,
+                title,
+                artist,
+                album,
+                length,
+                track_number=number,
+                metadata=TrackMetadata(
+                    location=f"iPod_Control/Music/F00/track-{identity}.m4a"
+                ),
+            )
+            for identity, title, artist, album, number, length in songs
+        )
+    )
+
+
+FLAC_FINGERPRINT = "1,2,3,4"
+
+
+def test_plex_songs_pair_with_songs_added_from_local_flac_files(
+    tmp_path: Path,
+) -> None:
+    """Songs put on the iPod from FLAC files (Acoustic Fingerprints, no Sync
+    record) are the same songs Plex lists: pair by details, copy nothing."""
+
+    from PySide6.QtCore import Qt
+
+    from iOpenPod.app.models.sync_selection import SyncSelection
+
+    ipod_songs = _ipod_songs(
+        (1, "Karma Police", "Radiohead", "OK Computer", 6, 264_000),
+        (2, "Airbag", "Radiohead", "OK Computer", 1, 284_000),
+        (3, "Lucky (Live)", "Radiohead", "Live Album", 4, 300_000),
+        (4, "Only On The iPod", "Someone", "Elsewhere", 1, 200_000),
+    )
+    ipod = _ipod_library(
+        (
+            _ipod_track(track_id=1, fingerprint=FLAC_FINGERPRINT),
+            _ipod_track(track_id=2, fingerprint="5,6,7"),
+            # Synced earlier from a local folder: still kept as it is.
+            _ipod_track(
+                track_id=3,
+                fingerprint="8,9",
+                sync=_sync(tmp_path / "flac/Lucky.flac", size=9_999),
+            ),
+            _ipod_track(track_id=4, fingerprint="10,11"),
+        )
+    )
+    plex = RemoteCatalog(
+        (
+            # Plex spells it differently; the details still agree.
+            item(
+                tmp_path / "Plex/Radiohead/OK Computer/06 Karma Police [1].flac",
+                "plex:s:1",
+                title="karma police",
+                artist="Radiohead",
+                album="OK Computer",
+                track_number=6,
+                length_ms=264_500,
+            ),
+            # Plex renamed the title; album, number and artist agree.
+            item(
+                tmp_path / "Plex/Radiohead/OK Computer/01 Airbag [2].flac",
+                "plex:s:2",
+                title="Airbag (Remastered)",
+                artist="Radiohead",
+                album="OK Computer",
+                track_number=1,
+                length_ms=284_000,
+            ),
+            item(
+                tmp_path / "Plex/Radiohead/Live Album/04 Lucky (Live) [3].flac",
+                "plex:s:3",
+                title="Lucky (Live)",
+                artist="Radiohead",
+                album="Live Album",
+                track_number=4,
+                length_ms=301_000,
+            ),
+            # Same name, different recording length: not the iPod's song.
+            item(
+                tmp_path / "Plex/Someone/Other/01 Only On The iPod [4].flac",
+                "plex:s:4",
+                title="Only On The iPod",
+                artist="Someone",
+                album="Other",
+                track_number=1,
+                length_ms=260_000,
+            ),
+        )
+    )
+    host = merge_remote(_host_library((), (), ()), plex)
+    plan = prepare_sync_plan(host, ipod, ipod_songs)
+    by_key = {entry.ipod_id: entry for entry in plan.items if entry.ipod_id}
+    for track_id in (1, 2, 3):
+        entry = by_key[track_id]
+        assert entry.action is SyncPlanAction.UNCHANGED, entry
+        assert entry.basis is SyncPlanBasis.TRACK_DETAILS_MATCH
+        assert entry.host_path is not None and "Plex" in entry.host_path
+    assert by_key[4].action is SyncPlanAction.REMOVE
+    assert plan.count(SyncPlanAction.ADD) == 1  # only the different recording
+
+    # Paired songs show as on the iPod and ticked, so nothing is copied twice.
+    selection = SyncSelection()
+    selection.reset(host, plan)
+    paired = [t.track_id for t in host.snapshot.tracks if t.title != "Only On The iPod"]
+    assert all(selection.track_on_ipod(i) for i in paired)
+    assert all(selection.track_check_state(i) is Qt.CheckState.Checked for i in paired)
+    assert not any(
+        e.action is SyncPlanAction.ADD and e.ipod_id
+        for e in select_sync_plan(
+            plan,
+            selected_host_paths=selection.selected_host_paths,
+            selected_ipod_removals=frozenset(),
+        ).items
+    )
+
+
+def test_details_pair_only_when_unique_on_both_sides(tmp_path: Path) -> None:
+    """Duplicates on either side are left alone rather than guessed."""
+
+    song = ("Intro", "Band", "Album", 1, 60_000)
+    ipod_songs = _ipod_songs((1, *song), (2, *song))  # the same song twice
+    ipod = _ipod_library(
+        (
+            _ipod_track(track_id=1, fingerprint="1,2"),
+            _ipod_track(track_id=2, fingerprint="3,4"),
+        )
+    )
+    remote = item(
+        tmp_path / "Plex/Band/Album/01 Intro [1].flac",
+        "plex:s:1",
+        title="Intro",
+        artist="Band",
+        album="Album",
+        track_number=1,
+        length_ms=60_000,
+    )
+    plan = prepare_sync_plan(
+        merge_remote(_host_library((), (), ()), RemoteCatalog((remote,))),
+        ipod,
+        ipod_songs,
+    )
+    assert not any(e.basis is SyncPlanBasis.TRACK_DETAILS_MATCH for e in plan.items)
+
+    # Two Plex copies of one iPod song: also left alone.
+    twin = replace(
+        remote, key="plex:s:2", path=HostPath(tmp_path / "Plex/Band/Copy/01 Intro.flac")
+    )
+    plan = prepare_sync_plan(
+        merge_remote(_host_library((), (), ()), RemoteCatalog((remote, twin))),
+        _ipod_library((_ipod_track(track_id=1, fingerprint="1,2"),)),
+        _ipod_songs((1, *song)),
+    )
+    assert not any(e.basis is SyncPlanBasis.TRACK_DETAILS_MATCH for e in plan.items)
+
+    # A local file with an Acoustic Fingerprint pairs by its sound, never by details.
+    local, local_source = _host_track(
+        tmp_path / "Intro.mp3", track_id=9, fingerprint="7,7"
+    )
+    plan = prepare_sync_plan(
+        _host_library((local,), (), (local_source,)),
+        _ipod_library((_ipod_track(track_id=1, fingerprint="1,2"),)),
+        _ipod_songs((1, "Song 9", "Artist", "Album", 0, 180_000)),
+    )
+    assert not any(e.basis is SyncPlanBasis.TRACK_DETAILS_MATCH for e in plan.items)

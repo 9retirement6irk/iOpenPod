@@ -115,6 +115,16 @@ the Plex page (for example an audiobook library, when Grimmory provides audioboo
 contributes no items, and its songs are dropped from Plex playlists; a playlist
 left empty is not listed. New libraries are included until left out.
 
+A Remote Identity can't pair with a song put on the iPod some other way, such
+as from a local FLAC file, whose iPod record holds an Acoustic Fingerprint.
+After pairing by prior path and by content, each still-unpaired Remote Item is
+compared with still-unpaired iPod Tracks by details: the lengths must agree within
+2.5 seconds, and either the title plus the album or artist agree, or the album,
+track and disc number plus the artist or title agree. Names are compared without
+case, accents, punctuation or a leading "The". Only a match unique in both
+directions pairs, and the pair is Unchanged: the iPod copy is kept as it is,
+with its plays, ratings and Playlist entries, and nothing is copied again.
+
 Movie and TV libraries are used only when chosen on the Plex page, for movies,
 music videos (movie-type libraries) or TV shows (TV-type libraries), because
 videos are large. Their movies and episodes become video Remote Items with the

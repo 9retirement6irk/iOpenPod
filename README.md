@@ -166,6 +166,11 @@ Syncing from more than one computer works: a Plex song or Grimmory book already 
 the iPod is recognized on any computer, even one that hasn't downloaded it, so it
 shows as ticked and isn't copied again.
 
+Songs already on your iPod from before, for example FLAC files you added by
+hand, are recognized as the same Plex songs when their title, artist, album,
+track number and length agree, so they show as ticked and aren't copied again.
+When a match isn't certain (two similar songs), the song is left alone.
+
 ![Settings → Sync with the Plex scrobbling switch and the media cache settings](docs/screenshots/fork/settings-sync.webp)
 
 ## Privacy and safety

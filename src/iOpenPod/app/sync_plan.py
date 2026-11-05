@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import unicodedata
 from collections import defaultdict
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
@@ -396,6 +397,9 @@ def prepare_sync_plan(
         pairs,
         attention,
     )
+    detail_pairs = _pair_remote_by_details(
+        host_candidates, ipod_candidates, host_remaining, ipod_remaining
+    )
 
     items = [
         _paired_item(
@@ -403,6 +407,16 @@ def prepare_sync_plan(
         )
         for host_index, ipod_index in pairs
     ]
+    # Already on the iPod from another source: keep the iPod copy as it is.
+    items.extend(
+        _item(
+            SyncPlanAction.UNCHANGED,
+            SyncPlanBasis.TRACK_DETAILS_MATCH,
+            host_candidates[host_index],
+            ipod_candidates[ipod_index],
+        )
+        for host_index, ipod_index in detail_pairs
+    )
     items.extend(_host_only_item(host_candidates[index]) for index in host_remaining)
     items.extend(_ipod_only_item(ipod_candidates[index]) for index in ipod_remaining)
     items.extend(attention)
@@ -827,6 +841,118 @@ def _pair_by_content(
         attention,
         review_video=True,
     )
+
+
+_DETAIL_LENGTH_TOLERANCE_MS = 2_500
+
+
+def _comparable(value: str) -> str:
+    """Case, accents, punctuation and a leading "The" don't separate names."""
+
+    text = unicodedata.normalize("NFKD", value).casefold()
+    text = "".join(c for c in text if c.isalnum() or c.isspace())
+    words = text.split()
+    if len(words) > 1 and words[0] == "the":
+        words = words[1:]
+    return " ".join(words)
+
+
+def _details_match(host: Track, ipod: Track) -> bool:
+    """Whether a Remote Item and an iPod Track describe the same recording."""
+
+    if host.length_ms > 0 and ipod.length_ms > 0:
+        if abs(host.length_ms - ipod.length_ms) > _DETAIL_LENGTH_TOLERANCE_MS:
+            return False
+        lengths_known = True
+    else:
+        lengths_known = False
+    title = _comparable(host.title) == _comparable(ipod.title) != ""
+    album = _comparable(host.album) == _comparable(ipod.album) != ""
+    artist = bool(
+        {_comparable(host.artist), _comparable(host.effective_album_artist)}
+        & {_comparable(ipod.artist), _comparable(ipod.effective_album_artist)} - {""}
+    )
+    host_disc = host.metadata.disc_number or 1
+    ipod_disc = ipod.metadata.disc_number or 1
+    number = (
+        host.track_number > 0
+        and host.track_number == ipod.track_number
+        and host_disc == ipod_disc
+    )
+    if not lengths_known:
+        return title and album and artist
+    return (title and (album or artist)) or (album and number and (artist or title))
+
+
+def _pair_remote_by_details(
+    hosts: tuple[_Candidate, ...],
+    ipods: tuple[_Candidate, ...],
+    host_remaining: set[int],
+    ipod_remaining: set[int],
+) -> list[tuple[int, int]]:
+    """Pair Remote Items with iPod Tracks put there some other way, by details.
+
+    A Remote Identity names a server item, not its sound, so a song copied to the
+    iPod from a local file (an Acoustic Fingerprint) never pairs by content. Each
+    unpaired Remote Item is compared with unpaired iPod Tracks by title, artist,
+    album, track number and length; only a match that is unique in both
+    directions pairs, so similar recordings are left alone.
+    """
+
+    def remote(candidate: _Candidate) -> bool:
+        return (
+            candidate.media_kind is SyncPlanMediaKind.TRACK
+            and candidate.track is not None
+            and is_remote_identity(candidate.fingerprint)
+        )
+
+    host_indexes = [i for i in sorted(host_remaining) if remote(hosts[i])]
+    if not host_indexes:
+        return []
+    by_title: dict[str, list[int]] = defaultdict(list)
+    by_number: dict[tuple[str, int], list[int]] = defaultdict(list)
+    ipod_tracks: dict[int, Track] = {}
+    for index in sorted(ipod_remaining):
+        candidate = ipods[index]
+        track = candidate.track
+        if (
+            candidate.media_kind is not SyncPlanMediaKind.TRACK
+            or track is None
+            or is_remote_identity(candidate.fingerprint)
+        ):
+            continue
+        ipod_tracks[index] = track
+        by_title[_comparable(track.title)].append(index)
+        if track.track_number > 0:
+            by_number[(_comparable(track.album), track.track_number)].append(index)
+
+    matches: dict[int, list[int]] = {}
+    claims: dict[int, int] = defaultdict(int)
+    for host_index in host_indexes:
+        host_track = hosts[host_index].track
+        assert host_track is not None
+        nearby = {
+            *by_title.get(_comparable(host_track.title), ()),
+            *by_number.get(
+                (_comparable(host_track.album), host_track.track_number), ()
+            ),
+        }
+        found = [
+            ipod_index
+            for ipod_index in sorted(nearby)
+            if hosts[host_index].has_video == bool(ipods[ipod_index].has_video)
+            and _details_match(host_track, ipod_tracks[ipod_index])
+        ]
+        matches[host_index] = found
+        for ipod_index in found:
+            claims[ipod_index] += 1
+    pairs: list[tuple[int, int]] = []
+    for host_index, found in matches.items():
+        if len(found) == 1 and claims[found[0]] == 1:
+            host_remaining.remove(host_index)
+            ipod_remaining.remove(found[0])
+            pairs.append((host_index, found[0]))
+    return pairs
 
 
 def _pair_unique_groups[Key](
