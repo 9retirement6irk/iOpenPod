@@ -23,6 +23,8 @@ from xml.etree import ElementTree
 
 from scripts.prepare_release_sources import read_manifest, verify
 
+from iOpenPod.app.updates.releases import numeric_version
+
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
@@ -258,7 +260,7 @@ def inspect_msix(
         expected = {
             "Name": identity["name"],
             "Publisher": identity["publisher"],
-            "Version": version + ".0",
+            "Version": numeric_version(version),
             "ProcessorArchitecture": "x64",
         }
         if any(package_identity.get(key) != value for key, value in expected.items()):

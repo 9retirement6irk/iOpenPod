@@ -22,6 +22,7 @@ from scripts import check_windows_bundle, package_app
 
 import iopenpod_launcher as entrypoint
 from iOpenPod.app.core import runtime
+from iOpenPod.app.updates.releases import numeric_version
 
 
 def test_smoke_test_reports_missing_gui_startup_dependency(tmp_path: Path) -> None:
@@ -343,7 +344,7 @@ def test_msix_cli_stages_saved_identity_and_explicit_overrides(
     assert identity.attrib == {
         "Name": expected[0],
         "Publisher": expected[1],
-        "Version": package_app.project_version() + ".0",
+        "Version": numeric_version(package_app.project_version()),
         "ProcessorArchitecture": "x64",
     }
     assert (

@@ -23,21 +23,25 @@ from xml.sax.saxutils import escape
 from packaging.requirements import Requirement
 from PIL import Image
 
+from iOpenPod.app.updates.releases import numeric_version, release_label, version_tuple
+
 ROOT = Path(__file__).resolve().parents[1]
 GENERATED = ROOT / "build/packaging"
 APP_ID = "io.github.therealsavi.iOpenPod"
 
 
 def project_version() -> str:
+    """The release label, such as "2.1.3-1" (upstream 2.1.3, fork revision 1)."""
+
     with (ROOT / "pyproject.toml").open("rb") as stream:
         value = str(tomllib.load(stream)["project"]["version"])
-    if re.fullmatch(r"\d+\.\d+\.\d+", value) is None:
+    try:
+        return release_label(value)
+    except ValueError as error:
         raise ValueError(
-            "Native packaging requires a numeric major.minor.patch version"
-        )
-    if any(int(part) > 65535 for part in value.split(".")):
-        raise ValueError("Version components must fit the MSIX 16-bit fields")
-    return value
+            "Native packaging requires a numeric major.minor.patch[.postN] version"
+            " whose parts fit the MSIX 16-bit fields"
+        ) from error
 
 
 def generate_assets() -> None:
@@ -59,7 +63,7 @@ def generate_assets() -> None:
                 tiles / f"{name}.png"
             )
     version = project_version()
-    fields = (*map(int, version.split(".")), 0)
+    fields = version_tuple(version)
     (GENERATED / "windows-version.txt").write_text(
         "VSVersionInfo(ffi=FixedFileInfo("
         f"filevers={fields!r}, prodvers={fields!r}, mask=0x3f, flags=0, "
@@ -67,7 +71,7 @@ def generate_assets() -> None:
         "StringFileInfo([StringTable('040904B0', ["
         "StringStruct('ProductName', 'iOpenPod'), "
         "StringStruct('FileDescription', 'iOpenPod'), "
-        f"StringStruct('FileVersion', '{version}.0'), "
+        f"StringStruct('FileVersion', '{numeric_version(version)}'), "
         f"StringStruct('ProductVersion', '{version}')"
         "])]), VarFileInfo([VarStruct('Translation', [1033, 1200])])])\n",
         encoding="utf-8",
@@ -274,7 +278,7 @@ def stage_msix(
         "IDENTITY": identity,
         "PUBLISHER": publisher,
         "PUBLISHER_DISPLAY_NAME": display_name,
-        "VERSION": project_version() + ".0",
+        "VERSION": numeric_version(project_version()),
         "ARCH": arch,
     }.items():
         template = template.replace(f"@{name}@", escape(value, {'"': "&quot;"}))

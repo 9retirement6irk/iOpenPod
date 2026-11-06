@@ -22,11 +22,15 @@ def prepare(
 ) -> ReleaseRequest:
     with (root / "pyproject.toml").open("rb") as stream:
         version = str(tomllib.load(stream)["project"]["version"])
-    if re.fullmatch(r"\d+\.\d+\.\d+", version) is None or any(
-        int(part) > 65535 for part in version.split(".")
-    ):
-        raise ValueError("Native releases require a numeric major.minor.patch version")
-    tag = f"v{version}"
+    # Upstream's version plus this fork's revision: 2.1.3.post1 is tagged v2.1.3-1.
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:(?:-|\.post)(\d+))?", version)
+    if match is None or any(int(part or 0) > 65535 for part in match.groups()):
+        raise ValueError(
+            "Native releases require a numeric major.minor.patch[.postN] version"
+        )
+    major, minor, patch, revision = match.groups()
+    label = f"{major}.{minor}.{patch}" + (f"-{revision}" if revision else "")
+    tag = f"v{label}"
     tagged = ref.startswith("refs/tags/")
     publish = event in {"push", "workflow_dispatch"} and tagged
     if tagged and ref != f"refs/tags/{tag}":

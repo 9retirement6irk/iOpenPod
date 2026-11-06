@@ -3,6 +3,7 @@
 import os
 import hashlib
 import json
+import re
 import sys
 import tomllib
 from pathlib import Path
@@ -18,6 +19,12 @@ root = Path(SPECPATH).parent
 generated = root / "build" / "packaging"
 config = tomllib.loads((root / "pyproject.toml").read_text())
 version = config["project"]["version"]
+# 2.1.3.post1 is upstream 2.1.3, fork revision 1: shown as 2.1.3, built as 2.1.3.1.
+_parts = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:(?:-|\.post)(\d+))?", version)
+if _parts is None:
+    raise ValueError(f"Unsupported project version: {version}")
+short_version = ".".join(_parts.groups()[:3])
+bundle_version = ".".join(part for part in _parts.groups() if part)
 datas = [(str(generated / "licenses"), "licenses")]
 datas += [(str(generated / "updates/installation.json"), "updates")]
 if sys.platform != "darwin":
@@ -130,8 +137,8 @@ if sys.platform == "darwin":
         bundle_identifier="com.iopenpod.app",
         info_plist={
             "CFBundleDisplayName": "iOpenPod",
-            "CFBundleShortVersionString": version,
-            "CFBundleVersion": version,
+            "CFBundleShortVersionString": short_version,
+            "CFBundleVersion": bundle_version,
             "NSPrincipalClass": "NSApplication",
             "NSHighResolutionCapable": True,
             "LSMinimumSystemVersion": config["tool"]["iopenpod"]["packaging"][

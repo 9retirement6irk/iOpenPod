@@ -170,3 +170,31 @@ def test_retained_evidence_rejects_rollback_and_same_sequence_substitution() -> 
 def test_versions_cannot_be_used_as_arbitrary_paths(version: str) -> None:
     with pytest.raises(ValueError):
         version_tuple(version)
+
+
+@pytest.mark.parametrize("version", ["2.1.3-", "2.1.3.post", "2.1.3-01", "2.1.3-65536"])
+def test_fork_revisions_are_whole_numbers(version: str) -> None:
+    with pytest.raises(ValueError):
+        version_tuple(version)
+
+
+def test_fork_revisions_follow_their_upstream_version() -> None:
+    """This fork's releases are upstream's version plus a revision: 2.1.3-1."""
+
+    from iOpenPod.app.updates.releases import (
+        bundle_version,
+        numeric_version,
+        release_label,
+    )
+
+    assert version_tuple("2.1.3") == (2, 1, 3, 0)
+    assert version_tuple("2.1.3-1") == version_tuple("2.1.3.post1") == (2, 1, 3, 1)
+    # Earlier fork releases see a revision as newer; the next upstream is newer still.
+    ordered = ["2.1.2", "2.1.3", "2.1.3-1", "2.1.3-2", "2.1.3-10", "2.1.4", "2.1.4-1"]
+    assert sorted(ordered, key=version_tuple) == ordered
+    assert release_label("2.1.3.post1") == "2.1.3-1"
+    assert release_label("2.1.3") == "2.1.3"
+    assert numeric_version("2.1.3.post1") == "2.1.3.1"
+    assert numeric_version("2.1.3") == "2.1.3.0"
+    assert bundle_version("2.1.3.post1") == "2.1.3.1"
+    assert bundle_version("2.1.3") == "2.1.3"

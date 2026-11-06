@@ -203,6 +203,9 @@ build needs glibc 2.39 or later.
 Chromaprint's `fpcalc` is optional for acoustic matching. **Settings → Media
 Tools → Set Up Media Tools** can install them for you.
 
+**Versions.** A release such as **v2.1.3-1** contains upstream iOpenPod 2.1.3
+plus this fork's revision 1.
+
 **Updates.** Builds of this fork check *this fork's* releases, never upstream's,
 so an update can never replace them with a version without Connected Sources.
 When a newer release is out, **Settings → About → Check for updates** links to its
@@ -259,9 +262,14 @@ servers. Recreate them with:
 uv run python -m scripts.capture_fork_screenshots
 ```
 
-**Releasing.** Raise `version` in `pyproject.toml` (and `uv.lock`), push to
-`main`, then run **Actions → Build and release** on `main` with **Publish**
-ticked. The workflow creates the `v<version>` tag and the release itself.
+**Releasing.** Releases are named after the upstream iOpenPod version they're
+built on, plus this fork's revision: **v2.1.3-1** is upstream 2.1.3 with this
+fork's first release on top, **v2.1.3-2** the next, and after merging upstream
+2.1.4 the count starts again at **v2.1.4-1**. In `pyproject.toml` (and
+`uv.lock`) that's written the Python way, `version = "2.1.3.post1"`. Raise it,
+push to `main`, then run **Actions → Build and release** on `main` with
+**Publish** ticked. The workflow creates the `v2.1.3-1` tag and the release
+itself. Windows and macOS builds carry it as `2.1.3.1`.
 
 ## License and credits
 

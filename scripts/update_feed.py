@@ -29,6 +29,7 @@ from iOpenPod.app.updates.releases import (
     TARGET_LAYOUTS,
     TARGET_SUFFIXES,
     ReleaseFloor,
+    bundle_version,
     read_json,
     verify_release,
     version_tuple,
@@ -113,10 +114,9 @@ def executable_digest(
                 keys,
             )
             info = plistlib.loads(package.read(prefix + "Info.plist"))
-            if (
-                info.get("SUPublicEDKey") != keys[0]
-                or info.get("CFBundleVersion") != version
-            ):
+            if info.get("SUPublicEDKey") != keys[0] or info.get(
+                "CFBundleVersion"
+            ) != bundle_version(version):
                 raise ValueError(
                     "macOS release does not pin the signing key and version"
                 )

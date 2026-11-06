@@ -94,8 +94,14 @@ def assemble(
         raise ValueError(f"Output must be a new directory: {output}")
     with (root / "pyproject.toml").open("rb") as stream:
         project = tomllib.load(stream)
-    version = str(project["project"]["version"])
-    if re.fullmatch(r"\d+\.\d+\.\d+", version) is None or tag != f"v{version}":
+    package = str(project["project"]["version"])
+    # 2.1.3.post1 in the package is release 2.1.3-1 (upstream 2.1.3, fork revision 1).
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:(?:-|\.post)(\d+))?", package)
+    if match is None:
+        raise ValueError(f"Unsupported project version: {package}")
+    major, minor, patch, revision = match.groups()
+    version = f"{major}.{minor}.{patch}" + (f"-{revision}" if revision else "")
+    if tag != f"v{version}":
         raise ValueError(f"Tag must exactly match the project version: v{version}")
     if re.fullmatch(r"[0-9a-fA-F]{40}", commit) is None:
         raise ValueError("Commit must be a full 40-character hexadecimal SHA")
@@ -125,7 +131,7 @@ def assemble(
                 raise ValueError(f"Invalid dependency inventory entry: {target}")
             inventory_packages.append((package_name, package_version))
         if not any(
-            name.lower() == "iopenpod" and package_version == version
+            name.lower() == "iopenpod" and package_version in {package, version}
             for name, package_version in inventory_packages
         ):
             raise ValueError(

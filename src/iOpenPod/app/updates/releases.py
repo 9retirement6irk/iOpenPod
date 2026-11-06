@@ -44,13 +44,43 @@ _LEGACY_TARGET_SUFFIXES = {
 }
 
 
-def version_tuple(value: str) -> tuple[int, int, int]:
-    if re.fullmatch(r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)", value) is None:
+# Upstream's major.minor.patch, then this fork's revision: "2.1.3-1", written
+# "2.1.3.post1" in Python package metadata. A plain "2.1.3" is revision 0.
+_RELEASE_VERSION = re.compile(
+    r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:(?:-|\.post)(0|[1-9]\d*))?"
+)
+
+
+def version_tuple(value: str) -> tuple[int, int, int, int]:
+    """(major, minor, patch, fork revision), for comparing release versions."""
+
+    match = _RELEASE_VERSION.fullmatch(value)
+    if match is None:
         raise ValueError(f"Unsupported release version: {value}")
-    parts = tuple(int(part) for part in value.split("."))
-    if any(part > 65535 for part in parts):
+    major, minor, patch, revision = (int(part or 0) for part in match.groups())
+    if any(part > 65535 for part in (major, minor, patch, revision)):
         raise ValueError("Release version component exceeds 65535")
-    return parts[0], parts[1], parts[2]
+    return major, minor, patch, revision
+
+
+def release_label(value: str) -> str:
+    """How a version is shown and tagged: "2.1.3-1", or "2.1.3" for revision 0."""
+
+    major, minor, patch, revision = version_tuple(value)
+    base = f"{major}.{minor}.{patch}"
+    return f"{base}-{revision}" if revision else base
+
+
+def bundle_version(value: str) -> str:
+    """The macOS bundle version: "2.1.3", or "2.1.3.1" for fork revision 1."""
+
+    return release_label(value).replace("-", ".")
+
+
+def numeric_version(value: str) -> str:
+    """Four numbers, for Windows file versions, MSIX and macOS bundle versions."""
+
+    return ".".join(str(part) for part in version_tuple(value))
 
 
 def _object(value: object) -> dict[str, object]:

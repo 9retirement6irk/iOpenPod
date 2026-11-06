@@ -24,6 +24,8 @@ from xml.etree import ElementTree
 from scripts import build_windows_sndfile, package_app
 from scripts.check_windows_bundle import check_windows_bundle
 
+from iOpenPod.app.updates.releases import numeric_version
+
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_NAMESPACE = "{http://schemas.microsoft.com/appx/manifest/foundation/windows10}"
 
@@ -126,7 +128,7 @@ def check_msix(package: Path, executable: Path, version: str) -> None:
         expected_identity = {
             "Name": name,
             "Publisher": publisher,
-            "Version": version + ".0",
+            "Version": numeric_version(version),
             "ProcessorArchitecture": "x64",
         }
         if identity is None or any(

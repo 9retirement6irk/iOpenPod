@@ -143,3 +143,21 @@ def test_invalid_requests_are_rejected(
 ) -> None:
     with pytest.raises(ValueError, match=reason):
         prepare(checkout, event=event, ref=ref, publish_requested=requested)
+
+
+def test_fork_revisions_are_tagged_with_a_dash(checkout: Path) -> None:
+    """Upstream 2.1.3, fork revision 1, is 2.1.3.post1 and released as v2.1.3-1."""
+
+    root = checkout
+    (root / "pyproject.toml").write_text('[project]\nversion = "2.1.3.post1"\n')
+    request = prepare(
+        root, event="workflow_dispatch", ref="refs/heads/main", publish_requested=True
+    )
+    assert request.tag == "v2.1.3-1" and request.publish and request.create_tag
+    with pytest.raises(ValueError, match=r"Release tag must equal v2\.1\.3-1"):
+        prepare(
+            root,
+            event="push",
+            ref="refs/tags/v2.1.3.post1",
+            publish_requested=False,
+        )
