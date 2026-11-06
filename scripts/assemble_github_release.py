@@ -101,6 +101,10 @@ def assemble(
         raise ValueError(f"Unsupported project version: {package}")
     major, minor, patch, revision = match.groups()
     version = f"{major}.{minor}.{patch}" + (f"-{revision}" if revision else "")
+    # Python packages use the normalized spelling: iopenpod-2.1.3.post1.
+    python_version = f"{major}.{minor}.{patch}" + (
+        f".post{revision}" if revision else ""
+    )
     if tag != f"v{version}":
         raise ValueError(f"Tag must exactly match the project version: v{version}")
     if re.fullmatch(r"[0-9a-fA-F]{40}", commit) is None:
@@ -131,7 +135,8 @@ def assemble(
                 raise ValueError(f"Invalid dependency inventory entry: {target}")
             inventory_packages.append((package_name, package_version))
         if not any(
-            name.lower() == "iopenpod" and package_version in {package, version}
+            name.lower() == "iopenpod"
+            and package_version in {package, version, python_version}
             for name, package_version in inventory_packages
         ):
             raise ValueError(
@@ -172,11 +177,11 @@ def assemble(
     inputs.extend(
         (name, regular_file(windows, "dist/" + name))
         for name in (
-            f"iopenpod-{version}-py3-none-any.whl",
-            f"iopenpod-{version}.tar.gz",
+            f"iopenpod-{python_version}-py3-none-any.whl",
+            f"iopenpod-{python_version}.tar.gz",
         )
     )
-    _check_sdist(windows / "dist" / f"iopenpod-{version}.tar.gz")
+    _check_sdist(windows / "dist" / f"iopenpod-{python_version}.tar.gz")
     manifest = regular_file(root, "packaging/third-party/sources.json")
     records = read_manifest(manifest)
     if not records:

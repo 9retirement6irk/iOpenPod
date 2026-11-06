@@ -46,17 +46,18 @@ jobs:
       - name: Validate the requested version
         env:
           UPDATE_VERSION: ${{ inputs.version }}
-        run: uv run --no-sync python -c 'import os; from iOpenPod.app.updates.releases import version_tuple; version_tuple(os.environ["UPDATE_VERSION"])'
+        # Fork revisions (2.1.3.post1) publish under their release label (2.1.3-1).
+        run: uv run --no-sync python -c 'import os; from pathlib import Path; from iOpenPod.app.updates.releases import release_label; Path(os.environ["GITHUB_ENV"]).open("a").write("RELEASE_LABEL=" + release_label(os.environ["UPDATE_VERSION"]) + "\n")'
       - name: Download the public native release assets
         env:
           GH_TOKEN: ${{ github.token }}
           UPDATE_VERSION: ${{ inputs.version }}
         run: |
-          gh release download "v$UPDATE_VERSION" --repo "$GITHUB_REPOSITORY" --dir build/update-archives --pattern "iOpenPod-$UPDATE_VERSION-*.zip"
-          gh release download "v$UPDATE_VERSION" --repo "$GITHUB_REPOSITORY" --dir build/update-archives --pattern "iOpenPod-$UPDATE_VERSION-*.tar.gz"
+          gh release download "v$RELEASE_LABEL" --repo "$GITHUB_REPOSITORY" --dir build/update-archives --pattern "iOpenPod-$RELEASE_LABEL-*.zip"
+          gh release download "v$RELEASE_LABEL" --repo "$GITHUB_REPOSITORY" --dir build/update-archives --pattern "iOpenPod-$RELEASE_LABEL-*.tar.gz"
       - name: Authenticate, sign, and publish the feeds atomically
         env:
           GH_TOKEN: ${{ github.token }}
           UPDATE_VERSION: ${{ inputs.version }}
           IOPENPOD_UPDATE_PRIVATE_KEY: ${{ secrets.IOPENPOD_UPDATE_PRIVATE_KEY }}
-        run: uv run --no-sync python -m scripts.publish_update_feed "$UPDATE_VERSION" build/update-archives build/signed-feed
+        run: uv run --no-sync python -m scripts.publish_update_feed "$RELEASE_LABEL" build/update-archives build/signed-feed

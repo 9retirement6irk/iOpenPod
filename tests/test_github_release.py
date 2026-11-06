@@ -18,6 +18,19 @@ COMMIT = "a" * 40
 
 @pytest.fixture
 def release_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    return _release_root(tmp_path, monkeypatch, "2.0.0", "2.0.0", "2.0.0")
+
+
+def _release_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    package: str,
+    label: str,
+    python: str,
+) -> Path:
+    """A release tree for pyproject ``package``: files named ``label`` for apps
+    and ``python`` (normalized) for the Python packages."""
+
     def write(relative: str, content: str = "source\n") -> Path:
         path = tmp_path / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -26,7 +39,7 @@ def release_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
     write(
         "pyproject.toml",
-        '[project]\nversion="2.0.0"\n[tool.iopenpod.packaging]\nmacos-minimum-version="12.3"\n',
+        f'[project]\nversion="{package}"\n[tool.iopenpod.packaging]\nmacos-minimum-version="12.3"\n',
     )
     for name in (
         "uv.lock",
@@ -64,15 +77,15 @@ def release_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         ("ubuntu-24.04", "Linux-x86_64.tar.gz", None),
     ):
         prefix = f"build/candidates/candidate-{target}"
-        name = f"iOpenPod-2.0.0-{suffix}"
+        name = f"iOpenPod-{label}-{suffix}"
         archive = write(prefix + "/dist/" + name, target)
         write(prefix + "/dist/" + name + ".sha256", f"{sha256(archive)}  {name}\n")
         write(
             prefix + "/build/packaging/licenses/inventory.json",
-            json.dumps([{"name": "iOpenPod", "version": "2.0.0"}]),
+            json.dumps([{"name": "iOpenPod", "version": python}]),
         )
         if architecture:
-            dmg_name = f"iOpenPod-2.0.0-macOS-{architecture}.dmg"
+            dmg_name = f"iOpenPod-{label}-macOS-{architecture}.dmg"
             dmg = write(prefix + "/dist/" + dmg_name, target + " installer")
             write(
                 prefix + "/dist/" + dmg_name + ".sha256",
@@ -90,14 +103,15 @@ def release_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
                 ),
             )
     write(
-        "build/candidates/candidate-windows-2022/dist/iopenpod-2.0.0-py3-none-any.whl"
+        f"build/candidates/candidate-windows-2022/dist/iopenpod-{python}-py3-none-any.whl"
     )
     sdist = (
-        tmp_path / "build/candidates/candidate-windows-2022/dist/iopenpod-2.0.0.tar.gz"
+        tmp_path
+        / f"build/candidates/candidate-windows-2022/dist/iopenpod-{python}.tar.gz"
     )
     with tarfile.open(sdist, "w:gz") as source_archive:
-        content = b"[project]\nversion='2.0.0'\n"
-        member = tarfile.TarInfo("iopenpod-2.0.0/pyproject.toml")
+        content = f"[project]\nversion='{python}'\n".encode()
+        member = tarfile.TarInfo(f"iopenpod-{python}/pyproject.toml")
         member.size = len(content)
         source_archive.addfile(member, io.BytesIO(content))
     members = tuple(
@@ -140,6 +154,24 @@ def test_assembly_keeps_all_platforms_and_verifiable_source(release_root: Path) 
         assert "notices/dependency.txt" in archive.getnames()
     with pytest.raises(ValueError, match="new directory"):
         release.assemble("v2.0.0", COMMIT, root=release_root)
+
+
+def test_fork_revisions_assemble_under_their_release_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """2.0.0.post1 is released as v2.0.0-1; its wheel keeps the Python spelling."""
+
+    root = _release_root(tmp_path, monkeypatch, "2.0.0.post1", "2.0.0-1", "2.0.0.post1")
+    output = release.assemble("v2.0.0-1", COMMIT, root=root)
+    record = json.loads((output / "release.json").read_text())
+    assert record["version"] == "2.0.0-1"
+    for _target, suffix, _ in release.TARGETS:
+        assert (output / f"iOpenPod-2.0.0-1-{suffix}").is_file()
+    assert (output / "iopenpod-2.0.0.post1-py3-none-any.whl").is_file()
+    assert (output / "iopenpod-2.0.0.post1.tar.gz").is_file()
+    shutil.rmtree(output)
+    with pytest.raises(ValueError, match="Tag must exactly match"):
+        release.assemble("v2.0.0.post1", COMMIT, root=root)
 
 
 def test_publication_uploads_native_archives_and_mac_install_images(
