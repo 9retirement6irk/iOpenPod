@@ -11,6 +11,7 @@ import gzip
 import hashlib
 import html
 import json
+import re
 import shutil
 import subprocess
 import tarfile
@@ -22,8 +23,6 @@ from urllib.parse import quote, unquote
 from xml.etree import ElementTree
 
 from scripts.prepare_release_sources import read_manifest, verify
-
-from iOpenPod.app.updates.releases import numeric_version
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -81,6 +80,18 @@ PACKAGE_LICENSE_PREFIX = "app/_internal/licenses/"
 
 class ByteReader(Protocol):
     def read(self, size: int = -1, /) -> bytes: ...
+
+
+def _numeric_version(version: str) -> str:
+    """The MSIX version: 2.1.3.post1 (released as 2.1.3-1) is 2.1.3.1.
+
+    Release assembly runs without the app installed, so this can't import it.
+    """
+
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:(?:-|\.post)(\d+))?", version)
+    if match is None:
+        raise ValueError(f"Unsupported project version: {version}")
+    return ".".join(part or "0" for part in match.groups())
 
 
 def stream_sha256(stream: ByteReader) -> str:
@@ -260,7 +271,7 @@ def inspect_msix(
         expected = {
             "Name": identity["name"],
             "Publisher": identity["publisher"],
-            "Version": numeric_version(version),
+            "Version": _numeric_version(version),
             "ProcessorArchitecture": "x64",
         }
         if any(package_identity.get(key) != value for key, value in expected.items()):

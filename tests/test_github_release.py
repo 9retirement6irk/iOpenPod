@@ -342,3 +342,26 @@ def test_overlarge_asset_is_rejected(
     monkeypatch.setattr(release, "_source_archives", skip_source_archives)
     with pytest.raises(ValueError, match="2 GiB limit"):
         release.assemble("v2.0.0", COMMIT, root=release_root)
+
+
+def test_release_assembly_runs_without_the_app_installed() -> None:
+    """The publish job runs assembly with only the standard library."""
+
+    import subprocess
+    import sys
+
+    root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-S",
+            "-c",
+            "import sys; sys.path.insert(0, sys.argv[1]); "
+            "import scripts.assemble_github_release",
+            str(root),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
