@@ -318,6 +318,7 @@ class _SyncLibraryNavigation(QFrame):
     def set_available_pages(self, pages: frozenset[PageId]) -> None:
         for page_id, button in self._buttons.items():
             button.setVisible(page_id in pages)
+        self.playlist_tree.setVisible(PageId.PLAYLISTS in pages)
 
     def add_connected(self, page_id: PageId, glyph: str) -> None:
         """A CONNECTED entry (photos, notes, calendars, contacts) below the media."""
@@ -402,6 +403,8 @@ class SyncWorkspace(QWidget):
         self._playlist_preview: tuple[PlaylistSyncReviewItem, ...] = ()
         self._storage_bar = SyncStorageBar(theme_manager, self)
         self.browser: HostLibraryBrowser | None = None
+        self._supported_pages = self.library_page_ids
+        self._visible_pages: frozenset[PageId] = frozenset()
         self._stream_profile: DeviceProfile | None = None
         self._stream_dialog: MediaStreamsDialog | None = None
         self._connected_pages: dict[PageId, QWidget] = {}
@@ -688,11 +691,33 @@ class SyncWorkspace(QWidget):
                 reset()  # read the servers again on the next visit
         self._refresh_stream_error()
         self._stream_error_label.setVisible(bool(self.selection.preference_error))
-        self._show_library_page(PageId.ALBUMS.value)
+        self._refresh_library_navigation()
         self.show_selection()
 
     def set_available_pages(self, pages: frozenset[PageId]) -> None:
-        self._library_navigation.set_available_pages(pages)
+        self._supported_pages = pages
+        self._refresh_library_navigation()
+
+    def _refresh_library_navigation(self) -> None:
+        browser = self.browser
+        self._visible_pages = (
+            browser.populated_pages & self._supported_pages
+            if browser is not None
+            else frozenset()
+        )
+        self._library_navigation.set_available_pages(self._visible_pages)
+        self._library_stack.setVisible(bool(self._visible_pages))
+        if browser is None:
+            return
+        current = self._library_stack.currentWidget()
+        for page_id, page in browser.page_widgets.items():
+            if page_id in self._visible_pages and page is current:
+                self._show_library_page(page_id.value)
+                return
+        for page_id in browser.page_widgets:
+            if page_id in self._visible_pages:
+                self._show_library_page(page_id.value)
+                return
 
     def show_selection(self) -> None:
         self._set_stage(SyncStage.SELECT)
@@ -877,6 +902,8 @@ class SyncWorkspace(QWidget):
             return
         browser = self.browser
         if browser is None:
+            return
+        if page_id not in self._visible_pages:
             return
         page = browser.page_widgets.get(page_id)
         if page is None:

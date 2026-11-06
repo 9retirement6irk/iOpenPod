@@ -335,6 +335,10 @@ separate Apple Silicon (`macos-15`) and Intel (`macos-15-intel`) candidates. The
 newer runners establish buildability and launch on their own OS; **execution on
 macOS 12.3 on each architecture remains pending acceptance**.
 
+Build and release, Health, and signed update-feed jobs use `macos-15` for Apple
+Silicon after [GitHub retired macOS 14 runners](https://github.com/actions/runner-images/issues/13518)
+on November 2, 2026. Release assembly consumes `candidate-macos-15` artifacts.
+
 ### Build for macOS 12.3
 
 Use UV **0.12.7**, whose managed Python manifest supplies the inspected runtime.

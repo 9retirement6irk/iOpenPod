@@ -41,6 +41,8 @@ class LayoutTokens:
     device_summary_image_size: int = 224
     device_summary_identity_width: int = 640
     device_summary_border_width: int = 1
+    start_logo_size: int = 160
+    start_action_width: int = 200
     device_storage_bar_height: int = 18
     scrollbar_extent: int = 10
     scrollbar_handle_minimum: int = 36
@@ -71,7 +73,10 @@ class LayoutTokens:
     playback_row_height: int = 64
     playback_row_artwork_size: int = 44
     playback_pane_animation_ms: int = 180
+    page_fade_animation_ms: int = 180
     selection_group_animation_ms: int = 200
+    grid_scroll_animation_ms: int = 140
+    grid_scroll_line_height: int = 32
     sync_scan_panel_minimum_width: int = 520
     sync_scan_panel_maximum_width: int = 720
     sync_storage_bar_height: int = 10

@@ -56,7 +56,13 @@ def release_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         ),
     )
     write("packaging/third-party/notices/dependency.txt", "Upstream license")
-    for target, suffix, architecture in release.TARGETS:
+    # Model the workflow's artifact handoff independently of the assembler.
+    for target, suffix, architecture in (
+        ("windows-2022", "Windows-x86_64.zip", None),
+        ("macos-15", "sparkle-update-macOS-arm64.zip", "arm64"),
+        ("macos-15-intel", "sparkle-update-macOS-x86_64.zip", "x86_64"),
+        ("ubuntu-24.04", "Linux-x86_64.tar.gz", None),
+    ):
         prefix = f"build/candidates/candidate-{target}"
         name = f"iOpenPod-2.0.0-{suffix}"
         archive = write(prefix + "/dist/" + name, target)

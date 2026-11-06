@@ -822,6 +822,14 @@ the Host while the current Track is analyzed. Count and retained-byte limits bou
 staging; oversized inputs and Host capacity failures retain direct device reads.
 The capture supplies the initial source fingerprint. Persisted Phase metadata
 receipts bind content provenance to source/chart paths and filesystem identities.
+Library writes gate Phase preparation on changes to the selected Playlist or its
+member audio inputs; unrelated writes retain the Phase selection precondition
+without evaluating caches or discovering runtimes. Chart compatibility ignores
+CPU/CUDA/MPS placement and matching wheel build suffixes, including legacy
+provenance, while preserving the actual producer record. Request-scoped Skip
+actions stop unfinished work and continue publication with only fully verified
+completed charts and cache hits. Unfinished Tracks stay in the Playlist but are
+omitted from the Phase Library until a later relevant edit. See ADR-0239.
 Matching receipts exclude retained inputs from audio reads, analysis and transaction
 content dependencies. Membership or ordering changes rebuild only the companion
 index; fresh analysis retains full source hashes and transaction preconditions.
@@ -1637,13 +1645,42 @@ vertical splitter. Back retains the browser instance and its query, sort, groupi
 view mode, and position. Card checkbox and modified selection gestures remain in the
 browser, and selection regrouping does not change an open detail page. See ADR-0072.
 
-The global iPod Library View Mode setting defaults to Split Table. Whole Page Table
+The iPod Library View Mode setting defaults to iTunes 11 style. Whole Page Table
 uses that same detail page for iPod Albums, Artists, Genres, TV Shows, and Music
 Videos, including Albums opened from Artist and Genre list views. Layout changes
 reuse the existing browser and Track table, preserving their models and iPod
 actions. Sync Selection controls remain exclusive to Select Media, whose layout
-does not follow this setting. The choice is persisted through the global settings
-service and applies immediately.
+does not follow this setting. iTunes 11 style inserts an album-colored Track list
+below the selected Album's grid row and pushes subsequent rows down. It displays
+Track number, title, rating, and duration with artwork on the right. Artists and
+Genres instead use list-only browsing and `CollectionAlbumList`: a collection
+heading, counts, playback/queue intents, and lazily materialized Album sections.
+The sections reuse `InlineAlbumPanel` Track selection, activation, and drag behavior
+with two columns, no rating, a title and year, and artwork on the left. Genres add
+an Album Artist byline and use smaller artwork. Existing Track actions bind to each
+materialized section. Only Tracks matching the selected collection enter the rows
+and header actions. See ADR-0235.
+TV Shows uses single-cover cards and detail artwork from the first Track with
+artwork in the show. Its iTunes 11 `InlineTVShowPanel` specializes the shared Album
+panel with Season tabs, Season-specific cover/colors, and virtualized episode
+rows. Rows place number, release date, and duration beside title and a two-line
+elided description. Season changes preserve the expanded grid row and scope its
+playback/queue actions to the displayed episodes. Other layouts retain all show
+Tracks. Host browsing and Select Media retain their existing layout policy.
+See ADR-0238.
+Music Videos reuses `LibraryPage` and its Album grid, single-cover artwork,
+sorting, search, and inline/detail layouts. Its `AlbumListModel` has an explicit
+Music Video scope, also used by the page's Track filter. Album actions and drags
+resolve the summary's Track identities so matching audio Album names cannot cross
+that scope. Host browsing and Select Media share these Album components while
+retaining their own presentation and selection policy. See ADR-0237.
+Movies opts into `TrackPage`'s grid/list toggle, defaulting to artwork/title cards
+in `TrackGridView`. Its existing table and grid share a filtered Track model and
+search, retaining selection when switching. Single clicks only select cards;
+explicit actions use the shared Track action and drag bindings. This presentation
+is independent of the Library View Mode setting. See ADR-0236.
+The choice uses the existing Host settings and individual
+iPod overrides, and applies immediately. See ADR-0126 for setting precedence.
 
 When an Active iPod is available, the pre-Sync workflow then runs an iPod Media Scan.
 The Application Layer loads the versioned, checksummed
@@ -1764,8 +1801,12 @@ re-encodings, changes after the bounded analysis window, and video-only changes.
 If either fingerprint is unavailable, changed Host file facts request replacement.
 Migration reuses existing fingerprint evidence without introducing a new baseline. Tags/artwork-only
 updates retain media locations and payloads; lyrics and optional Rockbox tags share
-one verified file rewrite, whose final size is reflected in iTunesDB. Unchanged
-iTHMB artwork is retained. Separate Host and committed iPod tag fingerprints prevent
+one verified file rewrite, whose final size is reflected in iTunesDB.
+Classic-incompatible ID3v2.4 lyrics layouts automatically convert to ID3v2.3 in
+Storage-owned staging and pass full-text and native-layout verification again.
+Version-specific metadata may be lost on the iPod copy; Host sources and encoded
+audio remain unchanged. No setting or confirmation is required (ADR-0206).
+Unchanged iTHMB artwork is retained. Separate Host and committed iPod tag fingerprints prevent
 repeat Updates after device normalization. An applied Rockbox policy records whether
 embedded tags and the device-specific cover representation need refreshing.
 See ADR-0120. Photos retain
@@ -1783,6 +1824,13 @@ iPod clears the comparison. Sync Selected reserves the clean Library Workspace,
 captures transcoder and Sync settings, revalidates the selected plan and source
 facts, and prepares media concurrently on the Host. Independent preparation
 failures retain existing device media while other selected changes may proceed.
+Incoming Tracks pass iPodDB's per-Track metadata validation before entering the
+shared Library Draft. Metadata-only Updates validate changed fields and current
+Host source facts independently. Invalid items retain their Host path, readable
+Track context and validation reasons in the result; failed replacements retain
+their device media and successful Sync Details. Cancellation, disconnected
+Filesystem Sessions, shared Library validation and publication failures still
+follow the existing stop/recovery contract.
 An isolated Library Draft carries successful media, Photo, artwork, and Playlist
 changes into the existing issued Library Review and ordered Storage Transaction.
 The Library Sync Helper is updated only after verified publication. Device writes
@@ -1814,7 +1862,11 @@ the progress steps with a dedicated result screen showing the actual Sync outcom
 saved change counts, and messages grouped as errors, warnings, and information.
 Warnings alone do not change a successful outcome. Technical details retain diagnostic
 codes and every affected item reference. Restore Previous Library, Retry Cleanup,
-and Keep Current Contents remain available when the result requires them. Pending recovery survives
+and Keep Current Contents remain available when the result requires them.
+**Save Sync report** exports the complete displayed outcome and diagnostics as
+UTF-8 text through Storage's atomic Host-file writer, including all references
+hidden by compact message previews. Cancelling export or failing to save the
+report leaves the Sync outcome intact. Pending recovery survives
 restarts in device journals, with no Host setting. Discovery lists affected iPods
 without preventing selection of other devices. Selecting an affected iPod requires
 a restore-or-keep choice before metadata repair or Library loading. Recovery can
@@ -2368,13 +2420,14 @@ current chapter title to the Track title, including during scrubbing. Hovering a
 marker shows its title and full timestamp with milliseconds; marker geometry and
 hit testing share the styled slider's handle endpoints and layout direction.
 
-For Tracks classified as Audiobooks, the Player action above the rating uses the
-existing book glyph and opens a screen-bounded chapter index instead of Synesthesia.
+For any Track with reachable chapters, the Player shows a book action above the
+rating that opens a screen-bounded chapter index. Non-Audiobook Tracks retain the
+Synesthesia action beside it. Audiobooks show only the book action, including when
+they have no chapters.
 The popup lists the same reachable chapters, highlights the current chapter, and
 routes selection through the ordinary Player seek intent. It owns no transport or
 Library mutation. Selection, Escape, an outside click, or a current-Track change
-dismisses it; a chapterless Audiobook shows an empty state. Other media keep the
-Synesthesia action.
+dismisses it; a chapterless Audiobook shows an empty state.
 The chapter index and statuses popup share one clipped panel animation: a 280 ms
 OutBack entrance with 0.8 overshoot and a 190 ms InCubic exit. The chapter index
 reveals downward from the Player, reversing direction when screen space requires
@@ -2659,6 +2712,48 @@ GUI/
 
 The GUI should remain a consumer of application state and services rather than the owner of application logic.
 
+`StartPage` is the initial route without an Active iPod and the return route when
+the Active iPod is cleared. Its primary **Choose Device** action emits the same
+Device Picker intent as the navigation surfaces. Loading an iPod while this page
+is current opens Albums. Device discovery leaves the action available; selection
+and other exclusive device work use the existing busy state. Settings and other
+explicit navigation remain available, and Sync recovery retains its workspace.
+
+The Host-only Library setting **Navigation style** switches immediately between
+`Sidebar` and `CompactTopBar`, retaining the current page and selected Playlist.
+`CompactTopBar` is the default; saved navigation preferences remain authoritative.
+Both consume the same routes, Device Capabilities, action availability, and Library
+Workspace. The compact strip centers Audio, Video, Playlists, Photos, and Games;
+its left side opens Device actions and starts Sync with Host, while Maintenance and
+Settings sit on the right. Unsupported media entries follow the same visibility
+policy as the sidebar. `HoverDropdown` and `HoverDropdownGroup` own the same popup
+surface, positioning, hover timing, exclusivity, dismissal, focus return, and
+keyboard policy for Device, Audio, Video, Playlists, and Maintenance. Content
+supplies action rows and an optional native tree view. Device Summary is the first
+Device action; the image opens its menu like every other heading.
+
+Tab focuses headings without opening them. Click, Enter, Space, or Down opens the
+first enabled item; Up opens the last. Up/Down and Home/End move the active highlight;
+Enter/Space activate. Left/Right switch headings unless navigating a folder or
+submenu. Escape returns focus to the heading, and Tab/Shift+Tab close and continue
+through the main window's controls. Hover opens without activation and permits a
+short grace period on departure. Keyboard-open menus remain open with the pointer
+elsewhere. Nested menus stay usable, while outside clicks, deactivation, movement,
+and context changes dismiss the complete dropdown. Open headings, hover, keyboard
+focus, and pressed state have separate theme rules. Current destinations have a
+checkmark, distinct from the active item highlight. See ADR-0234.
+
+The compact `PlaylistTree` uses activation-only selection: moving the current index
+with the pointer or keyboard does not emit a Library navigation intent. Clicking
+or activating a row commits the selection. The Sidebar keeps its existing behavior.
+
+The Playlists popup reuses `PlaylistTree`, including nested Playlist Folders,
+creation, editing, reordering, and membership drops. A valid Track drag opens the
+popup after hovering over Playlists, then existing hover expansion reveals nested
+drop targets. Drag acceptance retains the same workspace generation and revision
+checks. Navigation widgets emit application intents; changing the shell style
+does not create a second Library Workspace or grant device access. See ADR-0233.
+
 Library Drafts are an internal application concept. Editors use ordinary editing
 labels. The Draft all changes setting explains its manual-review and immediate-save
 choices; other labels, tooltips, confirmations, and status messages omit draft-only
@@ -2677,7 +2772,7 @@ current analysis. Preparation progress and failures stay quiet. Leaving the page
 cancels both Jobs and releases their analysis state without changing audio playback.
 
 While the page is visible, F or F11 toggles fullscreen. Fullscreen hides the Player,
-Sidebar, Queue/History/Lyrics pane, and status bar so the renderer fills the display.
+Sidebar or Compact top bar, Queue/History/Lyrics pane, and status bar so the renderer fills the display.
 F, F11, or Escape restores the previous window geometry and chrome visibility.
 The existing renderer and playback remain active throughout this presentation
 change; leaving the page or closing the window also restores the normal shell.
@@ -2888,7 +2983,11 @@ Pages should primarily compose reusable widgets and connect them to application 
 captured firmware and product serial, and Volume capacity without device I/O.
 Firmware and serial fields prefer current hardware evidence and withhold equally
 authoritative conflicts or missing observations. The sidebar device information
-opens it while its existing buttons retain their actions. A shared storage widget
+opens it while its existing buttons retain their actions. A pencil beside the name
+opens an inline editor using the revision-bound Library Workspace rename action
+and existing automatic or manual save policy. Enter or Apply commits the edit;
+Escape or Cancel discards input. Device changes and unavailable editing cancel
+pending input. A shared storage widget
 presents typed Application Layer category estimates, keeps unclassified usage in
 Other, and falls back to used/free capacity when metadata is inconsistent. Photo
 estimates count stored representation ranges rather than source sizes. Games uses

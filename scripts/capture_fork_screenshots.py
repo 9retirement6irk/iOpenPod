@@ -12,12 +12,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import io
+import math
 import os
 import tempfile
 from dataclasses import replace
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageColor, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
 WIDTH, HEIGHT = 1440, 1000
@@ -45,6 +46,94 @@ BOOKS = (
 )
 
 
+TITLES = (
+    "First Light",
+    "A Place to Begin",
+    "Open Water",
+    "Slow Motion",
+    "In the Distance",
+    "Between the Lines",
+    "Small Discoveries",
+    "Parallel Paths",
+    "Still Moving",
+    "The Long Way Home",
+    "After the Rain",
+    "Until Tomorrow",
+)
+
+_PALETTE = (
+    ("#fbc278", "#78415c"),
+    ("#64d5de", "#203461"),
+    ("#bce1d3", "#266675"),
+    ("#f3db77", "#dd8362"),
+    ("#adbd81", "#294d54"),
+    ("#eabdce", "#634991"),
+    ("#edd9a1", "#ac743b"),
+    ("#9bcece", "#304e70"),
+    ("#f0c5a1", "#675078"),
+    ("#c4d9a4", "#466b57"),
+    ("#efbd92", "#b75d58"),
+    ("#f2cd87", "#5c8b86"),
+)
+
+
+def illustration(index: int, *, landscape: bool = False) -> Image.Image:
+    """Produce original, repeatable sample artwork without external source images."""
+    pale, dark = _PALETTE[index % len(_PALETTE)]
+    width, height = (960, 640) if landscape else (640, 640)
+    canvas = Image.new("RGB", (width, height), pale)
+    draw = ImageDraw.Draw(canvas)
+    if landscape:
+        draw.ellipse(
+            (width * 0.66, 54, width * 0.82, 54 + width * 0.16), fill="#fff0ca"
+        )
+        for layer in range(5):
+            points = [(0, height)]
+            points.extend(
+                (x, int(235 + layer * 70 + math.sin(x / 145 + index + layer) * 58))
+                for x in range(0, width + 1, 8)
+            )
+            points.append((width, height))
+            color = tuple(
+                max(0, value - layer * 13) for value in ImageColor.getrgb(dark)
+            )
+            draw.polygon(points, fill=color)
+    elif index % 4 == 0:
+        for radius in range(400, 50, -45):
+            draw.ellipse(
+                (320 - radius, 320 - radius, 320 + radius, 320 + radius),
+                outline=dark,
+                width=16,
+            )
+        draw.rectangle((0, 430, 640, 640), fill=dark)
+    elif index % 4 == 1:
+        for step in range(9):
+            x = 25 + step * 78
+            draw.rounded_rectangle(
+                (x, -120 + step * 47, x + 34, 485 + step * 47), radius=17, fill=dark
+            )
+    elif index % 4 == 2:
+        for step in range(5):
+            draw.polygon(
+                [
+                    (0, 200 + step * 100),
+                    (320, 30 + step * 100),
+                    (640, 230 + step * 100),
+                    (640, 640),
+                    (0, 640),
+                ],
+                fill=dark if step % 2 == 0 else pale,
+            )
+    else:
+        for row in range(4):
+            for col in range(4):
+                x, y = 45 + col * 145, 45 + row * 145
+                draw.pieslice(
+                    (x, y, x + 116, y + 116), 0 + row * 90, 270 + row * 90, fill=dark
+                )
+    return canvas
+
+
 def _jpeg(image: Image.Image, path: Path) -> tuple[int, int, str]:
     path.parent.mkdir(parents=True, exist_ok=True)
     buffer = io.BytesIO()
@@ -56,8 +145,6 @@ def _jpeg(image: Image.Image, path: Path) -> tuple[int, int, str]:
 
 def remote_catalog(root: Path) -> object:
     """Fictional Plex music and video and Grimmory audiobooks, with covers."""
-
-    from scripts.capture_store_screenshots import illustration
 
     from iOpenPod.app.remote_media import (
         RemoteCatalog,
@@ -88,8 +175,6 @@ def remote_catalog(root: Path) -> object:
             title,
             **details,  # type: ignore[arg-type]
         )
-
-    from scripts.capture_store_screenshots import TITLES
 
     plex = root / "Plex"
     items: list[RemoteItem] = []

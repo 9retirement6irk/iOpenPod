@@ -1,6 +1,7 @@
 """Persistent source-list navigation and Active iPod placeholder."""
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QEvent, QLocale, QObject, QPoint, Qt, Signal
 from PySide6.QtGui import QCursor, QHoverEvent, QKeyEvent, QMouseEvent
@@ -18,10 +19,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from device_registry import DeviceProfile, FeatureSupport
 from iOpenPod.app.library_workspace import EditRevision, LibraryWorkspace
 from iOpenPod.app.models.device import ActiveIPod, DeviceDiscovery
-from iOpenPod.GUI.navigation import PageId, page_label
+from iOpenPod.GUI.navigation import PageId, page_label, page_supported
 from iOpenPod.GUI.presentation.device_images import device_pixmap
 from iOpenPod.GUI.presentation.i18n.text import (
     device_count_text,
@@ -39,6 +39,9 @@ from iOpenPod.GUI.widgets.themed_buttons import (
     NavigationButton,
 )
 
+if TYPE_CHECKING:
+    from device_registry import DeviceProfile
+
 
 @dataclass(frozen=True, slots=True)
 class _NavigationDefinition:
@@ -52,6 +55,7 @@ _MAINTENANCE = (
 )
 
 _LIBRARY = (
+    _NavigationDefinition(PageId.START, "ipod"),
     _NavigationDefinition(PageId.ALBUMS, "album"),
     _NavigationDefinition(PageId.ARTISTS, "user"),
     _NavigationDefinition(PageId.GENRES, "grid"),
@@ -73,14 +77,6 @@ _CONNECTED = (
     _NavigationDefinition(PageId.NOTES, "note"),
     _NavigationDefinition(PageId.CALENDARS, "calendar"),
     _NavigationDefinition(PageId.CONTACTS, "user"),
-)
-_VIDEO_PAGES = frozenset(
-    {
-        PageId.MOVIES,
-        PageId.TV_SHOWS,
-        PageId.MUSIC_VIDEOS,
-        PageId.VIDEOS,
-    }
 )
 
 
@@ -715,7 +711,7 @@ class Sidebar(QFrame):
         layout.addWidget(self._review)
         layout.addWidget(scroll, 1)
         layout.addWidget(self._settings)
-        self.set_current_page(PageId.ALBUMS)
+        self.set_current_page(PageId.START)
         self.retranslate_ui()
         self._refresh_page_visibility()
 
@@ -752,8 +748,9 @@ class Sidebar(QFrame):
     def page_available(self, page_id: PageId) -> bool:
         """Return whether the current Active iPod exposes one route."""
 
-        button = self._buttons.get(page_id)
-        return button is None or not button.isHidden()
+        return page_supported(page_id, self._active_profile) or (
+            page_id is PageId.GENIUS and self._has_genius_data
+        )
 
     def set_device_busy(self, busy: bool) -> None:
         self._device_card.set_busy(busy)
@@ -822,32 +819,13 @@ class Sidebar(QFrame):
         return button
 
     def _refresh_page_visibility(self) -> None:
-        profile = self._active_profile
         for page_id, button in self._buttons.items():
-            button.setVisible(
-                _page_supported(page_id, profile)
-                or (page_id is PageId.GENIUS and self._has_genius_data)
-            )
+            button.setVisible(self.page_available(page_id))
+        if self.playlist_tree is not None:
+            self.playlist_tree.setVisible(self.page_available(PageId.PLAYLISTS))
 
 
 def _format_bytes(byte_count: int) -> str:
     return QLocale().formattedDataSize(
         max(0, byte_count), 1, QLocale.DataSizeFormat.DataSizeTraditionalFormat
     )
-
-
-def _page_supported(page_id: PageId, profile: DeviceProfile | None) -> bool:
-    if page_id is PageId.GAMES:
-        return profile is not None and profile.capabilities.supports_games
-    if page_id is PageId.GENIUS:
-        return profile is not None and (
-            profile.capabilities.genius.playlists is not FeatureSupport.UNSUPPORTED
-            or profile.capabilities.genius.mixes is not FeatureSupport.UNSUPPORTED
-        )
-    if page_id in _VIDEO_PAGES:
-        return profile is not None and profile.capabilities.video.supported
-    if page_id is PageId.PHOTOS:
-        return profile is not None and profile.capabilities.artwork.supports_photos
-    if page_id is PageId.PODCASTS:
-        return profile is not None and profile.capabilities.audio.supports_podcasts
-    return True

@@ -24,8 +24,55 @@ Scrobbling service for iPod plays, with two-way star ratings. Virtual-volume and
 scripted-protocol tests cover the work; physical-device acceptance is unverified. See
 [ADR-0900](docs/adr/0900-add-connected-sources-and-ipod-extras.md).
 
-Unrelated Library edits reuse Phase charts through persisted source/chart metadata
-and content provenance, without audio scans or retained-media transaction hashes.
+First launch opens a nine-page onboarding dialog before device loading
+and startup prompts. Users choose navigation style, iPod Library View Mode, device
+artwork, then learn about transcoding and the four steps of Sync: opening the
+workflow, choosing folders, selecting media, and reviewing/applying changes.
+A final help page links to the website, Discord, GitHub issues, Ko-fi, and the
+GitHub repository for users who want to star the project.
+Finish saves the three chosen Host preferences
+and then `application/onboarding-complete`; the flag defaults to false. Closing
+or choosing Set up later leaves setup due on the next launch. Existing settings
+are preselected. Settings > About offers Retake onboarding; dismissing a retake
+preserves the existing completion flag and preferences. Screenshots show actual widgets with fictional sample media;
+see [the capture notes](src/iOpenPod/assets/onboarding/README.md).
+Settings > About > Help and support opens only the final help page in a standalone
+dialog, without changing preferences or onboarding completion.
+The language button at the top right of every onboarding page lists the system
+default and packaged languages. Language changes save immediately and translate
+the tour in place, preserving the current page and unfinished preference choices.
+
+When no Active iPod is loaded at startup, a welcome page invites the user to
+connect an iPod and click its prominent **Choose Device** button. It opens the
+existing Device Picker. Loading an iPod from this page opens Albums; clearing the Active iPod
+returns to the welcome page. Both navigation styles retain access to Settings.
+Without an Active iPod, both styles show Welcome as the only Library navigation
+entry. Loading an iPod replaces Welcome with the supported Library entries;
+clearing it restores Welcome. The disconnected compact strip shows Choose Device
+in place of Sync with Host.
+
+The Library setting **Navigation style** chooses Compact top bar (the default) or
+Sidebar immediately. The compact strip centers Audio, Video, Playlists, Photos,
+and Games, with Device and Sync on the left and Maintenance and Settings on the
+right. Device, Audio, Video, Playlists, and Maintenance share one hover dropdown
+implementation. Tab focuses headings; click or Enter/Space/Down opens and highlights
+the first enabled item. Arrows move the highlight, Enter activates, and Escape
+closes. Hover and keyboard highlighting preserve the current page and Playlist
+selection. Device Summary is the first Device menu item. See
+[ADR-0234](docs/adr/0234-unify-desktop-navigation-dropdowns.md).
+Both styles share routes, device capability rules, and Playlist editing.
+Dragging Tracks over Playlists opens its menu; hovering over Playlist
+Folders expands them before a drop onto a regular Playlist. See
+[ADR-0233](docs/adr/0233-share-navigation-behavior-between-shell-styles.md).
+
+Unrelated Library writes bypass Phase evaluation entirely. Only changes to the
+Phase Playlist or its member audio inputs enter companion preparation. CPU/CUDA/MPS
+changes alone reuse existing charts, including older provenance. Skip Phase analysis
+is available during automatic saves, Review Changes and Sync; verified completed
+charts are kept and unfinished Tracks remain unavailable in the game until a later
+Phase edit. See [ADR-0239](docs/adr/0239-gate-and-skip-phase-analysis.md).
+Relevant edits reuse charts through persisted source/chart metadata and content
+provenance, without audio scans or retained-media transaction hashes.
 Phase membership and ordering changes update the companion index incrementally;
 new or changed analysis retains full verification. Legacy caches need one content
 validation pass to establish metadata receipts. See
@@ -33,7 +80,8 @@ validation pass to establish metadata receipts. See
 
 The sidebar device information opens a Device Summary with a large device portrait,
 observed firmware and serial details, and color-coded capacity estimates from the
-committed Library, plus Games from captured file sizes across Games_RO,
+committed Library. A pencil beside the name opens inline renaming through the
+existing Library save workflow. Storage estimates also include Games files across Games_RO,
 GameData_RW, and GameStats_WO, and Album artwork from the entire Artwork folder.
 Games is pink and Album artwork is cyan. Other retains unclassified used space; inconsistent metadata
 falls back to observed used/free capacity. Restore iPod remains disabled beside
@@ -87,7 +135,7 @@ geometry; uncertain sources are preserved and reported. Video 5/5.5 use other
 cover formats. See [ADR-0218](docs/adr/0218-author-and-repair-native-f1061-geometry.md).
 
 Device selection commits playback history without regenerating Phase charts.
-Ordinary saves and Sync perform pending Phase upgrades; shutdown signals
+Saves and Sync affecting Phase can perform pending Phase upgrades; shutdown signals
 cancellation through selection's history save. The pinned model bypasses Hub
 alias lookup. See [ADR-0216](docs/adr/0216-defer-phase-analysis-during-device-selection.md).
 
@@ -162,7 +210,9 @@ bytes until cleanup. See [ADR-0207](docs/adr/0207-resume-create-only-transaction
 
 Classic lyrics preparation now checks the final embedded representation against
 the native byte bounds, encoding branches and frame/atom layout before issuing
-publication evidence. Incompatible text is preserved and reported rather than
+publication evidence. Incompatible ID3v2.4 tags automatically convert to v2.3 on
+the private iPod copy; metadata loss there is accepted, while Host files and
+encoded audio remain unchanged. Unrepresentable text is reported rather than
 truncated. The Library projects the lyrics flag's low bit, and Review explains
 podcast/audiobook description precedence. See
 [ADR-0206](docs/adr/0206-validate-native-lyrics-publication.md).
@@ -553,16 +603,36 @@ and can group grid items as Selected, Mixed, or Deselected. Opening an Album or
 collection card in Select Media replaces the browser with a full detail page,
 including artwork, metadata, bulk selection, and the shared Track table with its
 own search. Back returns to the retained browser; these Sync pages have no split
-Track pane. The global **iPod Library View Mode** setting also offers this shared
+Track pane. The **iPod Library View Mode** setting also offers this shared
 presentation in the iPod browser as **Whole Page Table**, without Sync Selection
-controls. **Split Table** remains its default. Changes apply immediately and are
-saved across restarts. See ADR-0072. Review derives an
+controls. Opening these full-page Track tables and going Back uses a brief
+crossfade in both Library and Sync with Host, retaining immediate navigation.
+The mouse Back button invokes the same Back action while a full-page table is open.
+**iTunes 11 style** opens an album-colored Track list with artwork beneath
+the selected row of the Albums grid, pushing later rows down. Artists and Genres
+use a source list beside a collection heading, playback/queue controls, and stacked
+Albums with two columns of Tracks. Covers sit on the left; Genres use smaller
+covers and an Album Artist byline. These rows omit ratings. See ADR-0235.
+Music Videos uses the same single-cover artwork, Album cards, and layout policy
+as Albums, scoped to Music Video Tracks. See ADR-0237. TV Shows uses one cover per
+show. In iTunes 11 style its inline panel has Season tabs, Season-specific artwork
+and colors, and episode rows with number, release date, duration, title, and an
+elided description. Other layouts show all episodes together. See ADR-0238.
+Movies defaults to artwork/title
+cards with a grid/list toggle for its existing table, independently of this setting.
+Single clicks select Movies without opening details or playback. See ADR-0236.
+**iTunes 11 style** is the default. Changes apply immediately,
+persist across restarts, and support individual iPod overrides. See ADR-0072 and
+ADR-0126. Review derives an
 immutable selected Sync Plan in collapsible change groups; iPod-only removal
 candidates start unchecked. Review can exclude individual actions or whole groups
 without changing desired Host membership. Sync Selected validates that plan, checks
 required media tools, prepares compatible media on the Host, and builds an isolated
 Library Draft. Failed independent items are reported and excluded while successful
-items can still commit. The verified Library and media publish through Storage;
+items can still commit. Incoming Track metadata and metadata-only source failures
+are checked per item; skipped Updates preserve the existing iPod copy. The result
+screen offers **Save Sync report** with every reported source and error reason,
+including entries omitted from compact message previews. The verified Library and media publish through Storage;
 successful Sync Details follow the commit. Cancellation and interrupted publication
 have explicit cleanup/recovery results. See ADR-0065 through ADR-0067, ADR-0070,
 and ADR-0076. Playlist Review has individual choices, visible iPod targets, and
@@ -898,7 +968,11 @@ Device files use
 fingerprint-checked Storage writes under
 `iPod_Control/iOpenPod/Podcasts`. Podcast Episodes can be added or removed manually,
 and per-show Sync settings select and retain Episodes during ordinary Sync or the
-Sync Podcast and Sync Podcasts actions. These operations refresh feeds, preserve
+Sync Podcast and Sync Podcasts actions. Settings > Sync in the Host scope offers
+**Default Podcast Sync Settings**, opening the same dialog and saving all five
+choices in Host `settings-v2.json`. Newly added subscriptions copy these defaults;
+existing subscriptions retain their own policy when defaults change or feeds refresh.
+These operations refresh feeds, preserve
 Listening History, prepare compatible media on the Host, and publish through the
 shared verified Library and Storage Transaction workflow. Failed feed refreshes
 leave that show's media unchanged. Imported chapters are ordered chronologically;
@@ -1037,8 +1111,10 @@ selects the previous chapter, or follows Track History at the start of the Track
 Next moves through chapters before advancing to the next Track. Decoder completion
 always advances Tracks independently of its last reported position. Playback uses
 ordered, unique starts within the Track duration without changing retained metadata.
-For Audiobooks, a book action replaces the visualizer action and opens a compact
-Chapter index beneath the Player. Selecting a chapter seeks to its start without
+Any Track with reachable chapters shows a book action that opens a compact Chapter
+index beneath the Player. Non-Audiobook Tracks retain the visualizer action beside
+it. Audiobooks show only the book action, including when they have no chapters.
+Selecting a chapter seeks to its start without
 changing the playing or paused state. The index highlights the current chapter and
 shows a read-only empty state when the Audiobook has no chapter metadata.
 Visible Chapter rows show their exact artwork image when available. During Host

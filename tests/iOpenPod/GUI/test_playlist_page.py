@@ -25,10 +25,15 @@ from PySide6.QtWidgets import (
 from tests.iOpenPod.GUI.application_shell_test_support import (
     APPLICATION,
     build_context,
+    show_albums,
+)
+from tests.iOpenPod.GUI.test_compact_top_bar import (
+    _active_ipod,  # pyright: ignore[reportPrivateUsage]
 )
 
 from device_registry import DEFAULT_DEVICE_REGISTRY, IdentificationStatus
 from iOpenPod.app.context import AppContext
+from iOpenPod.app.core.settings.definitions import NAVIGATION_STYLE, NavigationStyle
 from iOpenPod.app.library_export import PlaylistExportMode, PlaylistFileType
 from iOpenPod.app.models.device import (
     ActiveIPod,
@@ -1032,15 +1037,18 @@ def test_explicit_smart_rule_edit_updates_saved_membership(
 
 def test_playlist_dropdown_keeps_library_navigation_and_only_items_open_pages() -> None:
     context = build_context()
+    context.settings.set_global(NAVIGATION_STYLE, NavigationStyle.SIDEBAR.value)
     context.track_model.replace_tracks(_TRACKS)
     context.library_workspace.load(LibrarySnapshot(_TRACKS, (_ORIGINAL,)))
     window = MainWindow(context, auto_discover=False)
+    show_albums(window)
     window.show()
     APPLICATION.processEvents()
     try:
         sidebar = window.findChild(Sidebar, "appSidebar")
         page = window.findChild(PlaylistPage, "playlistsPage")
         assert sidebar is not None and page is not None
+        sidebar.set_active_ipod(_active_ipod())
         tree = sidebar.playlist_tree
         assert tree is not None
         toggle = sidebar.findChild(QPushButton, "playlistSectionToggle")

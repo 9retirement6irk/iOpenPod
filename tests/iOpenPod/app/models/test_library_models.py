@@ -99,6 +99,31 @@ def test_library_proxies_sort_cached_model_values() -> None:
     assert first_size >= last_size
 
 
+def test_album_projections_keep_audio_and_music_video_membership_separate() -> None:
+    tracks = TrackTableModel()
+    audio_albums = AlbumListModel(tracks)
+    video_albums = AlbumListModel(tracks, media_kind=MediaKind.MUSIC_VIDEO)
+    audio = Track(1, "Audio", "Artist", "Shared Album", 1000, artwork_id=10)
+    video = Track(
+        2,
+        "Video",
+        "Artist",
+        "Shared Album",
+        2000,
+        artwork_id=20,
+        media_types=(MediaType.MUSIC_VIDEO,),
+    )
+    tracks.replace_tracks((audio, video))
+    for model, track in ((audio_albums, audio), (video_albums, video)):
+        summary = model.album_at(0)
+        assert model.rowCount() == 1 and summary is not None
+        assert summary.track_ids == (track.track_id,)
+        assert summary.artwork_id == track.artwork_id
+        assert summary.duration_ms == track.length_ms
+    tracks.replace_tracks((audio,))
+    assert video_albums.rowCount() == 0 and audio_albums.rowCount() == 1
+
+
 def test_track_table_exposes_the_full_optional_metadata_projection() -> None:
     model = TrackTableModel()
     model.replace_tracks(
@@ -446,6 +471,31 @@ def test_album_summary_groups_tracks_by_album_artist() -> None:
     assert summary is not None
     assert summary.artist == "Album Artist"
     assert summary.track_ids == (1, 2)
+
+
+def test_tv_show_cover_uses_first_available_artwork_across_all_episodes() -> None:
+    tracks = TrackTableModel()
+    shows = CollectionListModel(tracks, CollectionKind.TV_SHOW)
+    episodes = tuple(
+        Track(
+            number,
+            f"Episode {number}",
+            "",
+            "",
+            1000,
+            show="Show",
+            media_types=(MediaType.TV_SHOW,),
+            artwork_id=number if number > 4 else 0,
+        )
+        for number in range(1, 8)
+    )
+    tracks.replace_tracks(episodes)
+    summary = shows.collection_at(0)
+    assert summary is not None and summary.representative_artwork_id == 5
+    assert summary.track_ids == tuple(range(1, 8))
+    tracks.replace_tracks(episodes[:4])
+    summary = shows.collection_at(0)
+    assert summary is not None and summary.representative_artwork_id == 0
 
 
 def test_collection_models_build_fixed_four_tile_artwork_collages() -> None:

@@ -5,10 +5,13 @@ from typing import cast
 
 from PySide6.QtCore import QT_TRANSLATE_NOOP, QCoreApplication
 
+from device_registry import DeviceProfile, FeatureSupport
+
 
 class PageId(StrEnum):
     """Stable route identifiers; labels remain localizable presentation data."""
 
+    START = "start"
     DEVICE_SUMMARY = "device-summary"
     ALBUMS = "albums"
     ARTISTS = "artists"
@@ -36,9 +39,52 @@ class PageId(StrEnum):
     SETTINGS = "settings"
 
 
+_VIDEO_PAGES = frozenset(
+    {PageId.MOVIES, PageId.TV_SHOWS, PageId.MUSIC_VIDEOS, PageId.VIDEOS}
+)
+_LIBRARY_PAGES = _VIDEO_PAGES | frozenset(
+    {
+        PageId.ALBUMS,
+        PageId.ARTISTS,
+        PageId.GENRES,
+        PageId.TRACKS,
+        PageId.PLAYLISTS,
+        PageId.GENIUS,
+        PageId.GAMES,
+        PageId.PHOTOS,
+        PageId.PODCASTS,
+        PageId.AUDIOBOOKS,
+    }
+)
+
+
+def page_supported(page_id: PageId, profile: DeviceProfile | None) -> bool:
+    """Share device capability visibility across Library navigation styles."""
+
+    if page_id is PageId.START:
+        return profile is None
+    if page_id in _LIBRARY_PAGES and profile is None:
+        return False
+    if page_id is PageId.GAMES:
+        return profile is not None and profile.capabilities.supports_games
+    if page_id is PageId.GENIUS:
+        return profile is not None and (
+            profile.capabilities.genius.playlists is not FeatureSupport.UNSUPPORTED
+            or profile.capabilities.genius.mixes is not FeatureSupport.UNSUPPORTED
+        )
+    if page_id in _VIDEO_PAGES:
+        return profile is not None and profile.capabilities.video.supported
+    if page_id is PageId.PHOTOS:
+        return profile is not None and profile.capabilities.artwork.supports_photos
+    if page_id is PageId.PODCASTS:
+        return profile is not None and profile.capabilities.audio.supports_podcasts
+    return True
+
+
 _PAGE_LABEL_SOURCES = cast(
     "dict[PageId, str]",
     {
+        PageId.START: QT_TRANSLATE_NOOP("Navigation", "Welcome"),
         PageId.DEVICE_SUMMARY: QT_TRANSLATE_NOOP("Navigation", "Device Summary"),
         PageId.ALBUMS: QT_TRANSLATE_NOOP("Navigation", "Albums"),
         PageId.ARTISTS: QT_TRANSLATE_NOOP("Navigation", "Artists"),

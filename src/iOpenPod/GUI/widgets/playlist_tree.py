@@ -251,6 +251,8 @@ class _PlaylistDelegate(QStyledItemDelegate):
             return
         option = QStyleOptionViewItem(option)
         self.initStyleOption(option, index)
+        if isinstance(view, _PlaylistView) and view.dropdown_navigation:
+            option.palette.setCurrentColorGroup(QPalette.ColorGroup.Active)
         selected = bool(option.state & QStyle.StateFlag.State_Selected)
         color = option.palette.color(
             QPalette.ColorRole.HighlightedText if selected else QPalette.ColorRole.Text
@@ -310,6 +312,11 @@ class _PlaylistDelegate(QStyledItemDelegate):
             PlaylistKind.GENIUS: "smart-playlist",
         }.get(kind, "playlist")
         playlist = index.data(PlaylistRole.PLAYLIST)
+        committed = (
+            isinstance(view, _PlaylistView)
+            and isinstance(playlist, Playlist)
+            and playlist.playlist_id == view.committed_playlist_id
+        )
         if isinstance(playlist, Playlist) and playlist.is_phase:
             glyph = "games"
         glyph_icon(glyph, LAYOUT.icon_size, color, view.devicePixelRatioF()).paint(
@@ -317,7 +324,7 @@ class _PlaylistDelegate(QStyledItemDelegate):
         )
         label_left = icon_rect.right() + LAYOUT.space_xs
         text_rect = option.rect.adjusted(
-            label_left, 0, -LAYOUT.control_height_compact, 0
+            label_left, 0, -LAYOUT.control_height_compact * (2 if committed else 1), 0
         )
         painter.setPen(color)
         painter.setFont(option.font)
@@ -335,6 +342,13 @@ class _PlaylistDelegate(QStyledItemDelegate):
                 expanded=view.isExpanded(index),
                 color=color,
             )
+        if committed:
+            check_rect = _disclosure_rect(option.rect).translated(
+                -LAYOUT.control_height_compact, 0
+            )
+            glyph_icon(
+                "check", LAYOUT.icon_size, color, view.devicePixelRatioF()
+            ).paint(painter, check_rect)
         painter.restore()
 
     def sizeHint(
@@ -362,6 +376,8 @@ class _PlaylistView(QTreeView):
     ) -> None:
         super().__init__(parent)
         self._workspace = workspace
+        self.dropdown_navigation = False
+        self.committed_playlist_id: int | None = None
         self._reclicked_folder = QPersistentModelIndex()
         self._spring_index = QPersistentModelIndex()
         self._spring_data: TrackSelectionMimeData | None = None
@@ -566,6 +582,7 @@ class PlaylistTree(QWidget):
     """Render the Workspace and emit editing intents for the application shell."""
 
     selected = Signal(object)
+    activated = Signal(object)
     createRequested = Signal(object)
     editRequested = Signal(object)
     removeRequested = Signal(object)
@@ -577,12 +594,15 @@ class PlaylistTree(QWidget):
         *,
         show_add_button: bool = True,
         show_context_menu: bool = True,
+        show_heading: bool = True,
+        select_on_navigation: bool = True,
         checks: PlaylistChecks | None = None,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("playlistSidebar")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
         self._workspace = workspace
+        self._select_on_navigation = select_on_navigation
         self._generation = workspace.generation
         self._selected_id: int | None = None
         self._expanded_ids: set[int] = set()
@@ -593,7 +613,8 @@ class PlaylistTree(QWidget):
             self.tr("Playlists"), "playlist", workspace, self
         )
         self._heading.setObjectName("playlistSectionToggle")
-        self._heading.setChecked(False)
+        self._heading.setChecked(not show_heading)
+        self._heading.setVisible(show_heading)
         self._add = IconButton(
             "plus",
             self.tr("New Playlist"),
@@ -622,6 +643,7 @@ class PlaylistTree(QWidget):
         heading.addWidget(self._add)
 
         self._tree = _PlaylistView(workspace, self)
+        self._tree.dropdown_navigation = not select_on_navigation
         self._tree.setObjectName("playlistTree")
         self._tree.setModel(self._model)
         self._tree.setItemDelegate(_PlaylistDelegate(self._tree, checks))
@@ -653,6 +675,8 @@ class PlaylistTree(QWidget):
         )
         self._tree.customContextMenuRequested.connect(self._show_context_menu)
         self._tree.selectionModel().currentChanged.connect(self._current_changed)
+        self._tree.clicked.connect(self._activate_index)
+        self._tree.activated.connect(self._activate_index)
         self._tree.expanded.connect(self._folder_expanded)
         self._tree.collapsed.connect(self._folder_collapsed)
         self._model.modelAboutToBeReset.connect(self._before_reset)
@@ -699,6 +723,22 @@ class PlaylistTree(QWidget):
     def current_playlist_id(self) -> int | None:
         return self._selected_id
 
+    @property
+    def creation_menu(self) -> QMenu:
+        """Share the existing creation intents with another navigation surface."""
+
+        return self._create_menu
+
+    def _activate_index(self, index: QModelIndex) -> None:
+        playlist_id = self._model.playlist_id(index)
+        if playlist_id is not None:
+            if not self._select_on_navigation:
+                self._selected_id = playlist_id
+                self._tree.committed_playlist_id = playlist_id
+                self._tree.viewport().update()
+                self.selected.emit(playlist_id)
+            self.activated.emit(playlist_id)
+
     def select_playlist(self, playlist_id: int) -> None:
         index = self._model.index_for_id(playlist_id)
         if not index.isValid():
@@ -711,6 +751,11 @@ class PlaylistTree(QWidget):
         self._update_tree_height()
         self._tree.setCurrentIndex(index)
         self._tree.scrollTo(index)
+        if not self._select_on_navigation and self._selected_id != playlist_id:
+            self._selected_id = playlist_id
+            self._tree.committed_playlist_id = playlist_id
+            self._tree.viewport().update()
+            self.selected.emit(playlist_id)
 
     def refresh_checks(self) -> None:
         """Repaint checkboxes after the chosen Playlists change elsewhere."""
@@ -721,6 +766,8 @@ class PlaylistTree(QWidget):
         self._tree.clearSelection()
         self._tree.setCurrentIndex(QModelIndex())
         self._selected_id = None
+        self._tree.committed_playlist_id = None
+        self._tree.viewport().update()
 
     def retranslate_ui(self) -> None:
         self._model.retranslate()
@@ -742,7 +789,7 @@ class PlaylistTree(QWidget):
         super().changeEvent(event)
 
     def _current_changed(self, current: QModelIndex, _previous: QModelIndex) -> None:
-        if self._resetting:
+        if self._resetting or not self._select_on_navigation:
             return
         self._selected_id = self._model.playlist_id(current)
         if self._selected_id is not None:
@@ -790,6 +837,9 @@ class PlaylistTree(QWidget):
             else:
                 self._selected_id = None
         self._resetting = False
+        if not self._select_on_navigation:
+            self._tree.committed_playlist_id = self._selected_id
+            self._tree.viewport().update()
         self._refresh_empty_state()
 
     def _refresh_empty_state(self) -> None:
@@ -828,8 +878,13 @@ class PlaylistTree(QWidget):
         self._tree.setFixedHeight(count * height)
 
     def _edit_current(self) -> None:
-        if self._selected_id is not None and not self._workspace.locked:
-            self.editRequested.emit(self._selected_id)
+        playlist_id = (
+            self._selected_id
+            if self._select_on_navigation
+            else self._model.playlist_id(self._tree.currentIndex())
+        )
+        if playlist_id is not None and not self._workspace.locked:
+            self.editRequested.emit(playlist_id)
 
     def _build_context_menu(self, position: QPoint) -> QMenu:
         index = self._tree.indexAt(position)

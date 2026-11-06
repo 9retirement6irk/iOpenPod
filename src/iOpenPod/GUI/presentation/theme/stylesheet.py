@@ -145,6 +145,8 @@ QStackedWidget#syncLibraryStack {{
 }}
 
 QLabel#pageTitle,
+QLabel#startTitle,
+QLabel#collectionAlbumTitle,
 QLabel#gamesEmptyTitle {{
     color: {tokens.text};
     font-family: "{typography.display}";
@@ -202,6 +204,11 @@ QTreeView#playlistTree {{
     selection-color: {tokens.accent};
 }}
 
+QTreeView#playlistTree[dropdownView="true"] {{
+    selection-background-color: {tokens.accent};
+    selection-color: {tokens.accent_ink};
+}}
+
 QPushButton#playlistSectionToggle {{
     padding-right: {LAYOUT.control_height_compact + LAYOUT.icon_button_size}px;
     border-color: transparent;
@@ -249,6 +256,8 @@ QLabel#photoAlbumManagerError {{
     color: {tokens.danger};
 }}
 
+QDialog#onboardingDialog,
+QDialog#helpSupportDialog,
 QDialog#playlistEditor,
 QDialog#metadataEditor,
 QDialog#artworkCropDialog,
@@ -286,6 +295,26 @@ QLabel#dialogTitle {{
     font-family: "{typography.display}";
     font-size: {typography.title_pt:g}pt;
     font-weight: 700;
+}}
+
+/* Hallmark · component: onboarding · existing desktop palette and typography */
+QLabel#onboardingProgress {{
+    color: {tokens.accent};
+    font-size: {typography.small_pt:g}pt;
+    font-weight: 700;
+}}
+
+QLabel#onboardingDescription, QLabel#onboardingCaption {{
+    color: {tokens.text_secondary};
+}}
+
+QLabel#onboardingError {{
+    color: {tokens.danger};
+}}
+
+QFrame#onboardingHelpDivider {{
+    background-color: {tokens.border};
+    border: none;
 }}
 
 QLabel#geniusMixSectionTitle {{
@@ -810,6 +839,55 @@ QRadioButton:disabled {{
     color: {tokens.text_disabled};
 }}
 
+QRadioButton[onboardingChoice="true"] {{
+    font-size: {typography.body_pt:g}pt;
+    font-weight: 700;
+    background-color: {tokens.surface};
+    border: none;
+    border-radius: {LAYOUT.radius_control}px;
+    padding: {LAYOUT.space_xs}px {LAYOUT.space_sm}px;
+    spacing: {LAYOUT.space_sm}px;
+}}
+
+QRadioButton[onboardingChoice="true"]:hover {{
+    background-color: {tokens.surface_hover};
+}}
+
+QRadioButton[onboardingChoice="true"]:checked {{
+    background-color: {tokens.surface_selected};
+}}
+
+QRadioButton[onboardingChoice="true"]:pressed {{
+    background-color: {tokens.surface_pressed};
+}}
+
+QRadioButton[onboardingChoice="true"]:disabled {{
+    background-color: {tokens.surface_alt};
+    color: {tokens.text_disabled};
+}}
+
+QRadioButton[onboardingChoice="true"]::indicator {{
+    width: 14px;
+    height: 14px;
+    border-radius: 8px;
+    border: 1px solid {tokens.border_strong};
+    background-color: {tokens.surface};
+}}
+
+QRadioButton[onboardingChoice="true"]::indicator:checked {{
+    border-color: {tokens.accent};
+    background-color: {tokens.accent};
+}}
+
+QRadioButton[onboardingChoice="true"]::indicator:focus {{
+    border: 2px solid {tokens.focus};
+}}
+
+QRadioButton[onboardingChoice="true"]::indicator:disabled {{
+    border-color: {tokens.border};
+    background-color: {tokens.surface_alt};
+}}
+
 QProgressDialog#libraryExportProgress QProgressBar,
 QProgressBar#syncScanProgress,
 QProgressBar#syncExecutionOverallProgress,
@@ -1293,6 +1371,10 @@ QTabWidget#settingsTabs::pane {{
     border-top: 1px solid {tokens.border};
 }}
 
+QTabWidget#settingsTabs::tab-bar {{
+    left: {LAYOUT.space_lg}px;
+}}
+
 QTabBar::tab {{
     min-width: 92px;
     min-height: {LAYOUT.control_height_large}px;
@@ -1378,6 +1460,67 @@ QFrame#appSidebar {{
     border-right: 1px solid {tokens.border};
 }}
 
+QWidget#collectionAlbumList,
+QWidget#collectionAlbumBody {{
+    background-color: {tokens.surface};
+}}
+
+QFrame#compactTopBar {{
+    color: {tokens.text};
+    background-color: {tokens.surface};
+    border: none;
+    border-bottom: 1px solid {tokens.border};
+}}
+
+QFrame[hoverDropdown="true"] {{
+    color: {tokens.text};
+    background-color: {tokens.surface};
+    border: 1px solid {tokens.border_strong};
+    border-radius: {LAYOUT.radius_control}px;
+}}
+
+QToolButton[dropdownItem="true"],
+QToolButton[dropdownItem="true"]:checked {{
+    color: {tokens.text};
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: {LAYOUT.radius_control}px;
+    min-height: {LAYOUT.control_height_compact}px;
+    padding: 0 {LAYOUT.control_height_compact}px 0 {LAYOUT.space_xs}px;
+    text-align: left;
+}}
+
+QToolButton[dropdownItem="true"][dropdownActive="true"] {{
+    color: {tokens.accent_ink};
+    background-color: {tokens.accent};
+}}
+
+QToolButton[dropdownItem="true"]:focus {{
+    border-color: {tokens.focus};
+}}
+
+QToolButton[dropdownItem="true"]:pressed {{
+    color: {tokens.accent_ink};
+    background-color: {tokens.accent_pressed};
+}}
+
+QToolButton[dropdownItem="true"]:disabled {{
+    color: {tokens.text_disabled};
+    background-color: transparent;
+}}
+
+QToolButton[dropdownItem="true"]::menu-indicator {{
+    image: none;
+    width: 0px;
+    height: 0px;
+}}
+
+QScrollArea#compactPlaylistScroll,
+QScrollArea#compactPlaylistScroll > QWidget > QWidget {{
+    background-color: {tokens.surface};
+    border: none;
+}}
+
 QWidget#sidebarNavigation,
 QScrollArea#sidebarScroll,
 QScrollArea#sidebarScroll > QWidget > QWidget {{
@@ -1426,7 +1569,14 @@ QLabel#deviceSummaryEmptyTitle {{
     font-weight: 700;
 }}
 
+QPushButton#startChooseDevice {{
+    min-height: {LAYOUT.control_height_large}px;
+    max-height: {LAYOUT.control_height_large}px;
+    min-width: {LAYOUT.start_action_width}px;
+}}
+
 QLabel#deviceSummaryModel,
+QLabel#startDescription,
 QLabel#deviceRestoreComingSoon,
 QLabel#deviceStorageCapacity,
 QLabel#deviceStorageNote {{
@@ -1723,6 +1873,59 @@ QPushButton[kind="quiet"]:focus {{
 }}
 
 QPushButton[kind="quiet"]:disabled {{
+    color: {tokens.text_disabled};
+    background-color: transparent;
+    border-color: transparent;
+}}
+
+QPushButton[compactNavigation="true"],
+QPushButton[compactNavigation="true"]:hover,
+QPushButton[compactNavigation="true"]:checked,
+QPushButton[compactNavigation="true"]:focus,
+QPushButton[compactNavigation="true"]:pressed {{
+    min-height: {LAYOUT.control_height_compact - 4}px;
+    padding: 0 {LAYOUT.space_xs}px;
+    text-align: center;
+    color: {tokens.text};
+    font-weight: 700;
+    border: 1px solid transparent;
+    border-radius: {(LAYOUT.control_height_compact - 4) // 2}px;
+}}
+
+QPushButton[compactNavigation="true"]:hover {{
+    background-color: {tokens.surface_hover};
+}}
+
+QPushButton[dropdownTrigger="true"],
+QPushButton[dropdownTrigger="true"]:hover {{
+    background-color: transparent;
+}}
+
+QPushButton[dropdownTrigger="true"][dropdownHovered="true"] {{
+    background-color: {tokens.surface_hover};
+}}
+
+/* An inset well: shadow above, soft fill below, and a light lower lip. */
+QPushButton[compactNavigation="true"]:checked,
+QPushButton[compactNavigation="true"]:focus,
+QPushButton[compactNavigation="true"]:pressed,
+QPushButton[dropdownTrigger="true"][dropdownOpen="true"] {{
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 {_darker(tokens.surface_alt, 118)},
+        stop:0.35 {_darker(tokens.surface_alt, 104)},
+        stop:1 {tokens.surface_alt});
+    border-color: {_darker(tokens.surface_alt, 112)};
+    border-top-color: {_darker(tokens.surface_alt, 135)};
+    border-bottom-color: {_lighter(tokens.surface, 120)};
+}}
+
+QPushButton[compactNavigation="true"]:pressed {{
+    background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 {_darker(tokens.surface_alt, 130)},
+        stop:1 {_darker(tokens.surface_alt, 108)});
+}}
+
+QPushButton[compactNavigation="true"]:disabled {{
     color: {tokens.text_disabled};
     background-color: transparent;
     border-color: transparent;

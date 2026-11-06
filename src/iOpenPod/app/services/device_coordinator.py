@@ -22,6 +22,7 @@ from device_registry import (
     IdentificationStatus,
     UsbIdentifier,
     authority_covers_metadata,
+    normalize_product_serial,
     parse_sysinfo,
     parse_sysinfo_extended,
     reconcile_device_metadata,
@@ -107,6 +108,7 @@ from iOpenPod.app.services.linux_identity import UDEV_RULE_VERSION
 from iOpenPod.app.services.phase import (
     PhasePublication,
     capture_phase_selection,
+    phase_playlist_changed,
     prepare_phase,
 )
 from iOpenPod.app.smart_playlist_preview import (
@@ -2203,6 +2205,7 @@ class DeviceCoordinator:
                         checkpoint=cancellation_checkpoint,
                         analyzer=self._phase_analysis,
                         media_writes=captured.media_writes,
+                        skip_requested=request.phase_analysis_skip.is_set,
                         analysis_progress=lambda value: progress(
                             WriteProgress(
                                 "resources.phase",
@@ -2216,6 +2219,9 @@ class DeviceCoordinator:
                         ),
                     )
                     if prepare_phase_companions
+                    and phase_playlist_changed(
+                        source.snapshot, result.prepared.snapshot, captured.media_writes
+                    )
                     else PhasePublication(
                         files=(active.phase_precondition,)
                         if active.phase_precondition is not None
@@ -3255,7 +3261,7 @@ class DeviceCoordinator:
                     ),
                     serial_number=_summary_identifier(
                         summary_evidence.product_serials,
-                        normalize=_valid_apple_product_serial,
+                        normalize=normalize_product_serial,
                     ),
                     game_storage_bytes=game_storage_bytes,
                     album_artwork_storage_bytes=album_artwork_storage_bytes,
@@ -4960,11 +4966,11 @@ def _probe_evidence(
         observation_evidence = DeviceEvidence(
             product_serials=(
                 (
-                    *_apple_product_serial_identifier(
+                    *_product_serial_identifier(
                         observation.unit_serial,
                         source,
                     ),
-                    *_apple_product_serial_identifier(
+                    *_product_serial_identifier(
                         udev_product_serial,
                         "udev_scsi_id",
                     ),
@@ -5027,11 +5033,11 @@ def _platform_probe_candidate_issues(
         for property_ in observation.host_properties
     }
     rule_version = properties.get("ID_IOPENPOD_RULE_VERSION", "").strip()
-    udev_product_serial = _valid_apple_product_serial(
+    udev_product_serial = normalize_product_serial(
         properties.get("ID_IOPENPOD_PRODUCT_SERIAL", "")
     )
     direct_product_serial = any(
-        _valid_apple_product_serial(observation.unit_serial)
+        normalize_product_serial(observation.unit_serial)
         for observation in result.observations
     )
     if rule_version == UDEV_RULE_VERSION:
@@ -5101,19 +5107,12 @@ def _current_text_identifier(
     )
 
 
-def _apple_product_serial_identifier(
+def _product_serial_identifier(
     value: str,
     source: str,
 ) -> tuple[DeviceIdentifier[str], ...]:
-    serial = _valid_apple_product_serial(value)
+    serial = normalize_product_serial(value)
     return _current_text_identifier(serial, source)
-
-
-def _valid_apple_product_serial(value: str) -> str:
-    serial = value.replace(" ", "").strip().upper()
-    if not re.fullmatch(r"[A-Z0-9]{11,12}", serial, flags=re.ASCII):
-        return ""
-    return serial
 
 
 def _summary_identifier(
