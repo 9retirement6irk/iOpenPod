@@ -306,3 +306,4 @@ What becomes easier, harder, required, or prohibited?
 - [ADR-0239: Gate and skip Phase analysis](0239-gate-and-skip-phase-analysis.md)
 - [ADR-0900: Add Connected Sources and iPod Extras](0900-add-connected-sources-and-ipod-extras.md) (this fork)
 - [ADR-0901: Choose Playlists in Select Media](0901-choose-playlists-in-select-media.md) (this fork)
+- [ADR-0902: Skip iPod Fingerprints for a Connected-Only Sync](0902-skip-ipod-fingerprints-for-connected-only-sync.md) (this fork)

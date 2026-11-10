@@ -32,8 +32,11 @@ def test_scan_worker_bounds_queued_progress_and_preserves_phase_endpoints(
         expected: ActiveIPod,
         progress: Callable[[IPodMediaScanProgress], None],
         cancelled: Event,
+        *,
+        acoustic: bool = True,
     ) -> IPodMediaLibrary:
         nonlocal now
+        assert acoustic  # Fingerprinting stays on unless Sync turns it off.
         assert expected is device.active and not cancelled.is_set()
         progress(IPodMediaScanProgress(IPodMediaScanStage.LOADING, 0, 0, "Loading"))
         for stage in (IPodMediaScanStage.TRACKS, IPodMediaScanStage.IMAGES):
@@ -87,6 +90,7 @@ def test_cancellation_discards_already_queued_progress_and_completion(
     cancelled: list[bool] = []
     progress_events: list[object] = []
     released: list[bool] = []
+    requested: list[bool] = []
     native_release = context.device_controller.finish_exclusive_operation
 
     def release() -> None:
@@ -97,7 +101,10 @@ def test_cancellation_discards_already_queued_progress_and_completion(
         expected: ActiveIPod,
         progress: Callable[[IPodMediaScanProgress], None],
         cancelled: Event,
+        *,
+        acoustic: bool = True,
     ) -> IPodMediaLibrary:
+        requested.append(acoustic)
         progress(IPodMediaScanProgress(IPodMediaScanStage.COMPLETE, 1, 1, "Done"))
         if fails:
             raise OSError("Read failed before the user cancelled")
@@ -123,11 +130,13 @@ def test_cancellation_discards_already_queued_progress_and_completion(
         assert not controller.busy and not context.device_controller.busy
 
         fails = False
-        assert controller.start()
+        assert controller.start(acoustic=False)
         assert controller._pool.waitForDone(5000)  # pyright: ignore[reportPrivateUsage]
         APPLICATION.processEvents()
         assert finished == [result]
         assert failed == []
+        # The second Sync was Plex-only: no new iPod fingerprints.
+        assert requested == [True, False]
         assert cancelled == [True]
         assert released == [True, True]
     finally:

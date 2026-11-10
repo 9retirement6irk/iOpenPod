@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -12,7 +13,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from threading import Event
-from time import time_ns
+from time import perf_counter, time_ns
 from typing import TYPE_CHECKING, Protocol, cast
 
 from iOpenPod.app.display_text import source_text
@@ -76,6 +77,9 @@ class IPodMediaScanStage(StrEnum):
     IMAGES = "images"
     SAVING = "saving"
     COMPLETE = "complete"
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,6 +183,9 @@ class IPodMediaScanIssue:
 class IPodMediaCacheStats:
     reused: int = 0
     fingerprinted: int = 0
+    # Tracks left without an Acoustic Fingerprint because nothing in this Sync
+    # could match one: only Connected Sources, which pair by Track details.
+    skipped: int = 0
 
     @property
     def total(self) -> int:
@@ -196,6 +203,9 @@ class IPodMediaLibrary:
     helper_revision: FileFingerprint | None
     persisted: bool
     playlist_associations: tuple[PlaylistAssociation, ...] = ()
+    # iPod Tracks deliberately not fingerprinted (see IPodMediaCacheStats.skipped).
+    # Sync planning pairs them by details or offers them as iPod-only.
+    unanalyzed_track_ids: frozenset[int] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -577,6 +587,7 @@ class _TrackOutcome:
     record: IPodTrackFingerprint | None = None
     error: Exception | None = None
     reused: bool = False
+    skipped: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -616,8 +627,14 @@ class IPodMediaScanner:
         progress: ProgressCallback | None = None,
         validate_source: CancellationCheck | None = None,
         report_read_only: bool = True,
+        acoustic: bool = True,
     ) -> IPodMediaLibrary:
-        """Scan one stable Library Snapshot and optionally publish its helper."""
+        """Scan one stable Library Snapshot and optionally publish its helper.
+
+        With ``acoustic`` false, Tracks without a saved fingerprint are not read
+        from the iPod: a Sync of only Connected Sources has nothing to match an
+        Acoustic Fingerprint against. Saved fingerprints are still reused.
+        """
 
         _require_sha256(library_sha256, "Library fingerprint")
         checkpoint()
@@ -669,6 +686,7 @@ class IPodMediaScanner:
                 report_read_only=report_read_only,
                 analysis_cache=cache,
                 remember=remember,
+                acoustic=acoustic,
             )
         finally:
             # Only independently completed, revalidated file analysis was remembered.
@@ -689,8 +707,10 @@ class IPodMediaScanner:
         report_read_only: bool,
         analysis_cache: IPodAnalysisCache | None,
         remember: Callable[[IPodAnalysisRecord], None],
+        acoustic: bool = True,
     ) -> IPodMediaLibrary:
 
+        started = perf_counter()
         _require_sha256(library_sha256, "Library fingerprint")
         checkpoint()
         _emit(progress, IPodMediaScanStage.LOADING, 0, 0, "Reading Sync helper…")
@@ -703,17 +723,32 @@ class IPodMediaScanner:
         images: list[IPodImageFingerprint] = []
         reused = 0
         fingerprinted = 0
+        skipped: set[int] = set()
+        failed = 0
         image_fingerprints: dict[tuple[str, int, int], str] = {}
 
         with closing(
             self._track_outcomes(
-                session, library, cached_tracks, analysis_cache, checkpoint, remember
+                session,
+                library,
+                cached_tracks,
+                analysis_cache,
+                checkpoint,
+                remember,
+                analyze=acoustic,
             )
         ) as outcomes:
             for outcome in outcomes:
                 index, track, track_path = outcome.index, outcome.track, outcome.path
                 error = outcome.error
-                if error is None:
+                if outcome.skipped:
+                    skipped.add(track.track_id)
+                    label = source_text(
+                        "Checking iPod Track {index} of {total}…",
+                        index=f"{index:,}",
+                        total=f"{len(library.tracks):,}",
+                    )
+                elif error is None:
                     track_record = outcome.record
                     assert track_record is not None
                     # v5 only changes acoustic encoding. v4 already has semantic baselines.
@@ -759,6 +794,8 @@ class IPodMediaScanner:
                     if isinstance(error, FpcalcNoAudioError):
                         reused += int(outcome.reused)
                         fingerprinted += int(not outcome.reused)
+                    else:
+                        failed += 1
                     issues.append(
                         IPodMediaScanIssue(f"Track {track.track_id}", str(error))
                     )
@@ -926,14 +963,28 @@ class IPodMediaScanner:
             "iPod media scan complete.",
             reused=reused,
         )
+        logger.info(
+            "iPod media scan: %.3fs, tracks=%d, reused=%d, fingerprinted=%d, "
+            "skipped=%d, failed=%d, images=%d, acoustic=%s, persisted=%s",
+            perf_counter() - started,
+            len(library.tracks),
+            reused,
+            fingerprinted,
+            len(skipped),
+            failed,
+            len(images),
+            acoustic,
+            persisted,
+        )
         return IPodMediaLibrary(
             tuple(tracks),
             tuple(images),
             tuple(issues),
-            IPodMediaCacheStats(reused, fingerprinted),
+            IPodMediaCacheStats(reused, fingerprinted, len(skipped)),
             helper_revision,
             persisted,
             loaded.playlists,
+            frozenset(skipped),
         )
 
     def _track_outcomes(
@@ -944,6 +995,8 @@ class IPodMediaScanner:
         cache: IPodAnalysisCache | None,
         checkpoint: CancellationCheck,
         remember: Callable[[IPodAnalysisRecord], None],
+        *,
+        analyze: bool = True,
     ) -> Generator[_TrackOutcome]:
         """Read native decoder inputs directly; retain capture fallback for adapters."""
         pending: _PendingTrack | None = None
@@ -1086,6 +1139,10 @@ class IPodMediaScanner:
                         )
                         continue
                     if unavailable:
+                        continue
+                    if not analyze:
+                        # Nothing in this Sync can match a new fingerprint.
+                        yield _TrackOutcome(index, track, path, skipped=True)
                         continue
                     if not prepared_fingerprinter:
                         if isinstance(fingerprinter, FpcalcFingerprinter):

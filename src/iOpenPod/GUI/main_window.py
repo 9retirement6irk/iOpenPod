@@ -2213,7 +2213,10 @@ class MainWindow(QMainWindow):
         value = self._with_remote(value)
         if self._context.device_controller.active_ipod is not None:
             self._pending_host_media_library = value
-            if self._context.ipod_media_controller.start():
+            # Plex and other Connected Sources pair by details, never by sound.
+            if self._context.ipod_media_controller.start(
+                acoustic=value.has_local_audio
+            ):
                 self._show_media_scan_progress(
                     source_text("Comparing the iPod media with its Sync helper…"),
                     host_scan=False,

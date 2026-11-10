@@ -170,6 +170,9 @@ Songs already on your iPod from before, for example FLAC files you added by
 hand, are recognized as the same Plex songs when their title, artist, album,
 track number and length agree, so they show as ticked and aren't copied again.
 When a match isn't certain (two similar songs), the song is left alone.
+When Sync uses only Plex and other connected sources, these songs aren't read
+off the iPod to fingerprint them, so scanning a large iPod takes seconds rather
+than hours. Add a local music folder to a Sync and fingerprinting comes back on.
 
 ![Settings → Sync with the Plex scrobbling switch and the media cache settings](docs/screenshots/fork/settings-sync.webp)
 

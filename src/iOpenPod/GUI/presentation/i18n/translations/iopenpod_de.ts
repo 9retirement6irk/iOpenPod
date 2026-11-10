@@ -11343,6 +11343,10 @@ Playlists: %3</translation>
         <translation>Dateien werden auf Änderungen während der Suche geprüft…</translation>
     </message>
     <message>
+        <source>Checking iPod Track {index} of {total}…</source>
+        <translation>iPod-Titel {index} von {total} wird geprüft…</translation>
+    </message>
+    <message>
         <source>Checking retained Library files before completing recovery…</source>
         <translation>Beibehaltene Mediathek-Dateien werden vor dem Abschluss der Wiederherstellung geprüft…</translation>
     </message>

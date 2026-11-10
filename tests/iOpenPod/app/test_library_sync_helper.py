@@ -443,6 +443,78 @@ def test_scan_releases_each_device_capture_before_copying_the_next(
     assert not any(path.exists() for path in fingerprinter.calls)
 
 
+def test_connected_only_scan_reads_no_unfingerprinted_tracks(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A Sync of only Plex or Grimmory has nothing to match a new Acoustic
+    Fingerprint against, so iPod Tracks without one are not read at all."""
+
+    root, session = _session(tmp_path)
+    _write_media(root)
+    fingerprinter = _Fingerprinter()
+    progress: list[IPodMediaScanProgress] = []
+
+    with session, caplog.at_level("INFO", logger=helper_module.__name__):
+        result = IPodMediaScanner(fingerprinter).scan(
+            session,
+            _library(),
+            library_sha256="a" * 64,
+            persist=False,
+            checkpoint=lambda: None,
+            progress=progress.append,
+            report_read_only=False,
+            acoustic=False,
+        )
+
+    assert fingerprinter.calls == []
+    assert result.tracks == ()
+    assert result.unanalyzed_track_ids == frozenset({7})
+    assert result.cache.skipped == 1
+    # Photos are still checked: Immich photos match by their bytes.
+    assert [image.image_id for image in result.images] == [91]
+    checking = [
+        event.message
+        for event in progress
+        if event.message.startswith("Checking iPod Track")
+    ]
+    assert checking
+    assert any(
+        "iPod media scan:" in record.getMessage()
+        and "skipped=1" in record.getMessage()
+        and "acoustic=False" in record.getMessage()
+        for record in caplog.records
+    )
+
+
+def test_connected_only_scan_still_reuses_saved_fingerprints(tmp_path: Path) -> None:
+    root, session = _session(tmp_path)
+    _write_media(root)
+
+    with session:
+        IPodMediaScanner(_Fingerprinter()).scan(
+            session,
+            _library(),
+            library_sha256="b" * 64,
+            persist=True,
+            checkpoint=lambda: None,
+        )
+        unused = _Fingerprinter()
+        result = IPodMediaScanner(unused).scan(
+            session,
+            _library(),
+            library_sha256="b" * 64,
+            persist=False,
+            checkpoint=lambda: None,
+            report_read_only=False,
+            acoustic=False,
+        )
+
+    assert unused.calls == []
+    assert [track.acoustic_fingerprint for track in result.tracks] == ["1,2,3"]
+    assert result.unanalyzed_track_ids == frozenset()
+    assert result.cache.skipped == 0
+
+
 def test_scan_reuses_helper_without_reading_media_content_again(tmp_path: Path) -> None:
     root, session = _session(tmp_path)
     _write_media(root)

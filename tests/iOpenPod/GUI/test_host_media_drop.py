@@ -273,7 +273,13 @@ def test_real_drop_scan_reaches_sync_selection_with_only_selected_photo(
     photo = tmp_path / "selected.png"
     Image.new("RGB", (8, 8), "red").save(photo)
     Image.new("RGB", (8, 8), "blue").save(tmp_path / "unrelated.png")
-    monkeypatch.setattr(context.ipod_media_controller, "start", lambda: True)
+    requested: list[bool] = []
+
+    def start(*, acoustic: bool = True) -> bool:
+        requested.append(acoustic)
+        return True
+
+    monkeypatch.setattr(context.ipod_media_controller, "start", start)
     pages = window.findChild(QStackedWidget, "pageStack")
     sync = window.findChild(SyncWorkspace)
     assert pages is not None and sync is not None
@@ -285,6 +291,8 @@ def test_real_drop_scan_reaches_sync_selection_with_only_selected_photo(
     library = context.host_media_controller.latest_library
     assert library is not None and library.snapshot.photos is not None
     assert len(library.snapshot.photos.photos) == 1
+    # A photo never matches a Track by sound: no iPod Track fingerprints.
+    assert requested == [False]
     context.ipod_media_controller.finished.emit(
         IPodMediaLibrary((), (), (), IPodMediaCacheStats(), None, False)
     )
@@ -326,7 +334,7 @@ def test_skipped_link_stays_visible_in_empty_selection_and_review(
         return 1
 
     monkeypatch.setattr(MediaFolderSettingsDialog, "exec", accept_settings)
-    monkeypatch.setattr(context.ipod_media_controller, "start", lambda: True)
+    monkeypatch.setattr(context.ipod_media_controller, "start", lambda **_: True)
     pages = window.findChild(QStackedWidget, "pageStack")
     sync = window.findChild(SyncWorkspace)
     assert pages is not None and sync is not None

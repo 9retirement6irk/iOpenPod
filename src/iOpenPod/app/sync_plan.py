@@ -189,6 +189,8 @@ class _Candidate:
     track_details_refreshed: bool = False
     artwork_available: bool = True
     has_video: bool | None = None
+    # An iPod Track deliberately not fingerprinted for a Connected-only Sync.
+    unanalyzed: bool = False
 
     @property
     def content_key(self) -> tuple[SyncPlanMediaKind, bool | None, str] | None:
@@ -385,7 +387,9 @@ def prepare_sync_plan(
             attention.append(_attention_item(candidate, SyncPlanBasis.MISSING_IDENTITY))
     for index in tuple(ipod_remaining):
         candidate = ipod_candidates[index]
-        if candidate.fingerprint is None:
+        # A Track left unfingerprinted on purpose can still pair by details, and
+        # is otherwise iPod-only: no Remote Item could have matched its sound.
+        if candidate.fingerprint is None and not candidate.unanalyzed:
             ipod_remaining.discard(index)
             attention.append(_attention_item(candidate, SyncPlanBasis.MISSING_IDENTITY))
 
@@ -1337,6 +1341,8 @@ def _ipod_candidates(
             path=track.metadata.location or None,
             item_id=track.track_id,
             track=track,
+            has_video=_has_video(track),
+            unanalyzed=track.track_id in media.unanalyzed_track_ids,
         )
         for track in library.tracks
         if track.track_id not in scanned_track_ids
@@ -1392,20 +1398,20 @@ def _ipod_track_candidate(
         modified_ns=record.modified_ns,
         sync=record.sync,
         track=track,
-        has_video=(
-            any(
-                kind in track.media_types
-                for kind in (
-                    MediaType.VIDEO,
-                    MediaType.AUDIO_VIDEO,
-                    MediaType.MUSIC_VIDEO,
-                    MediaType.TV_SHOW,
-                    MediaType.VIDEO_PODCAST,
-                )
-            )
-            if track is not None
-            else None
-        ),
+        has_video=_has_video(track) if track is not None else None,
+    )
+
+
+def _has_video(track: Track) -> bool:
+    return any(
+        kind in track.media_types
+        for kind in (
+            MediaType.VIDEO,
+            MediaType.AUDIO_VIDEO,
+            MediaType.MUSIC_VIDEO,
+            MediaType.TV_SHOW,
+            MediaType.VIDEO_PODCAST,
+        )
     )
 
 

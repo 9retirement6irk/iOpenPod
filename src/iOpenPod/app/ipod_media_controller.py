@@ -34,11 +34,14 @@ class _IPodScan(QRunnable):
         token: int,
         expected: ActiveIPod,
         coordinator: DeviceCoordinator,
+        *,
+        acoustic: bool = True,
     ) -> None:
         super().__init__()
         self.token = token
         self.expected = expected
         self.coordinator = coordinator
+        self.acoustic = acoustic
         self.cancelled = Event()
         self.signals = _Signals()
 
@@ -65,6 +68,7 @@ class _IPodScan(QRunnable):
                 self.expected,
                 publish,
                 self.cancelled,
+                acoustic=self.acoustic,
             )
         except LibrarySyncHelperCancelledError:
             self.signals.completed.emit(self.token, None, "")
@@ -100,7 +104,9 @@ class IPodMediaScanController(QObject):
         self._closed = False
         self.busy = False
 
-    def start(self) -> bool:
+    def start(self, *, acoustic: bool = True) -> bool:
+        """Scan the Active iPod; ``acoustic`` false skips new fingerprints."""
+
         expected = self._device_controller.active_ipod
         if (
             self._closed
@@ -111,7 +117,7 @@ class IPodMediaScanController(QObject):
             return False
         self._token += 1
         self.busy = True
-        job = _IPodScan(self._token, expected, self._coordinator)
+        job = _IPodScan(self._token, expected, self._coordinator, acoustic=acoustic)
         self._job = job
         job.signals.completed.connect(
             self._completed,
