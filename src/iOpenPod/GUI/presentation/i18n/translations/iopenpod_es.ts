@@ -11343,6 +11343,10 @@ Playlists: %3</translation>
         <translation>Comprobando archivos que cambiaron durante el análisis…</translation>
     </message>
     <message>
+        <source>Checking iPod Track {index} of {total}…</source>
+        <translation>Comprobando pista {index} de {total} del iPod…</translation>
+    </message>
+    <message>
         <source>Checking retained Library files before completing recovery…</source>
         <translation>Comprobando archivos conservados de la biblioteca antes de completar la recuperación…</translation>
     </message>

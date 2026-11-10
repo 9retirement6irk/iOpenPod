@@ -522,7 +522,7 @@ def test_completed_scans_open_selection_with_matched_checked_and_host_only_unche
         "active_ipod",
         property(lambda _controller: fake_active),
     )
-    monkeypatch.setattr(context.ipod_media_controller, "start", lambda: True)
+    monkeypatch.setattr(context.ipod_media_controller, "start", lambda **_: True)
 
     class FakeMediaFoldersDialog:
         folders = ()

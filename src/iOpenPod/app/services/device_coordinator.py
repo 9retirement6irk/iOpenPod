@@ -504,8 +504,14 @@ class DeviceCoordinator:
         expected: ActiveIPod,
         progress: Callable[[IPodMediaScanProgress], None],
         cancelled: threading.Event,
+        *,
+        acoustic: bool = True,
     ) -> IPodMediaLibrary:
-        """Scan the current iPod files and safely refresh its Sync helper."""
+        """Scan the current iPod files and safely refresh its Sync helper.
+
+        ``acoustic`` false leaves unfingerprinted Tracks unread (see
+        ``IPodMediaScanner.scan``).
+        """
 
         def checkpoint() -> None:
             if cancelled.is_set():
@@ -560,6 +566,7 @@ class DeviceCoordinator:
                 progress=progress,
                 validate_source=validate_source,
                 report_read_only=not mounted.volume.capabilities.safe_for_writes,
+                acoustic=acoustic,
             )
             validate_source()
         return result

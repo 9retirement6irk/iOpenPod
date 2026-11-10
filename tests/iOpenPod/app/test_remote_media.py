@@ -516,6 +516,54 @@ def test_plex_songs_pair_with_songs_added_from_local_flac_files(
     )
 
 
+def test_unfingerprinted_ipod_songs_pair_with_plex_by_details(tmp_path: Path) -> None:
+    """A Plex-only Sync leaves iPod Tracks unfingerprinted; they still pair by
+    details, and the rest are offered as iPod-only rather than flagged."""
+
+    ipod_songs = _ipod_songs(
+        (1, "Karma Police", "Radiohead", "OK Computer", 6, 264_000),
+        (2, "Only On The iPod", "Someone", "Elsewhere", 1, 200_000),
+        (3, "Unreadable", "Someone", "Elsewhere", 2, 200_000),
+    )
+    # Tracks 1 and 2 were skipped on purpose; track 3 failed to fingerprint.
+    ipod = replace(_ipod_library(()), unanalyzed_track_ids=frozenset({1, 2}))
+    plex = RemoteCatalog(
+        (
+            item(
+                tmp_path / "Plex/Radiohead/OK Computer/06 Karma Police [1].flac",
+                "plex:s:1",
+                title="Karma Police",
+                artist="Radiohead",
+                album="OK Computer",
+                track_number=6,
+                length_ms=264_000,
+            ),
+        )
+    )
+    plan = prepare_sync_plan(
+        merge_remote(_host_library((), (), ()), plex), ipod, ipod_songs
+    )
+    by_id = {entry.ipod_id: entry for entry in plan.items if entry.ipod_id}
+    assert by_id[1].action is SyncPlanAction.UNCHANGED
+    assert by_id[1].basis is SyncPlanBasis.TRACK_DETAILS_MATCH
+    assert by_id[2].action is SyncPlanAction.REMOVE
+    assert by_id[2].basis is SyncPlanBasis.IPOD_ONLY
+    assert by_id[3].action is SyncPlanAction.ATTENTION
+    assert by_id[3].basis is SyncPlanBasis.MISSING_IDENTITY
+    assert plan.count(SyncPlanAction.ADD) == 0
+
+
+def test_only_local_audio_or_video_needs_ipod_fingerprints(tmp_path: Path) -> None:
+    empty = _host_library((), (), ())
+    assert not empty.has_local_audio
+    plex = RemoteCatalog((item(tmp_path / "Plex/a.flac"),))
+    assert not merge_remote(empty, plex).has_local_audio
+    local, local_source = _host_track(tmp_path / "a.mp3", track_id=9, fingerprint="7")
+    with_local = _host_library((local,), (), (local_source,))
+    assert with_local.has_local_audio
+    assert merge_remote(with_local, plex).has_local_audio
+
+
 def test_details_pair_only_when_unique_on_both_sides(tmp_path: Path) -> None:
     """Duplicates on either side are left alone rather than guessed."""
 

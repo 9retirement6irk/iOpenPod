@@ -339,6 +339,21 @@ class HostMediaLibrary:
     unavailable_artwork_paths: frozenset[str] = frozenset()
 
     @property
+    def has_local_audio(self) -> bool:
+        """Whether any scanned file could match an iPod Track by its sound.
+
+        Remote Items (Plex, Grimmory) carry a Remote Identity instead of an
+        Acoustic Fingerprint, and Photos never match Tracks, so a Sync of only
+        those needs no iPod Track fingerprints.
+        """
+
+        return any(
+            not source.remote
+            and source.kind in (HostMediaFileKind.AUDIO, HostMediaFileKind.VIDEO)
+            for source in self.sources
+        )
+
+    @property
     def audio_count(self) -> int:
         return sum(
             any(
