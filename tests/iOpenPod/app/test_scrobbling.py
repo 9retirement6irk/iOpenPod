@@ -85,6 +85,7 @@ class ClientStub:
         self.calls: list[tuple[Listen, ...]] = []
         self.error = False
         self.partial = False
+        self.final = False
         self.after_submit: Callable[[], None] = lambda: None
 
     def submit(
@@ -96,7 +97,10 @@ class ClientStub:
         self.after_submit()
         return Submission(
             tuple(not self.partial or index == 0 for index in range(len(entries))),
-            tuple(RejectedListen(entry, 3) for entry in entries[1:])
+            tuple(
+                RejectedListen(entry, 404 if self.final else 3, final=self.final)
+                for entry in entries[1:]
+            )
             if self.partial
             else (),
         )
@@ -159,6 +163,41 @@ def test_unsupported_or_uncertain_plays_are_not_invented(song: Track) -> None:
     state = QueueState()
     assert capture(state, "one", LibrarySnapshot((song,)), ACCOUNTS, NOW) == 1
     assert not state.pending and not state.cursors
+
+
+def test_listens_a_service_can_never_accept_are_dropped_not_retried(
+    device: Device, tmp_path: Path
+) -> None:
+    """Plex has no Track for a song that was only ever on the iPod. Keeping its
+    listens pending repeated the same warning on every Sync."""
+
+    active = replace(device.active, library=LibrarySnapshot((track(),)))
+    queue = ScrobbleQueue(AtomicHostFile(tmp_path / "queue.json"))
+    client = ClientStub()
+    client.partial = client.final = True
+    service = ScrobbleService(
+        SourceStub(),
+        queue,
+        MemoryCredentials(),
+        clients=lambda _service: client,
+        clock=lambda: NOW,
+    )
+    account = (ACCOUNTS[0],)
+    result = service.run(active, account, Event(), lambda _: None)
+    # One accepted, one unmatched: nothing is left to try again.
+    assert (result.accepted, result.pending) == (1, 0)
+    assert len(client.calls[0]) == 2
+    (issue,) = result.issues
+    assert "1 listen rejected. They were dropped and won't be tried again." in issue
+    assert not [
+        item for item in queue.load().pending if item.account == account[0].identity
+    ]
+
+    # The next Sync has nothing to submit and nothing to warn about.
+    client.calls.clear()
+    again = service.run(active, account, Event(), lambda _: None)
+    assert client.calls == []
+    assert (again.accepted, again.pending, again.issues) == (0, 0, ())
 
 
 def test_two_services_partial_success_survives_restart_and_track_removal(

@@ -1,4 +1,4 @@
-"""Captured iPod plays become Plex plays; failures keep receipts and stay pending."""
+"""Captured iPod plays become Plex plays; unmatched ones are dropped, not retried."""
 
 from collections.abc import Mapping
 
@@ -59,7 +59,7 @@ def listen(title: str) -> Listen:
     return Listen("Band", title, "Album", 1_700_000_000, 200)
 
 
-def test_plays_are_attributed_to_the_ipod_and_unknown_songs_stay_pending() -> None:
+def test_plays_are_attributed_to_the_ipod_and_unknown_songs_are_dropped() -> None:
     plex = FakePlex()
     client = PlexScrobbleClient(plex).for_device("serial", "Will's iPod")
     result = client.submit(
@@ -68,6 +68,8 @@ def test_plays_are_attributed_to_the_ipod_and_unknown_songs_stay_pending() -> No
     assert result.accepted == (True, False, True)
     assert plex.plays == [("1", "Will's iPod"), ("3", "Will's iPod")]
     assert result.rejections[0].code == 404
+    # Plex has no such Track: trying again every Sync would never succeed.
+    assert result.rejections[0].final
     client.submit((listen("Two"),), CREDENTIALS)
     assert plex.library_reads == 1  # the library index is reused across batches
 
