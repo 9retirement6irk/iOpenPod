@@ -3434,6 +3434,13 @@
         <source>Album conversion cancelled.</source>
         <translation>Conversión del álbum cancelada.</translation>
     </message>
+    <message numerus="yes">
+        <source>Playlists chosen for Sync: %n</source>
+        <translation>
+            <numerusform>Listas de reproducción elegidas para sincronizar: %n</numerusform>
+            <numerusform>Listas de reproducción elegidas para sincronizar: %n</numerusform>
+        </translation>
+    </message>
     <message>
         <source>Skip Phase analysis</source>
         <translation>Omitir el análisis de Phase</translation>
@@ -9625,12 +9632,20 @@ Playlists: %3</translation>
         <translation>Sincronizar con el equipo</translation>
     </message>
     <message>
+        <source>Review Playlists</source>
+        <translation>Revisar listas de reproducción</translation>
+    </message>
+    <message>
         <source>Sources</source>
         <translation>Orígenes</translation>
     </message>
     <message>
         <source>Select Media</source>
         <translation>Seleccionar medios</translation>
+    </message>
+    <message>
+        <source>Playlists</source>
+        <translation>Listas de reproducción</translation>
     </message>
     <message>
         <source>Review</source>
@@ -14767,6 +14782,14 @@ Reiniciar iOpenPod no borra las propiedades ya guardadas en la caché de udev. E
     <message>
         <source>CONNECTED</source>
         <translation>CONECTADO</translation>
+    </message>
+    <message>
+        <source>All Playlists</source>
+        <translation>Todas las listas de reproducción</translation>
+    </message>
+    <message>
+        <source>Tick to put every Playlist and its songs on the iPod.</source>
+        <translation>Márcala para poner en el iPod todas las listas de reproducción y sus canciones.</translation>
     </message>
     <message>
         <source>Deselect all media</source>

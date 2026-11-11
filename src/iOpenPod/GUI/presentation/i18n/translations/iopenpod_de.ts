@@ -3434,6 +3434,13 @@
         <source>Album conversion cancelled.</source>
         <translation>Albumumwandlung abgebrochen.</translation>
     </message>
+    <message numerus="yes">
+        <source>Playlists chosen for Sync: %n</source>
+        <translation>
+            <numerusform>Für die Synchronisierung gewählte Wiedergabelisten: %n</numerusform>
+            <numerusform>Für die Synchronisierung gewählte Wiedergabelisten: %n</numerusform>
+        </translation>
+    </message>
     <message>
         <source>Skip Phase analysis</source>
         <translation>Phase-Analyse überspringen</translation>
@@ -9625,12 +9632,20 @@ Playlists: %3</translation>
         <translation>Mit Computer synchronisieren</translation>
     </message>
     <message>
+        <source>Review Playlists</source>
+        <translation>Wiedergabelisten prüfen</translation>
+    </message>
+    <message>
         <source>Sources</source>
         <translation>Quellen</translation>
     </message>
     <message>
         <source>Select Media</source>
         <translation>Medien auswählen</translation>
+    </message>
+    <message>
+        <source>Playlists</source>
+        <translation>Wiedergabelisten</translation>
     </message>
     <message>
         <source>Review</source>
@@ -14767,6 +14782,14 @@ Ein Neustart von iOpenPod entfernt keine bereits von udev zwischengespeicherten 
     <message>
         <source>CONNECTED</source>
         <translation>VERBUNDEN</translation>
+    </message>
+    <message>
+        <source>All Playlists</source>
+        <translation>Alle Wiedergabelisten</translation>
+    </message>
+    <message>
+        <source>Tick to put every Playlist and its songs on the iPod.</source>
+        <translation>Ankreuzen, um jede Wiedergabeliste mit ihren Titeln auf den iPod zu übertragen.</translation>
     </message>
     <message>
         <source>Deselect all media</source>

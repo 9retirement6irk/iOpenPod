@@ -249,6 +249,7 @@ class MainWindow(QMainWindow):
         self._review_host: HostMediaLibrary | None = None
         self._review_ipod: IPodMediaLibrary | None = None
         self._review_active: ActiveIPod | None = None
+        self._playlist_preview_stale = False
         scrobbler, self._scrobbling = create_scrobbling(
             context.device_coordinator,
             context.settings,
@@ -753,6 +754,7 @@ class MainWindow(QMainWindow):
         self._sync_workspace.selection.changed.connect(self._refresh_playlist_preview)
         self._sync_workspace.selection.changed.connect(self._refresh_default_status)
         self._sync_workspace.stageChanged.connect(self._refresh_default_status)
+        self._sync_workspace.stageChanged.connect(self._refresh_stale_playlist_preview)
         self._sync_workspace.playlistReconciliationChanged.connect(
             self._refresh_playlist_preview
         )
@@ -984,6 +986,9 @@ class MainWindow(QMainWindow):
                 return self.tr("Host items selected for Sync: %n", None, count)
             if self._sync_workspace.stage is SyncStage.SCANNING:
                 return self.tr("Scanning the Host Media Library…")
+            if self._sync_workspace.stage is SyncStage.PLAYLISTS:
+                count = len(self._sync_workspace.selection.chosen_playlist_ids)
+                return self.tr("Playlists chosen for Sync: %n", None, count)
             return self.tr("Configure Sync with Host")
         count = self._context.track_model.track_count
         count_text = track_count_text(count)
@@ -2362,14 +2367,33 @@ class MainWindow(QMainWindow):
         self._context.ipod_media_controller.cancel()
 
     def _refresh_playlist_preview(self) -> None:
+        """Work out Playlist changes for the stages that show them.
+
+        Select Media shows none, so ticking media there only marks the preview
+        stale; it is worked out when the Playlists or Review stage opens.
+        """
+
         host, ipod, active = self._review_host, self._review_ipod, self._review_active
+        if (
+            host is not None
+            and ipod is not None
+            and active is not None
+            and self._sync_workspace.stage
+            not in (SyncStage.PLAYLISTS, SyncStage.REVIEW)
+        ):
+            self._playlist_preview_stale = True
+            return
+        self._playlist_preview_stale = False
+        selection = self._sync_workspace.selection
         changes = (
             review_playlist_sync(
-                self._sync_workspace.selection.selected_plan,
+                selection.selected_plan,
                 host,
                 ipod,
                 active,
                 self._sync_workspace.playlist_choices,
+                # Already correlated for this scan: don't match the libraries again.
+                comparison=selection.resolved_comparison,
             )
             if host is not None and ipod is not None and active is not None
             else ()
@@ -2377,6 +2401,10 @@ class MainWindow(QMainWindow):
         self._sync_workspace.set_playlist_preview(
             changes, active.library if active is not None else None
         )
+
+    def _refresh_stale_playlist_preview(self) -> None:
+        if self._playlist_preview_stale:
+            self._refresh_playlist_preview()
 
     def _refresh_sync_availability(self) -> None:
         podcasts = self._context.podcast_controller

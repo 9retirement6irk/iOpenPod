@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from PySide6.QtCore import QAbstractProxyModel, QSortFilterProxyModel
 from PySide6.QtWidgets import QAbstractItemView
 
 from iOpenPod.app.artwork_controller import ArtworkController
@@ -38,7 +39,7 @@ from iPodDB.library import MediaKind
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from PySide6.QtWidgets import QStackedWidget
+    from PySide6.QtWidgets import QStackedWidget, QWidget
 
     from iOpenPod.app.core.settings.service import SettingsService
     from iOpenPod.app.library_workspace import LibraryWorkspace
@@ -285,6 +286,24 @@ class HostLibraryBrowser:
                     *page.findChildren(PhotoGridView),
                 ):
                     self._sync_actions.install(view)
+
+    def set_live_page(self, page: QWidget | None) -> None:
+        """Keep only the shown page filtering, sorting and grouping live.
+
+        Every page layers its own proxies over the shared models, so one tick
+        would otherwise refilter all of them. Hidden pages catch up when shown.
+        """
+
+        for candidate in self.pages:
+            live = candidate is page
+            proxies = candidate.findChildren(QAbstractProxyModel)
+            # Filters first, so a grouping layer regroups their final order once.
+            for proxy in sorted(
+                proxies, key=lambda proxy: not isinstance(proxy, QSortFilterProxyModel)
+            ):
+                set_live = getattr(proxy, "set_live", None)
+                if callable(set_live):
+                    set_live(live)
 
     def load(self, library: HostMediaLibrary) -> None:
         """Publish a complete scan to every shared Host Library view model."""

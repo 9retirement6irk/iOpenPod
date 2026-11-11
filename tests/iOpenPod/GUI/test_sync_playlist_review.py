@@ -72,13 +72,19 @@ def test_workspace_labels_finished_execution_as_result(
     workspace.show_execution()
     workspace.execution.show_result(SyncExecutionResult(SyncExecutionStatus.SUCCESS))
     labels = workspace.findChildren(QLabel, "syncStageIndicator")
-    assert labels[-1].text() == "4  Result"
+    assert [label.text() for label in labels[:4]] == [
+        "1  Sources",
+        "2  Select Media",
+        "3  Playlists",
+        "4  Review",
+    ]
+    assert labels[-1].text() == "5  Result"
     workspace.execution.begin_recovery(cleanup=True)
-    assert labels[-1].text() == "4  Sync"
+    assert labels[-1].text() == "5  Sync"
     workspace.execution.show_result(SyncExecutionResult(SyncExecutionStatus.SUCCESS))
-    assert labels[-1].text() == "4  Result"
+    assert labels[-1].text() == "5  Result"
     workspace.show_scan("Scanning again")
-    assert labels[-1].text() == "4  Sync"
+    assert labels[-1].text() == "5  Sync"
 
 
 def test_playlist_only_changes_require_checked_option_and_executable_review(
@@ -254,9 +260,10 @@ def test_media_changes_can_sync_with_playlist_reconciliation_off(
     assert execute.isEnabled()
 
 
-def test_playlist_preview_is_readable_literal_text_with_bounded_scrolling(
+def test_playlist_preview_is_readable_literal_text_on_its_own_page(
     workspace: SyncWorkspace,
 ) -> None:
+    workspace.show_playlists()
     changes = (
         PlaylistSyncChange("<Favorites>", "create", 3, 0, False),
         PlaylistSyncChange("Road Trip", "update", 2, 1, True),
@@ -276,8 +283,11 @@ def test_playlist_preview_is_readable_literal_text_with_bounded_scrolling(
     assert preview.model().index(0, 0).data() == "<Favorites>"
     assert preview.model().index(0, 2).data() == "Create · 3 added, 0 removed"
     assert preview.model().index(1, 2).data() == "2 added, 1 removed · Reorder"
-    assert preview.height() <= 220
+    # The Playlists stage gives the table the page, not a four-row strip.
+    assert preview.height() > 300
     assert preview.verticalScrollBar().maximum() > 0
+    workspace.show_review()
+    assert not preview.isVisible()
 
 
 @pytest.mark.parametrize("reset", ["clear", "scan"])

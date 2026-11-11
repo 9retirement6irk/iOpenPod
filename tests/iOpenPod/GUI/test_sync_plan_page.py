@@ -47,6 +47,7 @@ from iOpenPod.app.models.device import (
 from iOpenPod.app.models.sync_plan_table_model import SyncPlanColumn
 from iOpenPod.app.models.sync_selection import SyncSelection
 from iOpenPod.app.models.track_table_model import TrackColumn
+from iOpenPod.app.sync_execution import review_playlist_sync
 from iOpenPod.app.sync_plan import (
     SyncPlan,
     SyncPlanAction,
@@ -681,6 +682,24 @@ def test_completed_scans_open_selection_with_matched_checked_and_host_only_unche
         workspace.selection.set_tracks_checked((1,), False)
         assert bar.estimate.projected_used_bytes == 611
         assert window.statusBar().currentMessage() == "Host items selected for Sync: 1"
+
+        # Select Media shows no Playlist changes, so ticking there never works
+        # them out; they are worked out once when a stage that shows them opens.
+        previews: list[object] = []
+
+        def counted_review(*args: object, **kwargs: object) -> object:
+            previews.append(kwargs.get("comparison"))
+            return review_playlist_sync(*args, **kwargs)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(main_window_module, "review_playlist_sync", counted_review)
+        workspace.selection.set_tracks_checked((1,), True)
+        workspace.selection.set_tracks_checked((1,), False)
+        assert previews == []
+        workspace.show_playlists()
+        # It reuses this scan's comparison instead of matching the libraries again.
+        assert previews == [workspace.selection.resolved_comparison]
+        assert window.statusBar().currentMessage() == "Playlists chosen for Sync: 1"
+        workspace.show_selection()
 
         workspace.show_review()
         assert window.statusBar().currentMessage() == "2 planned changes"

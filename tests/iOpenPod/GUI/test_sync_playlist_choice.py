@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QEvent, Qt
-from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QTreeView
+from PySide6.QtTest import QSignalSpy, QTest
+from PySide6.QtWidgets import QCheckBox, QLabel, QPushButton, QTreeView
 from tests.iOpenPod.app.services.test_library_resources import build_device
 from tests.iOpenPod.GUI.application_shell_test_support import APPLICATION, build_context
 
@@ -28,7 +28,7 @@ from iOpenPod.app.sync_plan import (
     host_path_identity,
 )
 from iOpenPod.GUI.presentation.artwork_provider import ArtworkPixmapProvider
-from iOpenPod.GUI.sync_workspace import SyncWorkspace
+from iOpenPod.GUI.sync_workspace import SyncStage, SyncWorkspace
 from iOpenPod.GUI.widgets.playlist_tree import (
     _check_rect,  # pyright: ignore[reportPrivateUsage]
 )
@@ -43,6 +43,14 @@ from iPodDB.library import (
 
 CHECKED = Qt.CheckState.Checked
 UNCHECKED = Qt.CheckState.Unchecked
+
+
+def _all_state(selection: SyncSelection) -> Qt.CheckState | None:
+    return selection.playlists_check_state
+
+
+def _stage(workspace: SyncWorkspace) -> SyncStage:
+    return workspace.stage
 
 
 def _library() -> HostMediaLibrary:
@@ -136,6 +144,41 @@ def test_ticking_a_playlist_ticks_its_songs_and_unticking_never_removes() -> Non
     assert not selection.chosen_playlist_ids
 
 
+def test_all_playlists_are_chosen_or_unchosen_in_one_update() -> None:
+    selection = SyncSelection()
+    assert _all_state(selection) is None  # nothing to choose yet
+    selection.reset(_library(), _comparison())
+    assert _all_state(selection) is UNCHECKED
+    selection.set_playlist_checked(11, True)
+    assert _all_state(selection) is Qt.CheckState.PartiallyChecked
+
+    host_changes = QSignalSpy(selection.hostSelectionChanged)
+    playlist_changes = QSignalSpy(selection.playlistsChanged)
+    assert selection.set_all_playlists_checked(True)
+    # One update however many Playlists there are, so lists refresh once.
+    assert host_changes.count() == playlist_changes.count() == 1
+    assert _all_state(selection) is CHECKED
+    assert selection.chosen_playlist_ids == {10, 11}
+    assert [selection.track_check_state(i) for i in (1, 2, 3, 4, 5)] == [
+        CHECKED,
+        CHECKED,
+        CHECKED,
+        CHECKED,
+        UNCHECKED,  # in no Playlist
+    ]
+    assert not selection.set_all_playlists_checked(True)
+
+    assert selection.set_all_playlists_checked(False)
+    assert _all_state(selection) is UNCHECKED
+    # Song 1 is on the iPod: unticking every Playlist never plans a removal.
+    assert [selection.track_check_state(i) for i in (1, 2, 3, 4)] == [
+        CHECKED,
+        UNCHECKED,
+        UNCHECKED,
+        UNCHECKED,
+    ]
+
+
 @pytest.fixture
 def workspace() -> Iterator[SyncWorkspace]:
     context = build_context()
@@ -205,5 +248,70 @@ def test_select_media_chooses_playlists_and_review_follows(
         workspace.set_playlist_preview(rows)
         assert [r.host_playlist_id for r in workspace._playlist_preview] == [11]  # pyright: ignore[reportPrivateUsage]
         assert host_path_identity("C:/Music/2.mp3") not in selection.selected_host_paths
+    finally:
+        device.coordinator.close()
+
+
+def test_select_all_playlists_checkbox_and_the_playlists_stage(
+    tmp_path: Path, workspace: SyncWorkspace
+) -> None:
+    device = build_device(tmp_path)
+    try:
+        ipod = IPodMediaLibrary((), (), (), IPodMediaCacheStats(), None, False)
+        workspace.load_comparison(_library(), _comparison(), device.active, ipod)
+        selection = workspace.selection
+        everything = workspace.findChild(QCheckBox, "selectAllSyncPlaylists")
+        proceed = workspace.findChild(QPushButton, "reviewSyncSelection")
+        assert everything is not None and proceed is not None
+        assert everything.isVisible() and everything.text() == "All Playlists"
+        assert everything.checkState() is UNCHECKED
+        assert proceed.text() == "Review Sync"
+
+        # No Playlists chosen: Select Media goes straight to Review.
+        proceed.click()
+        assert _stage(workspace) is SyncStage.REVIEW
+        to_playlists = workspace.findChild(QPushButton, "backToSyncPlaylists")
+        assert to_playlists is not None and not to_playlists.isVisible()
+        workspace.show_selection()
+
+        selection.set_playlist_checked(11, True)
+        assert everything.checkState() is Qt.CheckState.PartiallyChecked
+        everything.click()  # some chosen -> all chosen
+        assert selection.chosen_playlist_ids == {10, 11}
+        assert everything.checkState() is CHECKED
+        assert selection.track_check_state(2) is CHECKED
+        everything.click()  # all chosen -> none
+        assert not selection.chosen_playlist_ids
+        assert everything.checkState() is UNCHECKED
+        everything.click()
+        assert selection.chosen_playlist_ids == {10, 11}
+
+        # With Playlists chosen, they get their own stage before Review.
+        assert proceed.text() == "Review Playlists"
+        proceed.click()
+        assert _stage(workspace) is SyncStage.PLAYLISTS
+        title = workspace.findChild(QLabel, "syncPlaylistReviewTitle")
+        execute = workspace.findChild(QPushButton, "executeSync")
+        assert title is not None and title.isVisible()
+        assert title.text() == "Review Playlists"
+        assert execute is not None and not execute.isVisible()
+        current = [
+            label.text()
+            for label in workspace.findChildren(QLabel, "syncStageIndicator")
+            if label.property("current")
+        ]
+        assert current == ["3  Playlists"]
+
+        onward = workspace.findChild(QPushButton, "reviewSyncAfterPlaylists")
+        assert onward is not None and onward.text() == "Review Sync"
+        onward.click()
+        assert _stage(workspace) is SyncStage.REVIEW
+        assert to_playlists.isVisible()
+        to_playlists.click()
+        assert _stage(workspace) is SyncStage.PLAYLISTS
+        back = workspace.findChild(QPushButton, "backToSyncSelectionFromPlaylists")
+        assert back is not None
+        back.click()
+        assert _stage(workspace) is SyncStage.SELECT
     finally:
         device.coordinator.close()

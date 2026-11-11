@@ -488,14 +488,46 @@ class SyncSelection(QObject):
         another chosen Playlist, so it never plans removing anything.
         """
 
-        tracks = self._playlists.get(playlist_id)
-        if tracks is None or (playlist_id in self._chosen_playlists) == checked:
+        return self.set_playlists_checked((playlist_id,), checked)
+
+    @property
+    def playlists_check_state(self) -> Qt.CheckState | None:
+        """All, some or none of the Playlists are chosen; None when there are none."""
+
+        if not self._playlists:
+            return None
+        if not self._chosen_playlists:
+            return Qt.CheckState.Unchecked
+        if len(self._chosen_playlists) == len(self._playlists):
+            return Qt.CheckState.Checked
+        return Qt.CheckState.PartiallyChecked
+
+    def set_all_playlists_checked(self, checked: bool) -> bool:
+        """Choose every Playlist, or none, in one update."""
+
+        return self.set_playlists_checked(tuple(self._playlists), checked)
+
+    def set_playlists_checked(self, playlist_ids: Iterable[int], checked: bool) -> bool:
+        """Choose or unchoose several Playlists, updating Track ticks once."""
+
+        changing = [
+            playlist_id
+            for playlist_id in dict.fromkeys(playlist_ids)
+            if playlist_id in self._playlists
+            and (playlist_id in self._chosen_playlists) != checked
+        ]
+        if not changing:
             return False
+        tracks = [
+            track_id
+            for playlist_id in changing
+            for track_id in self._playlists[playlist_id]
+        ]
         if checked:
-            self._chosen_playlists.add(playlist_id)
+            self._chosen_playlists.update(changing)
             changed_tracks = self.set_tracks_checked(tracks, True)
         else:
-            self._chosen_playlists.discard(playlist_id)
+            self._chosen_playlists.difference_update(changing)
             kept = {
                 track_id
                 for other in self._chosen_playlists

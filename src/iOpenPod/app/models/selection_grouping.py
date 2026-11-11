@@ -68,14 +68,35 @@ class SelectionGroupingProxyModel(QAbstractProxyModel):
         self._expanded: dict[SelectionGroup, bool] = dict.fromkeys(_GROUP_ORDER, True)
         self._rows: tuple[_PresentedRow, ...] = ()
         self._proxy_rows_by_source_row: dict[int, int] = {}
+        self._live = True
+        self._stale = False
         self.setSourceModel(source)
         source.modelReset.connect(self._source_changed)
         source.layoutChanged.connect(self._source_changed)
         source.rowsInserted.connect(self._source_changed)
         source.rowsRemoved.connect(self._source_changed)
         source.rowsMoved.connect(self._source_changed)
-        source.dataChanged.connect(self._source_changed)
+        source.dataChanged.connect(self._source_data_changed)
         self._rebuild_rows()
+
+    def set_live(self, live: bool) -> None:
+        """Stop regrouping on selection changes while the page is hidden.
+
+        Row insertions, removals and resets are always followed; only check-state
+        changes wait, and they are caught up when the page is shown again.
+        """
+
+        if live == self._live:
+            return
+        self._live = live
+        if live and self._stale:
+            self._source_changed()
+
+    def _source_data_changed(self, *_args: object) -> None:
+        if self._live:
+            self._source_changed()
+        else:
+            self._stale = True
 
     @property
     def grouping_enabled(self) -> bool:
@@ -265,6 +286,7 @@ class SelectionGroupingProxyModel(QAbstractProxyModel):
         return self.sourceModel().headerData(section, orientation, role)
 
     def _source_changed(self, *_args: object) -> None:
+        self._stale = False
         self.beginResetModel()
         self._rebuild_rows()
         self.endResetModel()

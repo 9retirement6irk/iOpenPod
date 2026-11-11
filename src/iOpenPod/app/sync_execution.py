@@ -2878,13 +2878,19 @@ def review_playlist_sync(
     ipod: IPodMediaLibrary,
     source: ActiveIPod,
     choices: tuple[PlaylistSyncChoice, ...] = (),
+    *,
+    comparison: SyncPlan | None = None,
 ) -> tuple[PlaylistSyncReviewItem, ...]:
-    """Include unchanged matches and skipped reasons alongside proposed changes."""
+    """Include unchanged matches and skipped reasons alongside proposed changes.
+
+    ``comparison`` is the resolved comparison ``plan`` was selected from, when the
+    caller already holds it; otherwise the scans are correlated again.
+    """
     rows: list[PlaylistSyncReviewItem] = []
     request = SyncExecutionRequest(
         plan, host, ipod, source, 0, 0, playlist_choices=choices
     )
-    _preview_playlist_sync(request, rows=rows)
+    _preview_playlist_sync(request, comparison=comparison, rows=rows)
     return tuple(rows)
 
 

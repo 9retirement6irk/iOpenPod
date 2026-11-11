@@ -305,8 +305,11 @@ class PlaylistMatchDialog(QDialog):
 class PlaylistSyncReview(QWidget):
     choicesChanged = Signal()
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None, *, fill: bool = False) -> None:
+        """``fill`` lets the table take all the height its page offers."""
+
         super().__init__(parent)
+        self._fill = fill
         self._choices: dict[int, PlaylistSyncChoice] = {}
         self._library = LibrarySnapshot()
         self.model = PlaylistSyncTableModel(self)
@@ -328,7 +331,8 @@ class PlaylistSyncReview(QWidget):
             QHeaderView.ResizeMode.Stretch
         )
         self.table.setMinimumHeight(LAYOUT.control_height_large * 3)
-        self.table.setMaximumHeight(LAYOUT.control_height_large * 5)
+        if not fill:
+            self.table.setMaximumHeight(LAYOUT.control_height_large * 5)
         self._detail = QLabel(self)
         self._detail.setTextFormat(Qt.TextFormat.PlainText)
         self._detail.setWordWrap(True)
@@ -342,7 +346,7 @@ class PlaylistSyncReview(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(LAYOUT.space_xs)
-        layout.addWidget(self.table)
+        layout.addWidget(self.table, 1 if fill else 0)
         layout.addLayout(actions)
         self.table.selectionModel().currentChanged.connect(self._describe_selected)
         self.table.doubleClicked.connect(self._choose_match)
@@ -383,11 +387,12 @@ class PlaylistSyncReview(QWidget):
         self.model.replace_rows(rows)
         self.setVisible(bool(rows))
         if rows:
-            self.table.setFixedHeight(
-                self.table.horizontalHeader().height()
-                + min(4, len(rows)) * LAYOUT.control_height_large
-                + 2 * self.table.frameWidth()
-            )
+            if not self._fill:
+                self.table.setFixedHeight(
+                    self.table.horizontalHeader().height()
+                    + min(4, len(rows)) * LAYOUT.control_height_large
+                    + 2 * self.table.frameWidth()
+                )
             selected = next(
                 (i for i, row in enumerate(rows) if row.host_playlist_id == identity), 0
             )
