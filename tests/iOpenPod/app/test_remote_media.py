@@ -202,6 +202,8 @@ def test_sync_downloads_a_remote_item_and_records_its_identity(tmp_path: Path) -
     cached = tmp_path / "Connected/Plex/Band/Album/01 Tone [5].mp3"
     song = item(cached, "plex:s:5", title="Remote tone", length_ms=1_000)
     downloads: list[str] = []
+    discarded: list[str] = []
+    damaged = [False]
 
     class Downloader:
         def materialize(
@@ -212,11 +214,17 @@ def test_sync_downloads_a_remote_item_and_records_its_identity(tmp_path: Path) -
         ) -> HostMediaSource:
             downloads.append(str(source.path))
             cached.parent.mkdir(parents=True, exist_ok=True)
-            cached.write_bytes(tone)
+            # A damaged cached copy is served until it is discarded.
+            cached.write_bytes(b"not audio" if damaged[0] else tone)
             stat = cached.stat()
             return replace(
                 source, size_bytes=stat.st_size, modified_ns=stat.st_mtime_ns
             )
+
+        def discard(self, source: HostMediaSource) -> bool:
+            discarded.append(str(source.path))
+            damaged[0] = False
+            return True
 
     device = bare_device(tmp_path, model_number="M9802")
     try:
@@ -244,6 +252,38 @@ def test_sync_downloads_a_remote_item_and_records_its_identity(tmp_path: Path) -
         assert synced.sync is not None
         assert synced.sync.host_path_hint == str(cached)
         assert synced.sync.host_size_bytes == len(tone)
+
+        # A cached copy that isn't readable media is downloaded once more.
+        damaged[0] = True
+        downloads.clear()
+        other = bare_device(tmp_path / "second", model_number="M9802")
+        try:
+            retried = SyncExecutor(other.coordinator).execute(
+                replace(
+                    SyncExecutionRequest(
+                        select_sync_plan(
+                            prepare_sync_plan(host, ipod, other.active.library),
+                            selected_host_paths=frozenset(
+                                {host_path_identity(str(cached))}
+                            ),
+                            selected_ipod_removals=frozenset(),
+                        ),
+                        host,
+                        ipod,
+                        other.active,
+                        1,
+                        1,
+                    ),
+                    remote=Downloader(),
+                ),
+                lambda _: None,
+                Event(),
+            )
+            assert retried.status is SyncExecutionStatus.SUCCESS, retried.issues
+            assert downloads == [str(cached), str(cached)]
+            assert discarded == [str(cached)]
+        finally:
+            other.coordinator.close()
 
         # Without a downloader (signed out), the item is reported, not crashed on.
         failed = SyncExecutor(device.coordinator).execute(
@@ -360,6 +400,9 @@ def test_sync_downloads_and_converts_a_remote_video(
             return replace(
                 source, size_bytes=stat.st_size, modified_ns=stat.st_mtime_ns
             )
+
+        def discard(self, source: HostMediaSource) -> bool:
+            return False
 
     device = build_device(tmp_path)
     try:

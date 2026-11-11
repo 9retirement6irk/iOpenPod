@@ -729,6 +729,27 @@ class ConnectedRemote:
             remote=True,
         )
 
+    def discard(self, source: HostMediaSource) -> bool:
+        """Remove a download and its record, so it is fetched again when needed."""
+
+        spec = self._specs.get(host_path_identity(str(source.path)))
+        if spec is None:
+            return False
+        target = owned_target(spec.folder, spec.relative)
+        with self._lock:
+            owned = load_owned(spec.folder)
+            known = owned.pop(spec.relative, None) is not None
+            if known:
+                save_owned(spec.folder, owned)
+            self._memory.sizes.pop(spec.key, None)
+        try:
+            target.unlink()
+        except FileNotFoundError:
+            return known
+        except OSError:
+            return known
+        return True
+
     # --- the cache ---------------------------------------------------------------------
 
     def trim(self, *, keep: bool, limit_bytes: int) -> tuple[int, int]:
