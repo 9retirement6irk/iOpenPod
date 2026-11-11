@@ -193,6 +193,20 @@ class IPodMediaCacheStats:
 
 
 @dataclass(frozen=True, slots=True)
+class IPodUnanalyzedTrack:
+    """An iPod Track left unfingerprinted, with the file facts seen at the scan.
+
+    A Connected-only Sync has nothing to match its sound against, but Sync still
+    needs to know the file is the one that was scanned before it changes it.
+    """
+
+    track_id: int
+    path: DevicePath
+    size_bytes: int
+    modified_ns: int
+
+
+@dataclass(frozen=True, slots=True)
 class IPodMediaLibrary:
     """Device-side matching evidence retained outside the common Library Snapshot."""
 
@@ -205,7 +219,11 @@ class IPodMediaLibrary:
     playlist_associations: tuple[PlaylistAssociation, ...] = ()
     # iPod Tracks deliberately not fingerprinted (see IPodMediaCacheStats.skipped).
     # Sync planning pairs them by details or offers them as iPod-only.
-    unanalyzed_track_ids: frozenset[int] = frozenset()
+    unanalyzed_tracks: tuple[IPodUnanalyzedTrack, ...] = ()
+
+    @property
+    def unanalyzed_track_ids(self) -> frozenset[int]:
+        return frozenset(track.track_id for track in self.unanalyzed_tracks)
 
 
 @dataclass(frozen=True, slots=True)
@@ -588,6 +606,7 @@ class _TrackOutcome:
     error: Exception | None = None
     reused: bool = False
     skipped: bool = False
+    entry: DeviceEntry | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -723,7 +742,7 @@ class IPodMediaScanner:
         images: list[IPodImageFingerprint] = []
         reused = 0
         fingerprinted = 0
-        skipped: set[int] = set()
+        skipped: list[IPodUnanalyzedTrack] = []
         failed = 0
         image_fingerprints: dict[tuple[str, int, int], str] = {}
 
@@ -742,7 +761,15 @@ class IPodMediaScanner:
                 index, track, track_path = outcome.index, outcome.track, outcome.path
                 error = outcome.error
                 if outcome.skipped:
-                    skipped.add(track.track_id)
+                    assert track_path is not None and outcome.entry is not None
+                    skipped.append(
+                        IPodUnanalyzedTrack(
+                            track.track_id,
+                            track_path,
+                            outcome.entry.size,
+                            outcome.entry.modified_ns,
+                        )
+                    )
                     label = source_text(
                         "Checking iPod Track {index} of {total}…",
                         index=f"{index:,}",
@@ -984,7 +1011,7 @@ class IPodMediaScanner:
             helper_revision,
             persisted,
             loaded.playlists,
-            frozenset(skipped),
+            tuple(skipped),
         )
 
     def _track_outcomes(
@@ -1142,7 +1169,9 @@ class IPodMediaScanner:
                         continue
                     if not analyze:
                         # Nothing in this Sync can match a new fingerprint.
-                        yield _TrackOutcome(index, track, path, skipped=True)
+                        yield _TrackOutcome(
+                            index, track, path, skipped=True, entry=entry
+                        )
                         continue
                     if not prepared_fingerprinter:
                         if isinstance(fingerprinter, FpcalcFingerprinter):

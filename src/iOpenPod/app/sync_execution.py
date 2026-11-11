@@ -145,7 +145,11 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator
 
     from iOpenPod.app.host_media_library import HostMediaLibrary, HostMediaSource
-    from iOpenPod.app.library_sync_helper import IPodMediaLibrary
+    from iOpenPod.app.library_sync_helper import (
+        IPodMediaLibrary,
+        IPodTrackFingerprint,
+        IPodUnanalyzedTrack,
+    )
     from iOpenPod.app.library_write import LibraryReview
     from iOpenPod.app.media.transcoding import PreparedTranscode
     from iOpenPod.app.models.device import ActiveIPod
@@ -1001,6 +1005,8 @@ class SyncExecutor:
                 ),
             )
         except Exception as error:
+            # The result shows only the message; keep the cause for diagnosis.
+            logger.exception("Sync failed")
             if committed_result is not None:
                 return replace(
                     committed_result,
@@ -3045,7 +3051,12 @@ def _validate_device_sources(
 ) -> None:
     """Recheck consumed or matched media within the caller's bound session."""
 
-    tracks = {item.track_id: item for item in request.ipod.tracks}
+    # Tracks left unfingerprinted for a Connected-only Sync still have the file
+    # facts seen at the scan, so removing or replacing one is checked the same way.
+    tracks: dict[int, IPodTrackFingerprint | IPodUnanalyzedTrack] = {
+        **{item.track_id: item for item in request.ipod.unanalyzed_tracks},
+        **{item.track_id: item for item in request.ipod.tracks},
+    }
     images = {item.image_id: item for item in request.ipod.images}
     observed: dict[DevicePath, DeviceEntry] = {}
     for item in request.plan.items:
@@ -3061,10 +3072,17 @@ def _validate_device_sources(
             continue
         if item.ipod_id is not None:
             recorded = (
-                tracks[item.ipod_id]
+                tracks.get(item.ipod_id)
                 if item.media_kind is SyncPlanMediaKind.TRACK
-                else images[item.ipod_id]
+                else images.get(item.ipod_id)
             )
+            if recorded is None:
+                raise ValueError(
+                    source_text(
+                        "{name}: the iPod scan has no record of this item. Rescan the iPod before Sync.",
+                        name=item.name,
+                    )
+                )
             actual = observed.get(recorded.path)
             if actual is None:
                 actual = session.stat(recorded.path)

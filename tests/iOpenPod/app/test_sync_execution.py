@@ -53,6 +53,7 @@ from iOpenPod.app.library_sync_helper import (
     IPodMediaCacheStats,
     IPodMediaLibrary,
     IPodTrackFingerprint,
+    IPodUnanalyzedTrack,
     SyncDetails,
     SyncedTrack,
 )
@@ -743,6 +744,64 @@ def _request(
         )
     )
     return SyncExecutionRequest(plan, host, ipod, device.active, 1, 1)
+
+
+def test_unfingerprinted_ipod_track_can_be_removed_and_is_checked_first(
+    tmp_path: Path,
+) -> None:
+    """A Connected-only Sync skips iPod fingerprints; removing such a Track must
+    still work, and still refuses a file that changed since the scan."""
+
+    device = build_device(tmp_path)
+    try:
+        scanned = _ipod(device)
+        doomed = scanned.tracks[0]
+        ipod = replace(
+            scanned,
+            tracks=scanned.tracks[1:],
+            unanalyzed_tracks=(
+                IPodUnanalyzedTrack(
+                    doomed.track_id, doomed.path, doomed.size_bytes, doomed.modified_ns
+                ),
+            ),
+        )
+        host = HostMediaLibrary(LibrarySnapshot(), (), (), HostMediaCacheStats())
+        comparison = prepare_sync_plan(host, ipod, device.active.library)
+        removal = next(
+            item
+            for item in comparison.items
+            if item.action is SyncPlanAction.REMOVE and item.ipod_id == doomed.track_id
+        )
+        plan = replace(comparison, items=(removal,))
+
+        # The file is not the one that was scanned: refuse, with a real reason.
+        stale = replace(
+            ipod,
+            unanalyzed_tracks=(
+                replace(ipod.unanalyzed_tracks[0], size_bytes=doomed.size_bytes + 1),
+            ),
+        )
+        refused = _Executor(device.coordinator, transcoder=_AvailableTools()).execute(
+            SyncExecutionRequest(plan, host, stale, device.active, 1, 1),
+            lambda _: None,
+            Event(),
+        )
+        assert refused.status is SyncExecutionStatus.FAILED
+        assert any("changed after scanning" in str(i.detail) for i in refused.issues)
+
+        result = _Executor(device.coordinator, transcoder=_AvailableTools()).execute(
+            SyncExecutionRequest(plan, host, ipod, device.active, 1, 1),
+            lambda _: None,
+            Event(),
+        )
+        assert result.status is SyncExecutionStatus.SUCCESS, result.issues
+        assert result.active is not None
+        assert doomed.track_id not in {
+            track.track_id for track in result.active.library.tracks
+        }
+        assert not (device.root / str(doomed.path)).exists()
+    finally:
+        device.coordinator.close()
 
 
 @pytest.mark.parametrize("action", [SyncPlanAction.ADD, SyncPlanAction.REMOVE])

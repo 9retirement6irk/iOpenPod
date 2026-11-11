@@ -77,13 +77,23 @@ class SyncStorageProjection:
             for track in host.snapshot.tracks
             if track.metadata.location
         }
+        # Tracks left unfingerprinted still take space that a removal frees.
         self._ipod_files = {
-            (SyncPlanMediaKind.TRACK, track.track_id): (
-                str(track.path),
-                track.size_bytes,
+            (SyncPlanMediaKind.TRACK, skipped.track_id): (
+                str(skipped.path),
+                skipped.size_bytes,
             )
-            for track in ipod.tracks
+            for skipped in ipod.unanalyzed_tracks
         }
+        self._ipod_files.update(
+            {
+                (SyncPlanMediaKind.TRACK, track.track_id): (
+                    str(track.path),
+                    track.size_bytes,
+                )
+                for track in ipod.tracks
+            }
+        )
         self._ipod_files.update(
             {
                 (SyncPlanMediaKind.PHOTO, photo.image_id): (
