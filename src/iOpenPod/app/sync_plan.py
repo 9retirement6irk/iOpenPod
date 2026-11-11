@@ -8,6 +8,7 @@ import unicodedata
 from collections import defaultdict
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
+from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -523,6 +524,12 @@ def with_stream_selection(
         raise ValueError("Stream choices require a safely selected Host Track")
     changed = selection_digest(selection) != item.applied_stream_selection_sha256
     replacement = changed and item.action is not SyncPlanAction.ADD
+    if (
+        not replacement
+        and item.stream_selection == selection
+        and not item.stream_selection_changed
+    ):
+        return item  # nothing to request: skip copying every selected item
     return replace(
         item,
         action=SyncPlanAction.UPDATE if replacement else item.action,
@@ -532,8 +539,12 @@ def with_stream_selection(
     )
 
 
+@lru_cache(maxsize=262_144)
 def host_path_identity(value: str) -> str:
-    """Return the normalized identity used for Host-path correlation and selection."""
+    """Return the normalized identity used for Host-path correlation and selection.
+
+    Cached: selection and planning ask for the same paths after every change.
+    """
 
     return os.path.normcase(os.path.normpath(os.path.abspath(value)))
 
