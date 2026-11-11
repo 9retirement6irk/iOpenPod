@@ -136,6 +136,9 @@ from storage.host_input import LocalHostFile
 from storage.media_processing import MediaToolFinder, available_compute_threads
 
 logger = logging.getLogger(__name__)
+
+# FFprobe could not read the file as media at all: for a download, a damaged copy.
+_UNREADABLE_MEDIA = frozenset({"media.probe_failed", "media.probe_invalid"})
 _FAILURE_LOG_LIMIT = 5
 
 _PHOTO_MEMORY_BUDGET = 2 * 1024 * 1024 * 1024
@@ -1894,7 +1897,50 @@ class SyncExecutor:
                 )
             # Download (or reuse the cached copy) now; its facts replace the
             # server's description for the checks and Sync Details below.
-            source = request.remote.materialize(source, checkpoint, activity)
+            listed = source
+            remote = request.remote
+            source = remote.materialize(listed, checkpoint, activity)
+            try:
+                return self._prepare_local(
+                    request, item, source, track, tools, checkpoint, activity
+                )
+            except Exception as error:
+                if getattr(error, "code", "") not in _UNREADABLE_MEDIA:
+                    raise
+                # The copy isn't readable media: a download cut short or damaged
+                # in the cache. Fetch it once more rather than fail every Sync.
+                logger.warning(
+                    "Downloading %s again; its local copy is unreadable: %s",
+                    source.path.path.name,
+                    error,
+                )
+                remote.discard(listed)
+                source = remote.materialize(listed, checkpoint, activity)
+                try:
+                    return self._prepare_local(
+                        request, item, source, track, tools, checkpoint, activity
+                    )
+                except Exception as again:
+                    if getattr(again, "code", "") in _UNREADABLE_MEDIA:
+                        # The server's file itself is unreadable: keep no copy.
+                        remote.discard(listed)
+                    raise
+        return self._prepare_local(
+            request, item, source, track, tools, checkpoint, activity
+        )
+
+    def _prepare_local(
+        self,
+        request: SyncExecutionRequest,
+        item: SyncPlanItem,
+        source: HostMediaSource,
+        track: Track,
+        tools: MediaTools,
+        checkpoint: Callable[[], None],
+        activity: Callable[[MediaPreparationProgress], None],
+    ) -> _PreparedTrack:
+        """Prepare one local file (a Host file or a finished download)."""
+
         _validate_host_source(source)
         with ExitStack() as lifetime:
             result = lifetime.enter_context(

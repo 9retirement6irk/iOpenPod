@@ -8,6 +8,7 @@ they are kept beside the Scrobbling credentials in the platform keyring.
 from __future__ import annotations
 
 import json
+import threading
 from enum import StrEnum
 from typing import Protocol, cast
 
@@ -50,7 +51,24 @@ class _NativeVault(Protocol):
     def delete_password(self, service: str, username: str) -> None: ...
 
 
+# Every Connected Source secret lives in this one vault item. One item means the
+# OS asks for permission once, where one item per service asked once for each.
+_VAULT_ITEM = "all"
+
+
 class SystemSecretStore:
+    """Keep every Connected Source secret in one native vault item.
+
+    The item is read once and remembered for the session, so the OS vault (and
+    its permission prompt) is consulted once however often secrets are needed.
+    Items saved one per service by earlier versions are gathered into it the
+    first time, then left alone.
+    """
+
+    def __init__(self) -> None:
+        self._values: dict[str, Secret] | None = None
+        self._lock = threading.Lock()
+
     def _backend(self) -> _NativeVault:
         backend = keyring.get_keyring()
         candidates = (
@@ -63,20 +81,39 @@ class SystemSecretStore:
             "A native system credential store is unavailable. Unlock or enable your OS keyring and try again."
         )
 
+    def _all(self) -> dict[str, Secret]:
+        """Every secret, read from the vault once per session."""
+
+        if self._values is not None:
+            return self._values
+        backend = self._backend()
+        raw = backend.get_password(_VAULT_SERVICE, _VAULT_ITEM)
+        if raw is not None:
+            document: object = json.loads(raw)
+            if not isinstance(document, dict):
+                raise ValueError
+            values = {
+                str(key): _secret(value)
+                for key, value in cast("dict[object, object]", document).items()
+            }
+        else:
+            # First run of this layout: gather the per-service items once.
+            values = {}
+            for key in SecretKey:
+                legacy = backend.get_password(_VAULT_SERVICE, key.value)
+                if legacy is not None:
+                    values[key.value] = _secret(json.loads(legacy))
+            backend.set_password(
+                _VAULT_SERVICE, _VAULT_ITEM, json.dumps(values, sort_keys=True)
+            )
+        self._values = values
+        return values
+
     def load(self, key: SecretKey) -> Secret | None:
         try:
-            raw = self._backend().get_password(_VAULT_SERVICE, key.value)
-            if raw is None:
-                return None
-            value: object = json.loads(raw)
-            if not isinstance(value, dict):
-                raise ValueError
-            items = cast("dict[object, object]", value)
-            if not all(
-                isinstance(k, str) and isinstance(v, str) for k, v in items.items()
-            ):
-                raise ValueError
-            return cast("Secret", items)
+            with self._lock:
+                value = self._all().get(key.value)
+            return None if value is None else dict(value)
         except ConnectedError:
             raise
         except Exception:
@@ -86,9 +123,12 @@ class SystemSecretStore:
 
     def save(self, key: SecretKey, secret: Secret) -> None:
         try:
-            self._backend().set_password(
-                _VAULT_SERVICE, key.value, json.dumps(secret, sort_keys=True)
-            )
+            with self._lock:
+                values = {**self._all(), key.value: dict(secret)}
+                self._backend().set_password(
+                    _VAULT_SERVICE, _VAULT_ITEM, json.dumps(values, sort_keys=True)
+                )
+                self._values = values
         except ConnectedError:
             raise
         except Exception:
@@ -98,15 +138,30 @@ class SystemSecretStore:
 
     def remove(self, key: SecretKey) -> None:
         try:
-            backend = self._backend()
-            if backend.get_password(_VAULT_SERVICE, key.value) is not None:
-                backend.delete_password(_VAULT_SERVICE, key.value)
+            with self._lock:
+                current = self._all()
+                if key.value not in current:
+                    return
+                values = {k: v for k, v in current.items() if k != key.value}
+                self._backend().set_password(
+                    _VAULT_SERVICE, _VAULT_ITEM, json.dumps(values, sort_keys=True)
+                )
+                self._values = values
         except ConnectedError:
             raise
         except Exception:
             raise ConnectedError(
                 "Could not remove sign-in details from your OS keyring."
             ) from None
+
+
+def _secret(value: object) -> Secret:
+    if not isinstance(value, dict):
+        raise ValueError
+    items = cast("dict[object, object]", value)
+    if not all(isinstance(k, str) and isinstance(v, str) for k, v in items.items()):
+        raise ValueError
+    return cast("Secret", dict(items))
 
 
 class MemorySecretStore:

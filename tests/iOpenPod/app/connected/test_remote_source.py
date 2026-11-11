@@ -129,6 +129,15 @@ def test_plex_is_listed_downloaded_once_and_cached(tmp_path: Path) -> None:
         got.modified_ns,
     )
 
+    # A damaged copy can be thrown away: the next request downloads it again.
+    assert downloader.discard(source(one))
+    assert not Path(got.path.path).exists()
+    assert not downloader.discard(source(one))  # nothing left to discard
+    fresh = downloader.materialize(source(one), lambda: None, lambda _p: None)
+    assert client.fetched == ["1", "1"]
+    assert Path(fresh.path.path).read_bytes() == b"x" * 4_000
+    assert not remote(tmp_path, client).discard(source(two))  # never downloaded
+
 
 def test_earlier_picks_count_as_cached(tmp_path: Path) -> None:
     client = StubPlex(tracks())

@@ -83,3 +83,27 @@ def test_vault_rejects_non_string_credentials(
         SystemCredentialStore().load(Service.LASTFM)
     assert "secret" not in str(caught.value)
     assert backend.values["iOpenPod 2 Scrobbling", "lastfm"] == raw
+
+
+def test_a_service_is_read_from_the_vault_once_per_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = VaultStub()
+    reads: list[str] = []
+    original = backend.get_password
+
+    def counted(service: str, username: str) -> str | None:
+        reads.append(username)
+        return original(service, username)
+
+    monkeypatch.setattr(backend, "get_password", counted)
+    monkeypatch.setattr(VaultStub, "__module__", "keyring.backends.macOS")
+    monkeypatch.setattr(keyring, "get_keyring", lambda: backend)
+    saved = Credentials("alice", "token")
+    backend.values["iOpenPod 2 Scrobbling", "plex"] = json.dumps(asdict(saved))
+    store = SystemCredentialStore()
+    for _ in range(3):
+        assert store.load(Service.PLEX) == saved
+        assert store.load(Service.LASTFM) is None
+    # Each read can raise an OS permission prompt.
+    assert reads == ["plex", "lastfm"]

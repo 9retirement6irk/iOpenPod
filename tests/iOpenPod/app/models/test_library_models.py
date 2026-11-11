@@ -729,3 +729,54 @@ def test_paused_album_proxy_catches_up_when_its_page_is_shown() -> None:
     selection.set_tracks_checked((1,), True)
     selection.set_tracks_checked((2, 3), False)
     assert order() == ["Alpha", "Beta"]  # live again: follows every change
+
+
+def test_sync_ticks_do_not_rebuild_albums_or_collections() -> None:
+    """Ticking media changes no album; projecting them all again is wasted work."""
+
+    from iOpenPod.app.host_media_library import HostMediaCacheStats, HostMediaLibrary
+    from iOpenPod.app.models.sync_selection import SyncSelection
+    from iOpenPod.app.sync_plan import SyncPlan
+    from iPodDB.library import LibrarySnapshot
+
+    tracks = tuple(
+        Track(
+            identity,
+            f"Song {identity}",
+            "Artist",
+            "Album",
+            1_000,
+            metadata=TrackMetadata(location=f"C:/Music/{identity}.mp3"),
+        )
+        for identity in (1, 2)
+    )
+    selection = SyncSelection()
+    selection.reset(
+        HostMediaLibrary(LibrarySnapshot(tracks=tracks), (), (), HostMediaCacheStats()),
+        SyncPlan(()),
+    )
+    source = TrackTableModel()
+    source.reset_tracks(tracks)
+    source.set_sync_selection(selection)
+    albums = AlbumListModel(source)
+    albums.set_sync_selection(selection)
+    artists = CollectionListModel(source, CollectionKind.ARTIST)
+    projections: list[str] = []
+    for name, model in (("albums", albums), ("artists", artists)):
+        original = model._project  # pyright: ignore[reportPrivateUsage]
+
+        def counted(original=original, name=name):  # type: ignore[no-untyped-def]
+            projections.append(name)
+            return original()
+
+        model._project = counted  # type: ignore[method-assign]  # pyright: ignore[reportPrivateUsage]
+
+    selection.set_tracks_checked((1,), True)
+    assert projections == []
+    assert albums.index(0, 0).data(Qt.ItemDataRole.CheckStateRole) is (
+        Qt.CheckState.PartiallyChecked
+    )
+
+    # A real edit to Track details still rebuilds them.
+    source.dataChanged.emit(source.index(0, 0), source.index(0, 0), [])
+    assert sorted(projections) == ["albums", "artists"]

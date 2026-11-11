@@ -263,6 +263,14 @@ class RemoteMedia(Protocol):
         """
         ...
 
+    def discard(self, source: HostMediaSource) -> bool:
+        """Forget the local copy so the next ``materialize`` downloads it again.
+
+        Returns whether there was a copy to forget. Used when a downloaded file
+        turns out to be unreadable, so a damaged copy is never kept.
+        """
+        ...
+
 
 __all__ = [
     "RemoteCatalog",

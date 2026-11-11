@@ -62,6 +62,12 @@ def start_ui(link: str | None = None) -> int:
 
     window = MainWindow(context, auto_discover=False, defer_startup=True)
     window.show()
+    # Beach balls are otherwise invisible in the log: record what caused each one.
+    from iOpenPod.app.core.stall_monitor import StallMonitor
+
+    stall_monitor = StallMonitor(application)
+    stall_monitor.start()
+    application.aboutToQuit.connect(stall_monitor.stop)
     links = AppLinks(application)
     links.listen()
     application.installEventFilter(links)  # macOS delivers links as file-open events

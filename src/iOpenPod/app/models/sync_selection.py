@@ -63,6 +63,9 @@ class SyncSelection(QObject):
         self._selected_ipod_removals: set[tuple[SyncPlanMediaKind, int]] = set()
         self._excluded_review_items: set[SyncPlanItem] = set()
         self._review_plan: SyncPlan | None = None
+        # The reviewed plan with unchecked actions left out; several views ask for
+        # it after every change, so it is built once per change.
+        self._selected_plan: SyncPlan | None = None
         self._review_items: frozenset[SyncPlanItem] = frozenset()
         # Host Playlists that can be synced, and the ones chosen to go on the iPod.
         self._playlists: dict[int, tuple[int, ...]] = {}
@@ -179,6 +182,7 @@ class SyncSelection(QObject):
         self._resolved_comparison = resolved
         self._on_ipod_host_paths = _matched_host_paths(resolved)
         self._review_plan = None
+        self._selected_plan = None
         self._excluded_review_items = exclusions
         self.hostSelectionChanged.emit()
         self.removalSelectionChanged.emit()
@@ -220,6 +224,7 @@ class SyncSelection(QObject):
             return False
         self._selected_host_paths = wanted
         self._review_plan = None
+        self._selected_plan = None
         self._excluded_review_items.intersection_update(self.review_plan.items)
         self.hostSelectionChanged.emit()
         self.changed.emit()
@@ -265,6 +270,7 @@ class SyncSelection(QObject):
         else:
             self._stream_selections[path] = selection
         self._review_plan = None
+        self._selected_plan = None
         self._excluded_review_items.intersection_update(self.review_plan.items)
         self.reviewSelectionChanged.emit()
         self.changed.emit()
@@ -306,14 +312,16 @@ class SyncSelection(QObject):
 
     @property
     def selected_plan(self) -> SyncPlan:
-        return replace(
-            self.review_plan,
-            items=tuple(
-                item
-                for item in self.review_plan.items
-                if self.review_check_state(item) is not Qt.CheckState.Unchecked
-            ),
-        )
+        if self._selected_plan is None:
+            self._selected_plan = replace(
+                self.review_plan,
+                items=tuple(
+                    item
+                    for item in self.review_plan.items
+                    if self.review_check_state(item) is not Qt.CheckState.Unchecked
+                ),
+            )
+        return self._selected_plan
 
     @property
     def review_plan(self) -> SyncPlan:
@@ -390,6 +398,7 @@ class SyncSelection(QObject):
                 self._excluded_review_items.add(item)
             changed = True
         if changed:
+            self._selected_plan = None
             if removals_changed:
                 self.removalSelectionChanged.emit()
             self.reviewSelectionChanged.emit()
@@ -444,6 +453,7 @@ class SyncSelection(QObject):
         self._selected_ipod_removals.clear()
         self._excluded_review_items.clear()
         self._review_plan = None
+        self._selected_plan = None
         self._review_items = frozenset()
         self.hostSelectionChanged.emit()
         self.playlistsChanged.emit()
@@ -560,6 +570,7 @@ class SyncSelection(QObject):
         self._selected_ipod_removals.clear()
         self._excluded_review_items.clear()
         self._review_plan = None
+        self._selected_plan = None
         self._review_items = frozenset()
         self._playlists.clear()
         self._chosen_playlists.clear()
@@ -619,6 +630,7 @@ class SyncSelection(QObject):
             return False
         self._selected_host_paths = set(self._initial_selected_host_paths)
         self._review_plan = None
+        self._selected_plan = None
         self._excluded_review_items.intersection_update(self.review_plan.items)
         self.hostSelectionChanged.emit()
         self.changed.emit()
@@ -665,6 +677,7 @@ class SyncSelection(QObject):
         if before == len(self._selected_host_paths):
             return False
         self._review_plan = None
+        self._selected_plan = None
         self._excluded_review_items.intersection_update(self.review_plan.items)
         self.hostSelectionChanged.emit()
         self.changed.emit()

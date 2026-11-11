@@ -35,6 +35,11 @@ class _NativeVault(Protocol):
 
 
 class SystemCredentialStore:
+    def __init__(self) -> None:
+        # Each vault read can raise an OS permission prompt: read a service once
+        # per session and remember the answer.
+        self._session: dict[Service, Credentials | None] = {}
+
     def _backend(self) -> _NativeVault:
         backend = keyring.get_keyring()
         candidates = (
@@ -48,9 +53,12 @@ class SystemCredentialStore:
         )
 
     def load(self, service: Service) -> Credentials | None:
+        if service in self._session:
+            return self._session[service]
         try:
             raw = self._backend().get_password("iOpenPod 2 Scrobbling", service.value)
             if raw is None:
+                self._session[service] = None
                 return None
             values: object = json.loads(raw)
             if not is_object(values) or set(values) != {
@@ -60,12 +68,14 @@ class SystemCredentialStore:
                 "api_secret",
             }:
                 raise ValueError
-            return Credentials(
+            credentials = Credentials(
                 username=text(values["username"]),
                 token=text(values["token"]),
                 api_key=text(values["api_key"]),
                 api_secret=text(values["api_secret"]),
             )
+            self._session[service] = credentials
+            return credentials
         except ScrobbleError:
             raise
         except Exception:
@@ -78,6 +88,7 @@ class SystemCredentialStore:
             self._backend().set_password(
                 "iOpenPod 2 Scrobbling", service.value, json.dumps(asdict(credentials))
             )
+            self._session[service] = credentials
         except ScrobbleError:
             raise
         except Exception:
@@ -90,6 +101,7 @@ class SystemCredentialStore:
             backend = self._backend()
             if backend.get_password("iOpenPod 2 Scrobbling", service.value) is not None:
                 backend.delete_password("iOpenPod 2 Scrobbling", service.value)
+            self._session[service] = None
         except ScrobbleError:
             raise
         except Exception:
