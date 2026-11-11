@@ -469,6 +469,10 @@ def test_connected_only_scan_reads_no_unfingerprinted_tracks(
     assert fingerprinter.calls == []
     assert result.tracks == ()
     assert result.unanalyzed_track_ids == frozenset({7})
+    # The file facts are kept, so Sync can still check the file before changing it.
+    (skipped,) = result.unanalyzed_tracks
+    assert str(skipped.path) == "iPod_Control/Music/F00/SONG.MP3"
+    assert skipped.size_bytes == len(b"audio-one")
     assert result.cache.skipped == 1
     # Photos are still checked: Immich photos match by their bytes.
     assert [image.image_id for image in result.images] == [91]

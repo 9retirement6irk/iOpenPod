@@ -15,6 +15,7 @@ from tests.iOpenPod.app.test_sync_plan import (
 )
 
 from iOpenPod.app.host_media_library import stable_playlist_identity
+from iOpenPod.app.library_sync_helper import IPodUnanalyzedTrack
 from iOpenPod.app.remote_media import (
     RemoteCatalog,
     RemoteCover,
@@ -31,7 +32,7 @@ from iOpenPod.app.sync_plan import (
     select_sync_plan,
 )
 from iPodDB.library import LibrarySnapshot, MediaType, Track, TrackMetadata
-from storage import HostPath
+from storage import DevicePath, HostPath
 
 SHA = "a" * 64
 
@@ -526,7 +527,18 @@ def test_unfingerprinted_ipod_songs_pair_with_plex_by_details(tmp_path: Path) ->
         (3, "Unreadable", "Someone", "Elsewhere", 2, 200_000),
     )
     # Tracks 1 and 2 were skipped on purpose; track 3 failed to fingerprint.
-    ipod = replace(_ipod_library(()), unanalyzed_track_ids=frozenset({1, 2}))
+    ipod = replace(
+        _ipod_library(()),
+        unanalyzed_tracks=tuple(
+            IPodUnanalyzedTrack(
+                identity,
+                DevicePath(f"iPod_Control/Music/F00/track-{identity}.m4a"),
+                9,
+                9,
+            )
+            for identity in (1, 2)
+        ),
+    )
     plex = RemoteCatalog(
         (
             item(

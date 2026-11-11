@@ -28,6 +28,10 @@ matching. One that matches no Remote Item is offered as iPod-only, which is the
 same result a fingerprint would have given. A Track that failed to fingerprint
 still needs attention as before.
 
+The scan keeps each skipped Track's path, size and modified time. Sync checks
+those before it removes or replaces the file, exactly as it does for a
+fingerprinted Track, and the storage estimate counts its size.
+
 The iPod scan now logs one summary line: time taken, Tracks reused,
 fingerprinted, skipped and failed.
 
