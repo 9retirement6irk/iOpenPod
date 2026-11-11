@@ -672,3 +672,60 @@ def _track(index: int) -> Track:
         play_count=index % 30,
         rating=(index % 6) * 20,
     )
+
+
+def test_paused_album_proxy_catches_up_when_its_page_is_shown() -> None:
+    """Hidden Sync pages skip re-sorting on every tick, then catch up."""
+
+    from iOpenPod.app.host_media_library import HostMediaCacheStats, HostMediaLibrary
+    from iOpenPod.app.models.sync_selection import SyncSelection
+    from iOpenPod.app.sync_plan import SyncPlan
+    from iPodDB.library import LibrarySnapshot
+
+    tracks = tuple(
+        Track(
+            identity,
+            f"Song {identity}",
+            "Artist",
+            album,
+            1_000,
+            metadata=TrackMetadata(location=f"C:/Music/{identity}.mp3"),
+        )
+        for identity, album in ((1, "Alpha"), (2, "Beta"), (3, "Beta"))
+    )
+    selection = SyncSelection()
+    selection.reset(
+        HostMediaLibrary(LibrarySnapshot(tracks=tracks), (), (), HostMediaCacheStats()),
+        SyncPlan(()),
+    )
+    source = TrackTableModel()
+    source.reset_tracks(tracks)
+    source.set_sync_selection(selection)
+    albums = AlbumListModel(source)
+    albums.set_sync_selection(selection)
+    proxy = AlbumFilterProxyModel(albums)
+    proxy.set_group_by_selection(True)
+
+    def order() -> list[object]:
+        return [proxy.index(row, 0).data() for row in range(proxy.rowCount())]
+
+    def states() -> list[object]:
+        return [
+            proxy.index(row, 0).data(Qt.ItemDataRole.CheckStateRole)
+            for row in range(proxy.rowCount())
+        ]
+
+    assert order() == ["Alpha", "Beta"]
+    proxy.set_live(False)
+    selection.set_tracks_checked((2,), True)
+    assert order() == ["Alpha", "Beta"]  # not re-sorted while hidden
+    # The cached state is never stale, even while paused.
+    assert states() == [Qt.CheckState.Unchecked, Qt.CheckState.PartiallyChecked]
+
+    proxy.set_live(True)
+    assert order() == ["Beta", "Alpha"]  # selected albums first
+    selection.set_tracks_checked((3,), True)
+    assert states() == [Qt.CheckState.Checked, Qt.CheckState.Unchecked]
+    selection.set_tracks_checked((1,), True)
+    selection.set_tracks_checked((2, 3), False)
+    assert order() == ["Alpha", "Beta"]  # live again: follows every change

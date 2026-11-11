@@ -432,7 +432,8 @@ QLabel#syncStorageRemaining[status="over"] {{
     color: {tokens.danger};
 }}
 
-QLabel#syncWorkspaceTitle {{
+QLabel#syncWorkspaceTitle,
+QLabel#syncPlaylistReviewTitle {{
     color: {tokens.text};
     font-family: "{typography.display}";
     font-size: {typography.heading_pt:g}pt;

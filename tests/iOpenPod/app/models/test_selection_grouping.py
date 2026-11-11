@@ -45,6 +45,31 @@ def test_selection_grouping_inserts_ordered_headers_and_collapses_items() -> Non
     )
 
 
+def test_paused_grouping_waits_for_its_page_but_still_follows_new_rows() -> None:
+    source = QStandardItemModel()
+    source.appendRow(_item("First", Qt.CheckState.Checked))
+    source.appendRow(_item("Second", Qt.CheckState.Unchecked))
+    grouped = SelectionGroupingProxyModel(source)
+    grouped.set_grouping_enabled(True)
+    before = _presented_rows(grouped)
+
+    grouped.set_live(False)  # its page is hidden
+    source.item(1).setCheckState(Qt.CheckState.Checked)
+    assert _presented_rows(grouped) == before  # no regrouping work yet
+
+    grouped.set_live(True)  # the page is shown again
+    assert _presented_rows(grouped) == (
+        ("header", "Selected"),
+        ("item", "First"),
+        ("item", "Second"),
+    )
+
+    grouped.set_live(False)
+    source.appendRow(_item("Third", Qt.CheckState.Unchecked))
+    # Rows are never left unmapped, even while paused.
+    assert ("item", "Third") in _presented_rows(grouped)
+
+
 def test_selection_grouping_moves_changed_items_and_omits_empty_groups() -> None:
     source = QStandardItemModel()
     source.appendRow(_item("First", Qt.CheckState.Checked))

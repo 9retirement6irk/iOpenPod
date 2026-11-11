@@ -53,8 +53,11 @@ Review, so nothing changes on the iPod until you say so.
   Tracks, Movies, TV Shows, Music Videos and Audiobooks pages. Tick what you want;
   each item downloads only when Sync copies it.
 * **Playlists:** tick a Playlist in the sidebar to put it and all its songs on the
-  iPod. Playlists you've synced before stay ticked; unticking one never removes
-  songs already on the iPod.
+  iPod, or tick **All Playlists** to take every one. Playlists you've synced
+  before stay ticked; unticking one never removes songs already on the iPod.
+  Before Review, a **Playlists** step lists each chosen Playlist with what will
+  change on the iPod, and lets you skip one or match it to a different iPod
+  Playlist.
 * **Photos:** tick Immich Favorites, albums or people. **Update photos** downloads
   them and rescans, keeping every other tick you've made, and their photos are
   ticked for you.

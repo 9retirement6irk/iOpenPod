@@ -3,6 +3,7 @@
 from enum import StrEnum
 
 from PySide6.QtCore import (
+    QAbstractItemModel,
     QModelIndex,
     QObject,
     QPersistentModelIndex,
@@ -44,7 +45,51 @@ class CollectionSortMode(StrEnum):
     DURATION = "duration"
 
 
-class TrackFilterProxyModel(QSortFilterProxyModel):
+class PausableSortFilterProxyModel(QSortFilterProxyModel):
+    """Skip refiltering and resorting while the page that shows it is hidden.
+
+    Several pages filter the same source model. A selection change reaches every
+    one of them, so a hidden page pauses its proxy and catches up when shown.
+    A paused proxy still follows row insertions, removals and resets.
+    """
+
+    def __init__(self, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self._live = True
+        self._stale = False
+
+    @property
+    def live(self) -> bool:
+        return self._live
+
+    def setSourceModel(self, source: QAbstractItemModel) -> None:
+        super().setSourceModel(source)
+        for signal in (
+            source.dataChanged,
+            source.rowsInserted,
+            source.rowsRemoved,
+            source.modelReset,
+            source.layoutChanged,
+        ):
+            signal.connect(self._mark_stale)
+
+    def set_live(self, live: bool) -> None:
+        """Pause while hidden; on resuming, filter and sort again if anything changed."""
+
+        if live == self._live:
+            return
+        self._live = live
+        self.setDynamicSortFilter(live)
+        if live and self._stale:
+            self._stale = False
+            self.invalidate()
+
+    def _mark_stale(self, *_args: object) -> None:
+        if not self._live:
+            self._stale = True
+
+
+class TrackFilterProxyModel(PausableSortFilterProxyModel):
     """Filter one Track model by album and cached search text."""
 
     def __init__(
@@ -154,7 +199,7 @@ class TrackFilterProxyModel(QSortFilterProxyModel):
         return True
 
 
-class AlbumFilterProxyModel(QSortFilterProxyModel):
+class AlbumFilterProxyModel(PausableSortFilterProxyModel):
     """Filter and sort album summaries without rebuilding grid items."""
 
     def __init__(
@@ -298,12 +343,12 @@ class AlbumFilterProxyModel(QSortFilterProxyModel):
         )
 
     def _selection_data_changed(self) -> None:
-        if self._group_by_selection:
+        if self._group_by_selection and self.live:
             self.invalidate()
             self.sort(0, self._sort_direction)
 
 
-class CollectionFilterProxyModel(QSortFilterProxyModel):
+class CollectionFilterProxyModel(PausableSortFilterProxyModel):
     """Filter collection summaries without rebuilding their collage data."""
 
     def __init__(
@@ -412,7 +457,7 @@ class CollectionFilterProxyModel(QSortFilterProxyModel):
         return str(left_title).casefold() < str(right_title).casefold()
 
     def _selection_data_changed(self) -> None:
-        if self._group_by_selection:
+        if self._group_by_selection and self.live:
             self.invalidate()
             self.sort(0, self._sort_direction)
 

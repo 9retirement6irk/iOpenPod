@@ -96,6 +96,7 @@ class AlbumListModel(QAbstractListModel):
         self._media_kind = media_kind
         self._albums: tuple[AlbumSummary, ...] = ()
         self._search_texts: tuple[str, ...] = ()
+        self._check_states: dict[str, Qt.CheckState] = {}
         self._sync_selection: SyncSelection | None = None
         tracks.modelReset.connect(self._source_reset)
         tracks.dataChanged.connect(self._source_changed)
@@ -153,7 +154,12 @@ class AlbumListModel(QAbstractListModel):
 
         album = self._albums[index.row()]
         if role == Qt.ItemDataRole.CheckStateRole and self._sync_selection is not None:
-            return self._sync_selection.track_group_check_state(album.track_ids)
+            # Sorting and grouping ask for every album's state many times over.
+            state = self._check_states.get(album.key)
+            if state is None:
+                state = self._sync_selection.track_group_check_state(album.track_ids)
+                self._check_states[album.key] = state
+            return state
         if role == AlbumRole.ON_IPOD and self._sync_selection is not None:
             return self._sync_selection.track_group_on_ipod(album.track_ids)
         if role == Qt.ItemDataRole.DisplayRole:
@@ -263,6 +269,7 @@ class AlbumListModel(QAbstractListModel):
 
     def _commit(self, summaries: tuple[AlbumSummary, ...]) -> None:
         self._albums = summaries
+        self._check_states.clear()
         self._search_texts = tuple(
             "\x1f".join((album.title, album.artist, str(album.year))).casefold()
             for album in summaries
@@ -283,6 +290,7 @@ class AlbumListModel(QAbstractListModel):
         )
 
     def _selection_changed(self) -> None:
+        self._check_states.clear()
         if not self._albums:
             return
         self.dataChanged.emit(

@@ -67,6 +67,7 @@ class SyncStage(StrEnum):
     SOURCES = "sources"
     SCANNING = "scanning"
     SELECT = "select"
+    PLAYLISTS = "playlists"
     REVIEW = "review"
     SYNC = "sync"
 
@@ -74,8 +75,9 @@ class SyncStage(StrEnum):
 _STAGES = (
     (SyncStage.SOURCES, "1"),
     (SyncStage.SELECT, "2"),
-    (SyncStage.REVIEW, "3"),
-    (SyncStage.SYNC, "4"),
+    (SyncStage.PLAYLISTS, "3"),
+    (SyncStage.REVIEW, "4"),
+    (SyncStage.SYNC, "5"),
 )
 
 _LIBRARY_NAVIGATION = (
@@ -239,6 +241,7 @@ class _SyncLibraryNavigation(QFrame):
         self.setObjectName("syncLibraryNavigation")
         self.setFixedWidth(LAYOUT.sidebar_width)
         self._selection = selection
+        self._playlists_available = False
         self._buttons: dict[PageId, NavigationButton] = {}
         self._group = QButtonGroup(self)
         self._group.setExclusive(True)
@@ -265,6 +268,12 @@ class _SyncLibraryNavigation(QFrame):
         selection.playlistsChanged.connect(self.playlist_tree.refresh_checks)
         self.playlist_tree.setObjectName("syncPlaylistSidebar")
         self.playlist_tree.set_drag_drop_enabled(False)
+        self._all_playlists = QCheckBox(contents)
+        self._all_playlists.setObjectName("selectAllSyncPlaylists")
+        self._all_playlists.setTristate(True)
+        # A click chooses all or none; "some" is only ever shown.
+        self._all_playlists.clicked.connect(self._toggle_all_playlists)
+        selection.playlistsChanged.connect(self._refresh_all_playlists)
         for page_id, glyph in _LIBRARY_NAVIGATION:
             button = NavigationButton(page_label(page_id), glyph, contents)
             button.setProperty("syncPageId", page_id.value)
@@ -277,6 +286,7 @@ class _SyncLibraryNavigation(QFrame):
             self._buttons[page_id] = button
             contents_layout.addWidget(button)
             if page_id is PageId.TRACKS:
+                contents_layout.addWidget(self._all_playlists)
                 contents_layout.addWidget(self.playlist_tree)
         self._connected_heading = QLabel(contents)
         self._connected_heading.setObjectName("sidebarSectionLabel")
@@ -319,6 +329,8 @@ class _SyncLibraryNavigation(QFrame):
         for page_id, button in self._buttons.items():
             button.setVisible(page_id in pages)
         self.playlist_tree.setVisible(PageId.PLAYLISTS in pages)
+        self._playlists_available = PageId.PLAYLISTS in pages
+        self._refresh_all_playlists()
 
     def add_connected(self, page_id: PageId, glyph: str) -> None:
         """A CONNECTED entry (photos, notes, calendars, contacts) below the media."""
@@ -353,6 +365,10 @@ class _SyncLibraryNavigation(QFrame):
             *self._connected_buttons.items(),
         ):
             button.setText(page_label(page_id))
+        self._all_playlists.setText(self.tr("All Playlists"))
+        self._all_playlists.setToolTip(
+            self.tr("Tick to put every Playlist and its songs on the iPod.")
+        )
         self._refresh_media_selection()
 
     def _refresh_media_selection(self) -> None:
@@ -367,6 +383,19 @@ class _SyncLibraryNavigation(QFrame):
         self._selection.set_all_host_media_checked(
             not self._selection.all_host_media_selected
         )
+
+    def _refresh_all_playlists(self) -> None:
+        state = self._selection.playlists_check_state
+        self._all_playlists.setVisible(self._playlists_available and state is not None)
+        with QSignalBlocker(self._all_playlists):
+            self._all_playlists.setCheckState(state or Qt.CheckState.Unchecked)
+
+    def _toggle_all_playlists(self) -> None:
+        # Anything short of all chosen becomes all; all chosen becomes none.
+        self._selection.set_all_playlists_checked(
+            self._selection.playlists_check_state is not Qt.CheckState.Checked
+        )
+        self._refresh_all_playlists()
 
 
 class SyncWorkspace(QWidget):
@@ -506,22 +535,45 @@ class SyncWorkspace(QWidget):
         self._podcast_detail.setObjectName("syncPodcastReviewDetail")
         self._podcast_detail.setWordWrap(True)
         self._podcast_detail.setVisible(False)
-        self._playlist_changes = PlaylistSyncReview(self)
+        self._playlist_changes = PlaylistSyncReview(self, fill=True)
         self._playlist_changes.choicesChanged.connect(self._playlist_choices_changed)
         self._playlist_changes.hide()
+        self._playlists_title = QLabel(self)
+        self._playlists_title.setObjectName("syncPlaylistReviewTitle")
         playlist_review = QFrame(self)
         playlist_review.setObjectName("syncPlaylistReview")
         playlist_layout = QVBoxLayout(playlist_review)
         playlist_layout.setContentsMargins(
-            LAYOUT.space_lg, LAYOUT.space_sm, LAYOUT.space_lg, LAYOUT.space_sm
+            LAYOUT.space_lg, LAYOUT.space_md, LAYOUT.space_lg, LAYOUT.space_sm
         )
-        playlist_layout.setSpacing(LAYOUT.space_xs)
-        playlist_heading = QHBoxLayout()
-        playlist_heading.addWidget(self._reconcile_playlists)
-        playlist_heading.addWidget(self._playlist_detail, 1)
-        playlist_layout.addLayout(playlist_heading)
-        playlist_layout.addWidget(self._playlist_changes)
-        playlist_layout.addWidget(self._podcast_detail)
+        playlist_layout.setSpacing(LAYOUT.space_sm)
+        playlist_layout.addWidget(self._playlists_title)
+        playlist_layout.addWidget(self._reconcile_playlists)
+        playlist_layout.addWidget(self._playlist_detail)
+        playlist_layout.addWidget(self._playlist_changes, 1)
+        self._playlists_back = ActionButton(
+            parent=self, kind=ActionButtonKind.SECONDARY
+        )
+        self._playlists_back.setObjectName("backToSyncSelectionFromPlaylists")
+        self._playlists_cancel = ActionButton(parent=self)
+        self._playlists_cancel.setObjectName("cancelSyncPlaylists")
+        self._playlists_next = ActionButton(parent=self, kind=ActionButtonKind.PRIMARY)
+        self._playlists_next.setObjectName("reviewSyncAfterPlaylists")
+        playlists_page = QWidget(self)
+        playlists_page.setObjectName("syncPlaylistsPage")
+        playlists_page_layout = QVBoxLayout(playlists_page)
+        playlists_page_layout.setContentsMargins(0, 0, 0, 0)
+        playlists_page_layout.setSpacing(0)
+        playlists_page_layout.addWidget(playlist_review, 1)
+        playlists_page_layout.addWidget(
+            self._footer(
+                self._playlists_back, self._playlists_cancel, self._playlists_next
+            )
+        )
+        self._back_to_playlists = ActionButton(
+            parent=self, kind=ActionButtonKind.SECONDARY
+        )
+        self._back_to_playlists.setObjectName("backToSyncPlaylists")
         self._review_cancel = ActionButton(parent=self)
         self._review_cancel.setObjectName("cancelSyncReview")
         review_footer = QFrame(self)
@@ -531,11 +583,17 @@ class SyncWorkspace(QWidget):
             LAYOUT.space_lg, LAYOUT.space_sm, LAYOUT.space_lg, LAYOUT.space_sm
         )
         review_footer_layout.setSpacing(LAYOUT.space_xs)
+        review_footer_layout.addWidget(self._podcast_detail)
         review_footer_layout.addWidget(self._review_summary)
         review_footer_actions = QHBoxLayout()
         review_footer_actions.setSpacing(LAYOUT.space_xs)
         review_footer_actions.addWidget(self._review.review_actions, 1)
-        for button in (self._back, self._review_cancel, self._execute):
+        for button in (
+            self._back,
+            self._back_to_playlists,
+            self._review_cancel,
+            self._execute,
+        ):
             review_footer_actions.addWidget(button)
         review_footer_layout.addLayout(review_footer_actions)
         self._review.review_actions.show()
@@ -545,18 +603,19 @@ class SyncWorkspace(QWidget):
         review_layout.setContentsMargins(0, 0, 0, 0)
         review_layout.setSpacing(0)
         review_layout.addWidget(self._review, 1)
-        review_layout.addWidget(playlist_review)
         review_layout.addWidget(review_footer)
 
         self._content = QStackedWidget(self)
         self._content.setObjectName("syncWorkspaceContent")
         self._content.addWidget(self._scan)
         self._content.addWidget(selection_page)
+        self._content.addWidget(playlists_page)
         self._content.addWidget(review_page)
         self._content.addWidget(self.execution)
         self._stage_pages = {
             SyncStage.SCANNING: self._scan,
             SyncStage.SELECT: selection_page,
+            SyncStage.PLAYLISTS: playlists_page,
             SyncStage.REVIEW: review_page,
             SyncStage.SYNC: self.execution,
         }
@@ -581,8 +640,13 @@ class SyncWorkspace(QWidget):
             self.selection.revert_host_media_selection
         )
         self._selection_exit.clicked.connect(self.exitRequested.emit)
-        self._review_button.clicked.connect(self.show_review)
+        self._review_button.clicked.connect(self.continue_from_selection)
         self._back.clicked.connect(self.show_selection)
+        self._back_to_playlists.clicked.connect(self.show_playlists)
+        self._playlists_back.clicked.connect(self.show_selection)
+        self._playlists_cancel.clicked.connect(self.exitRequested.emit)
+        self._playlists_next.clicked.connect(self.show_review)
+        self.selection.playlistsChanged.connect(self._refresh_selection_actions)
         self._review_cancel.clicked.connect(self.exitRequested.emit)
         self._execute.clicked.connect(self._request_execution)
         self._reconcile_playlists.toggled.connect(self._playlist_reconciliation_toggled)
@@ -723,6 +787,19 @@ class SyncWorkspace(QWidget):
         self._set_stage(SyncStage.SELECT)
         self._refresh_selection_actions()
 
+    def continue_from_selection(self) -> None:
+        """Leave Select Media: Playlists first when any are chosen, else Review."""
+
+        if self.selection.chosen_playlist_ids:
+            self.show_playlists()
+        else:
+            self.show_review()
+
+    def show_playlists(self) -> None:
+        """Review the chosen Playlists on their own page before the media."""
+
+        self._set_stage(SyncStage.PLAYLISTS)
+
     def show_review(self) -> None:
         self._review.load_review(self.selection)
         self._set_stage(SyncStage.REVIEW)
@@ -819,13 +896,15 @@ class SyncWorkspace(QWidget):
         self._storage_bar.retranslate_ui()
         if self.browser is not None:
             self.browser.retranslate()
-        self._review_button.setText(self.tr("Review Sync"))
         self._revert_selection.setText(self.tr("Revert selections"))
         self._selection_exit.setText(self.tr("Exit Sync"))
         self._back.setText(self.tr("Edit Selection"))
-        self._review_cancel.setText(
-            QCoreApplication.translate("CommonActions", "Cancel")
-        )
+        self._back_to_playlists.setText(self.tr("Review Playlists"))
+        self._playlists_back.setText(self.tr("Edit Selection"))
+        self._playlists_next.setText(self.tr("Review Sync"))
+        self._playlists_title.setText(self.tr("Review Playlists"))
+        for cancel in (self._review_cancel, self._playlists_cancel):
+            cancel.setText(QCoreApplication.translate("CommonActions", "Cancel"))
         self._reconcile_playlists.setText(self.tr("Sync Playlists"))
         self._reconcile_playlists.setToolTip(
             self.tr(
@@ -850,6 +929,7 @@ class SyncWorkspace(QWidget):
         stage_labels = {
             SyncStage.SOURCES: self.tr("Sources"),
             SyncStage.SELECT: self.tr("Select Media"),
+            SyncStage.PLAYLISTS: self.tr("Playlists"),
             SyncStage.REVIEW: self.tr("Review"),
             SyncStage.SYNC: self.tr("Result")
             if self._stage is SyncStage.SYNC and self.execution.showing_result
@@ -875,13 +955,15 @@ class SyncWorkspace(QWidget):
         self._stage = stage
         self._refresh_stage_labels()
         self._refresh_review_summary()
-        self._storage_bar.setVisible(stage in {SyncStage.SELECT, SyncStage.REVIEW})
+        self._storage_bar.setVisible(
+            stage in {SyncStage.SELECT, SyncStage.PLAYLISTS, SyncStage.REVIEW}
+        )
         self._scan_issues.setVisible(
             self._scan_issues.has_issues
             and stage in {SyncStage.SELECT, SyncStage.REVIEW}
         )
         self._content.setCurrentWidget(self._stage_pages[stage])
-        order = (SyncStage.SOURCES, SyncStage.SELECT, SyncStage.REVIEW, SyncStage.SYNC)
+        order = tuple(candidate for candidate, _number in _STAGES)
         current = 0 if stage is SyncStage.SCANNING else order.index(stage)
         for position, candidate in enumerate(order):
             label = self._stage_labels[candidate]
@@ -898,6 +980,8 @@ class SyncWorkspace(QWidget):
         connected = self._connected_pages.get(page_id)
         if connected is not None:
             self._library_stack.setCurrentWidget(connected)
+            if self.browser is not None:
+                self.browser.set_live_page(None)
             self._library_navigation.set_current_page(page_id)
             return
         browser = self.browser
@@ -909,6 +993,7 @@ class SyncWorkspace(QWidget):
         if page is None:
             return
         self._library_stack.setCurrentWidget(page)
+        browser.set_live_page(page)
         self._library_navigation.set_current_page(page_id)
         if page_id is not PageId.PLAYLISTS:
             browser.playlist_page.select_playlist(None)
@@ -995,6 +1080,11 @@ class SyncWorkspace(QWidget):
         self._revert_selection.setEnabled(
             self.selection.can_revert_host_media_selection
         )
+        chosen = bool(self.selection.chosen_playlist_ids)
+        self._review_button.setText(
+            self.tr("Review Playlists") if chosen else self.tr("Review Sync")
+        )
+        self._back_to_playlists.setVisible(chosen)
 
     def _refresh_storage_estimate(self) -> None:
         projection = self._storage_projection
