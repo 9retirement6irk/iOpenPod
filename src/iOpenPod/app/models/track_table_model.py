@@ -33,6 +33,16 @@ __all__ = ("TrackColumn", "TrackRole", "TrackTableModel")
 _ROOT_INDEX = QModelIndex()
 
 
+def selection_only(roles: object) -> bool:
+    """Whether a dataChanged names only what a Sync tick changes on a Track.
+
+    Albums and collections are built from Track details, which a tick leaves
+    alone, so they need not be projected again for one.
+    """
+
+    return isinstance(roles, list) and bool(roles) and set(roles) <= _SELECTION_ROLES
+
+
 class TrackRole(IntEnum):
     """Non-display roles shared by library views and proxy models."""
 
@@ -329,15 +339,20 @@ class TrackTableModel(QAbstractTableModel):
         self.dataChanged.emit(
             self.index(0, TrackColumn.SYNC_SELECTION),
             self.index(len(self._tracks) - 1, TrackColumn.SYNC_SELECTION),
-            [
-                Qt.ItemDataRole.CheckStateRole.value,
-                Qt.ItemDataRole.ToolTipRole.value,
-                Qt.ItemDataRole.AccessibleTextRole.value,
-                TrackRole.SORT_VALUE,
-                TrackRole.STREAM_MANUAL,
-                TrackRole.ON_IPOD,
-            ],
+            sorted(_SELECTION_ROLES),
         )
+
+
+_SELECTION_ROLES = frozenset(
+    {
+        int(Qt.ItemDataRole.CheckStateRole.value),
+        int(Qt.ItemDataRole.ToolTipRole.value),
+        int(Qt.ItemDataRole.AccessibleTextRole.value),
+        int(TrackRole.SORT_VALUE),
+        int(TrackRole.STREAM_MANUAL),
+        int(TrackRole.ON_IPOD),
+    }
+)
 
 
 def _search_text(track: Track) -> str:

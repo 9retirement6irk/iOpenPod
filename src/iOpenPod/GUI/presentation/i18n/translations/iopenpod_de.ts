@@ -14218,6 +14218,10 @@ Beim Fortfahren wird das Autorisierungsformat für {model} versucht.</translatio
         <translation>{name}: Die iPod-Datei hat sich nach der Suche geändert. Durchsuchen Sie den iPod vor der Synchronisierung erneut.</translation>
     </message>
     <message>
+        <source>{name}: the iPod scan has no record of this item. Rescan the iPod before Sync.</source>
+        <translation>{name}: Die iPod-Suche hat keinen Eintrag für dieses Element. Durchsuchen Sie den iPod vor der Synchronisierung erneut.</translation>
+    </message>
+    <message>
         <source>{reason}
 Reported updater family: {families}
 Reported firmware: {firmware}</source>

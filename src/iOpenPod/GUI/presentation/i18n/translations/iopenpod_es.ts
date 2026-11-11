@@ -14218,6 +14218,10 @@ Al continuar, se intentará usar el formato de autorización de {model}.</transl
         <translation>{name}: el archivo del iPod cambió después del análisis. Vuelve a analizar el iPod antes de sincronizar.</translation>
     </message>
     <message>
+        <source>{name}: the iPod scan has no record of this item. Rescan the iPod before Sync.</source>
+        <translation>{name}: el análisis del iPod no tiene registro de este elemento. Vuelve a analizar el iPod antes de sincronizar.</translation>
+    </message>
+    <message>
         <source>{reason}
 Reported updater family: {families}
 Reported firmware: {firmware}</source>

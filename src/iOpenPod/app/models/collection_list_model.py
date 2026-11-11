@@ -122,7 +122,7 @@ class CollectionListModel(QAbstractListModel):
         self._search_texts: tuple[str, ...] = ()
         self._sync_selection: SyncSelection | None = None
         tracks.modelReset.connect(self._source_reset)
-        tracks.dataChanged.connect(self._source_changed)
+        tracks.dataChanged.connect(self._source_data_changed)
         tracks.rowsInserted.connect(self._source_changed)
         tracks.rowsRemoved.connect(self._source_changed)
         self._source_reset()
@@ -276,6 +276,15 @@ class CollectionListModel(QAbstractListModel):
         self.beginResetModel()
         self._commit(self._project())
         self.endResetModel()
+
+    def _source_data_changed(
+        self, _top_left: object, _bottom_right: object, roles: object = None
+    ) -> None:
+        from iOpenPod.app.models.track_table_model import selection_only
+
+        # A Sync tick changes no album or collection: skip projecting them again.
+        if not selection_only(roles):
+            self._source_changed()
 
     def _source_changed(self, *_args: object) -> None:
         reconcile_keyed_rows(

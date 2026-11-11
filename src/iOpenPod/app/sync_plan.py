@@ -1332,6 +1332,7 @@ def _ipod_candidates(
         for record in media.tracks
     ]
     scanned_track_ids = {record.track_id for record in media.tracks}
+    unanalyzed_track_ids = media.unanalyzed_track_ids  # built once, not per Track
     candidates.extend(
         _Candidate(
             media_kind=SyncPlanMediaKind.TRACK,
@@ -1342,7 +1343,7 @@ def _ipod_candidates(
             item_id=track.track_id,
             track=track,
             has_video=_has_video(track),
-            unanalyzed=track.track_id in media.unanalyzed_track_ids,
+            unanalyzed=track.track_id in unanalyzed_track_ids,
         )
         for track in library.tracks
         if track.track_id not in scanned_track_ids
