@@ -861,6 +861,7 @@ def _pair_by_content(
 _DETAIL_LENGTH_TOLERANCE_MS = 2_500
 
 
+@lru_cache(maxsize=131_072)
 def _comparable(value: str) -> str:
     """Case, accents, punctuation and a leading "The" don't separate names."""
 

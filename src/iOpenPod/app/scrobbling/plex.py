@@ -2,8 +2,9 @@
 
 Plays are reported as a finished listen on the matched Plex Track, attributed to
 a Plex player named after the iPod (platform "iPod"), so they appear in Plex Play
-History and raise the Track's play count. Listens that match no Plex Track are
-rejected and remain pending, so they can be delivered if the Track is added later.
+History and raise the Track's play count. Listens that match no Plex Track, or
+match several, are reported once and dropped: the same listen would fail the same
+way on every later Sync.
 
 Credentials map onto the shared Scrobbling record as: ``username`` = Plex account
 name, ``token`` = the server access token, ``api_key`` = server base URL, and
@@ -93,6 +94,7 @@ class PlexScrobbleClient:
                         "Several Plex Tracks match this song."
                         if match.ambiguous
                         else "No matching Track in your Plex music library.",
+                        final=True,
                     )
                 )
                 continue

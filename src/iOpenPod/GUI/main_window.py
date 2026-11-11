@@ -173,6 +173,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# After a Sync, wait this long for the iPod to be free before sending extras.
+_EXTRAS_WAIT_MS = 1000
+_EXTRAS_WAIT_LIMIT = 120
+
 _BACKUP_STATUS_SOURCE = "backup-progress"
 _SYNESTHESIA_PROGRESS_STATUS_SOURCE = "synesthesia-progress"
 _SYNESTHESIA_NOTICE_STATUS_SOURCE = "synesthesia-notice"
@@ -277,6 +281,7 @@ class MainWindow(QMainWindow):
         self._kept_selection: tuple[frozenset[str], frozenset[str]] | None = None
         # Connected steps that run one after another once Sync has finished.
         self._after_sync: list[Callable[[], bool]] = []
+        self._extras_waits = 0
         # Plex and Grimmory listed for the current Sync, merged after the scan.
         self._remote_catalog: RemoteCatalog | None = None
         self._stars_pending = False
@@ -2005,6 +2010,14 @@ class MainWindow(QMainWindow):
             self._context.status.show("plex.stars", " ".join(parts), timeout_ms=20_000)
             return
         if operation == "extras-publish" and isinstance(_value, ExtrasSent):
+            logger.info(
+                "Notes, calendars and contacts sent: notes=%d calendars=%d "
+                "contacts=%d issues=%s",
+                _value.notes,
+                _value.calendars,
+                _value.contacts,
+                list(_value.issues),
+            )
             parts = [
                 self.tr(
                     "On the iPod: {notes} notes, {calendars} calendars, {contacts} contacts."
@@ -2472,14 +2485,22 @@ class MainWindow(QMainWindow):
         if not isinstance(value, SyncExecutionResult):
             return
         host_sync = self._review_host is not None
-        if (
-            host_sync
-            and value.status
-            in {SyncExecutionStatus.SUCCESS, SyncExecutionStatus.PARTIAL}
-            and self._connected.has_extras
-        ):
+        saved = value.status in {
+            SyncExecutionStatus.SUCCESS,
+            SyncExecutionStatus.PARTIAL,
+        }
+        extras = self._connected.has_extras
+        # This step used to leave no trace when it was skipped or refused.
+        logger.info(
+            "Sync finished: status=%s host_sync=%s extras_set_up=%s",
+            value.status.value,
+            host_sync,
+            extras,
+        )
+        if host_sync and saved and extras:
             # Notes, calendars and contacts go on once the media is in place.
             self._after_sync.append(self._connected.publish_for_sync)
+            self._extras_waits = 0
         # Keep Plex and Grimmory downloads within the cache limit, or remove them.
         self._after_sync.append(self._connected.trim_cache)
         self._run_after_sync()
@@ -2500,10 +2521,43 @@ class MainWindow(QMainWindow):
     def _run_after_sync(self) -> None:
         """Start the next queued Connected step when the controller is free."""
 
+        devices = self._context.device_controller
         while self._after_sync and not self._connected.busy:
-            step = self._after_sync.pop(0)
-            if step():
-                if step == self._connected.publish_for_sync:
+            step = self._after_sync[0]
+            extras = step == self._connected.publish_for_sync
+            if (
+                extras
+                and devices.active_ipod is not None
+                and not devices.device_writes_allowed
+                and self._extras_waits < _EXTRAS_WAIT_LIMIT
+            ):
+                # Something else holds the iPod for a moment (saving play counts,
+                # scrobbling). Wait for it instead of dropping the step.
+                if not self._extras_waits:
+                    logger.info(
+                        "Notes, calendars and contacts wait for the iPod to be free"
+                    )
+                self._extras_waits += 1
+                QTimer.singleShot(_EXTRAS_WAIT_MS, self._run_after_sync)
+                return
+            self._after_sync.pop(0)
+            started = step()
+            if extras:
+                logger.info(
+                    "Notes, calendars and contacts: started=%s after %d waits",
+                    started,
+                    self._extras_waits,
+                )
+                if not started:
+                    self._context.status.show(
+                        "connected.extras",
+                        self.tr(
+                            "Notes, calendars and contacts were not sent: the iPod was busy. Use Send to iPod on their pages."
+                        ),
+                        timeout_ms=30000,
+                    )
+            if started:
+                if extras:
                     self._context.status.show(
                         "connected.extras",
                         self.tr("Sending notes, calendars and contacts to the iPod…"),

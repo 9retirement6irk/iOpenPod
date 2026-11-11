@@ -73,3 +73,23 @@ def test_the_contact_limit_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(contacts, "MAX_CONTACTS", 2)
     files, over = plan_contacts([UPLOAD])
     assert (len(files), over) == (2, 1)
+
+
+def test_a_contact_with_a_large_folded_photo_parses_quickly() -> None:
+    """Phone exports fold a photo over thousands of lines; joining them piece by
+    piece froze the window for seconds on every Connected page refresh."""
+
+    import time
+
+    photo = "QUJD" * 150_000  # 600 kB of base64
+    folded = "\n ".join(photo[i : i + 74] for i in range(0, len(photo), 74))
+    card = (
+        "BEGIN:VCARD\nVERSION:3.0\nFN:Ada Lovelace\nN:Lovelace;Ada;;;\n"
+        f"TEL:1\nPHOTO;ENCODING=b;TYPE=JPEG:{folded}\nEND:VCARD\n"
+    )
+    started = time.perf_counter()
+    contacts = parse_contacts(card * 40)
+    assert len(contacts) == 40
+    assert contacts[0].name == "Ada Lovelace"
+    assert "PHOTO" not in contacts[0].text  # the iPod can't show photos
+    assert time.perf_counter() - started < 5

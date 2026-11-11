@@ -1510,6 +1510,8 @@ class ContactsPage(_ConnectedPage):
         self._header.set_title(self.tr("Contacts"))
         files = QGroupBox(self.tr("Contact files"), self)
         self._files = QListWidget(files)
+        self._listing: tuple[tuple[str, str, int], ...] | None = None
+        self._counts: dict[tuple[str, int], int] = {}
         self._files.setMaximumHeight(200)
         add = _button(self.tr("Add vCard file…"), files)
         add.clicked.connect(self._add_file)
@@ -1537,9 +1539,19 @@ class ContactsPage(_ConnectedPage):
     def _render(self) -> None:
         from iOpenPod.app.connected.contacts import parse_contacts
 
+        files = self.controller.contact_files()
+        # This runs whenever any Connected work starts or ends; a large vCard file
+        # takes seconds to read, so count each file once and redraw on change only.
+        listing = tuple((item.filename, item.name, len(text)) for item, text in files)
+        if listing == self._listing:
+            return
+        self._listing = listing
         self._files.clear()
-        for item, text in self.controller.contact_files():
-            count = len(parse_contacts(text))
+        for item, text in files:
+            key = (item.filename, len(text))
+            count = self._counts.get(key)
+            if count is None:
+                count = self._counts[key] = len(parse_contacts(text))
             entry = QListWidgetItem(
                 self.tr("{name}  ·  {count} contacts").format(
                     name=item.name, count=count

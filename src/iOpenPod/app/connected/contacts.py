@@ -44,13 +44,15 @@ class ContactFile:
 def _unfold(lines: list[str]) -> list[str]:
     """Join folded lines (continuations start with a space or tab)."""
 
-    logical: list[str] = []
+    # A photo is thousands of folded lines: gather the pieces and join once, since
+    # growing one string piece by piece copies it every time.
+    parts: list[list[str]] = []
     for line in lines:
-        if line[:1] in {" ", "\t"} and logical:
-            logical[-1] += line[1:]
+        if line[:1] in {" ", "\t"} and parts:
+            parts[-1].append(line[1:])
         elif line.strip():
-            logical.append(line)
-    return logical
+            parts.append([line])
+    return ["".join(pieces) for pieces in parts]
 
 
 def _property(line: str) -> tuple[str, str]:

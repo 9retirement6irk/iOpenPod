@@ -58,6 +58,9 @@ class RejectedListen:
     listen: Listen
     code: int
     message: str = ""
+    # The service can never accept this listen as it is, so trying again every
+    # Sync would only repeat the warning: it is dropped instead of kept pending.
+    final: bool = False
 
 
 @dataclass(frozen=True, slots=True)

@@ -163,8 +163,21 @@ class ScrobbleService:
                         for item, ok in zip(batch, result.accepted, strict=True)
                         if ok
                     }
+                    # Listens the service can never accept are settled too, or
+                    # every later Sync would submit and report them again.
+                    final = {
+                        rejection.listen
+                        for rejection in result.rejections
+                        if rejection.final
+                    }
+                    dropped = {
+                        item.identity
+                        for item, ok in zip(batch, result.accepted, strict=True)
+                        if not ok and item.submission in final
+                    }
+                    settled = received | dropped
                     state.pending = [
-                        item for item in state.pending if item.identity not in received
+                        item for item in state.pending if item.identity not in settled
                     ]
                     # Even cancellation/disconnect after a response must retain receipts.
                     self._queue.save(state)

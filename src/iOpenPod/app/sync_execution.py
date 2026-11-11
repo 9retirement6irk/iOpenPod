@@ -38,6 +38,7 @@ from iOpenPod.app.media.importing import (
     LibraryMediaSource,
     relocate_song,
 )
+from iOpenPod.app.media.inspection import MediaInspector
 from iOpenPod.app.media.music_paths import MusicPathAllocator
 from iOpenPod.app.media.photo_image import photo_source_size
 from iOpenPod.app.media.photo_sync import (
@@ -1906,6 +1907,17 @@ class SyncExecutor:
                 )
             except Exception as error:
                 if getattr(error, "code", "") not in _UNREADABLE_MEDIA:
+                    raise
+                try:
+                    MediaInspector(tools.ffprobe).inspect(
+                        source.path, checkpoint=checkpoint
+                    )
+                except Exception as unreadable:
+                    if getattr(unreadable, "code", "") not in _UNREADABLE_MEDIA:
+                        raise error from None
+                else:
+                    # The download itself reads fine, so fetching it again would
+                    # change nothing: the conversion is what failed.
                     raise
                 # The copy isn't readable media: a download cut short or damaged
                 # in the cache. Fetch it once more rather than fail every Sync.

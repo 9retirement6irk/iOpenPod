@@ -60,9 +60,19 @@ def rejection_report(
         groups.setdefault(rejection.code, {}).setdefault(key, []).append(
             listen.timestamp
         )
+    dropped = sum(rejection.final for rejection in rejections)
+    if dropped == len(rejections):
+        outcome = "They were dropped and won't be tried again."
+    elif dropped:
+        outcome = (
+            f"{_listens(dropped)} dropped and won't be tried again; "
+            "the rest remain pending."
+        )
+    else:
+        outcome = "Unaccepted listens remain pending."
     lines = [
         f"{account.service.label} ({single_line(account.username)}): "
-        f"{_listens(len(rejections))} rejected. Unaccepted listens remain pending."
+        f"{_listens(len(rejections))} rejected. {outcome}"
     ]
     if account.service is Service.LASTFM and now is not None:
         old = sum(item.listen.timestamp < now - LASTFM_MAX_AGE for item in rejections)

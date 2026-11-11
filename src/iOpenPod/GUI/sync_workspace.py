@@ -742,6 +742,9 @@ class SyncWorkspace(QWidget):
         )
         self._storage_bar.set_device(active_ipod)
         browser = self._ensure_browser()
+        # Loading resets every list; pause all pages so only the one shown below
+        # filters and sorts the new library.
+        browser.set_live_page(None)
         browser.load(library)
         self.selection.reset(library, comparison)
         # Playlists synced before stay synced; others are ticked in Select Media.
