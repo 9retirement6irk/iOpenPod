@@ -337,6 +337,7 @@ class ConnectedController(QObject):
             return False
         if exclusive:
             if not self._devices.begin_exclusive_operation():
+                _LOGGER.info("Connected %s not started: the iPod is busy", operation)
                 self.message.emit(
                     self.tr("The iPod is busy. Try again when it's idle.")
                 )
@@ -365,6 +366,8 @@ class ConnectedController(QObject):
         if self._closed:
             return
         if isinstance(error, str) and error:
+            # Otherwise only a status line that is gone in seconds.
+            _LOGGER.warning("Connected %s failed: %s", operation, error)
             self.message.emit(error)
         else:
             if then is not None:
@@ -1495,42 +1498,56 @@ class ConnectedController(QObject):
                     )
                 except CancelledError:
                     raise
-                except ConnectedError as error:
+                except Exception as error:
+                    _LOGGER.warning("Notes were not sent", exc_info=True)
                     sent = replace(sent, issues=(*sent.issues, f"Notes: {error}"))
             if calendars:
-                files, _dropped, issues = self._calendar_files(
-                    job, config.calendars, links
-                )
-                job.signals.progress.emit(self.tr("Writing calendars to the iPod…"))
-                result = self._coordinator.publish_extras(
-                    active, ExtrasSection.CALENDARS, files, job.cancelled
-                )
-                sent = replace(
-                    sent,
-                    calendars=len(files),
-                    issues=(*sent.issues, *issues, *result.issues),
-                )
+                try:
+                    files, _dropped, issues = self._calendar_files(
+                        job, config.calendars, links
+                    )
+                    job.signals.progress.emit(self.tr("Writing calendars to the iPod…"))
+                    result = self._coordinator.publish_extras(
+                        active, ExtrasSection.CALENDARS, files, job.cancelled
+                    )
+                    sent = replace(
+                        sent,
+                        calendars=len(files),
+                        issues=(*sent.issues, *issues, *result.issues),
+                    )
+                except CancelledError:
+                    raise
+                except Exception as error:
+                    # One kind failing must not stop the others.
+                    _LOGGER.warning("Calendars were not sent", exc_info=True)
+                    sent = replace(sent, issues=(*sent.issues, f"Calendars: {error}"))
             if contacts:
                 from iOpenPod.app.connected.contacts import plan_contacts
 
-                planned, over = plan_contacts(uploads, config.contacts.skipped)
-                job.signals.progress.emit(self.tr("Writing contacts to the iPod…"))
-                result = self._coordinator.publish_extras(
-                    active,
-                    ExtrasSection.CONTACTS,
-                    tuple(ExtrasFile(c.relative, c.data) for c in planned),
-                    job.cancelled,
-                )
-                extra = (
-                    (self.tr("{count} contacts didn't fit.").format(count=over),)
-                    if over
-                    else ()
-                )
-                sent = replace(
-                    sent,
-                    contacts=len(planned),
-                    issues=(*sent.issues, *extra, *result.issues),
-                )
+                try:
+                    planned, over = plan_contacts(uploads, config.contacts.skipped)
+                    job.signals.progress.emit(self.tr("Writing contacts to the iPod…"))
+                    result = self._coordinator.publish_extras(
+                        active,
+                        ExtrasSection.CONTACTS,
+                        tuple(ExtrasFile(c.relative, c.data) for c in planned),
+                        job.cancelled,
+                    )
+                    extra = (
+                        (self.tr("{count} contacts didn't fit.").format(count=over),)
+                        if over
+                        else ()
+                    )
+                    sent = replace(
+                        sent,
+                        contacts=len(planned),
+                        issues=(*sent.issues, *extra, *result.issues),
+                    )
+                except CancelledError:
+                    raise
+                except Exception as error:
+                    _LOGGER.warning("Contacts were not sent", exc_info=True)
+                    sent = replace(sent, issues=(*sent.issues, f"Contacts: {error}"))
             return sent
 
         return self._start("extras-publish", work, exclusive=True)

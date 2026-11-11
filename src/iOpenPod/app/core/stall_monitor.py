@@ -22,6 +22,8 @@ _BEAT_MS = 100
 _STALL_SECONDS = 0.75
 _POLL_SECONDS = 0.25
 _MAX_FRAMES = 30
+_RESAMPLE_SECONDS = 1.0
+_MAX_SAMPLES = 12
 
 
 class StallMonitor(QObject):
@@ -65,11 +67,21 @@ class StallMonitor(QObject):
     def _heartbeat(self) -> None:
         self._beat = monotonic()
 
+    def _stack(self) -> str:
+        frame = sys._current_frames().get(self._interface_thread)
+        if frame is None:
+            return "(interface thread stack unavailable)"
+        return "".join(traceback.format_stack(frame)[-_MAX_FRAMES:]).rstrip()
+
     def _watch(self) -> None:
         reported_beat = 0.0
+        samples = 0
+        next_sample = 0.0
+        last_stack = ""
         while not self._stopped.wait(self._poll):
             beat = self._beat
-            stalled = monotonic() - beat
+            now = monotonic()
+            stalled = now - beat
             if stalled < self._threshold:
                 if reported_beat and beat != reported_beat:
                     logger.warning(
@@ -78,20 +90,29 @@ class StallMonitor(QObject):
                     )
                     reported_beat = 0.0
                 continue
-            if beat == reported_beat:
-                continue  # already reported this stall
-            reported_beat = beat
-            frame = sys._current_frames().get(self._interface_thread)
-            stack = (
-                "".join(traceback.format_stack(frame)[-_MAX_FRAMES:])
-                if frame is not None
-                else "(interface thread stack unavailable)\n"
-            )
-            logger.warning(
-                "Interface not responding for %.1fs; it is busy in:\n%s",
-                stalled,
-                stack.rstrip(),
-            )
+            if beat != reported_beat:
+                reported_beat = beat
+                samples = 1
+                next_sample = now + _RESAMPLE_SECONDS
+                last_stack = self._stack()
+                logger.warning(
+                    "Interface not responding for %.1fs; it is busy in:\n%s",
+                    stalled,
+                    last_stack,
+                )
+            elif samples < _MAX_SAMPLES and now >= next_sample:
+                # A long stall moves through several pieces of work: sample it
+                # again so the log shows where the time goes, not only the start.
+                samples += 1
+                next_sample = now + _RESAMPLE_SECONDS
+                stack = self._stack()
+                if stack != last_stack:
+                    last_stack = stack
+                    logger.warning(
+                        "Interface still not responding after %.1fs; now in:\n%s",
+                        stalled,
+                        stack,
+                    )
 
 
 __all__ = ["StallMonitor"]

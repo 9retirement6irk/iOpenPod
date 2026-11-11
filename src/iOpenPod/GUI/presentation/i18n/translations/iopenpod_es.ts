@@ -3598,6 +3598,10 @@
         <translation>Sincronización no disponible</translation>
     </message>
     <message>
+        <source>Notes, calendars and contacts were not sent: the iPod was busy. Use Send to iPod on their pages.</source>
+        <translation>No se enviaron las notas, los calendarios ni los contactos: el iPod estaba ocupado. Usa Enviar al iPod en sus páginas.</translation>
+    </message>
+    <message>
         <source>Sending notes, calendars and contacts to the iPod…</source>
         <translation>Enviando notas, calendarios y contactos al iPod…</translation>
     </message>

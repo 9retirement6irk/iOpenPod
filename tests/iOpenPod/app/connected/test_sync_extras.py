@@ -113,6 +113,30 @@ def test_ticked_notes_calendars_and_contacts_are_sent(tmp_path: Path) -> None:
         }
         assert results[-1] == ("extras-publish", ExtrasSent(1, 1, 1))
 
+        # One kind failing doesn't stop the others, and is reported by name.
+        coordinator.publish_extras.reset_mock()
+        normal = coordinator.publish_extras.return_value
+
+        def flaky(_active: object, section: ExtrasSection, *_rest: object) -> object:
+            if section is ExtrasSection.CALENDARS:
+                raise RuntimeError("the iPod Library changed")
+            return normal
+
+        coordinator.publish_extras.side_effect = flaky
+        assert made.publish_for_sync()
+        wait_for(lambda: not made.busy)
+        APPLICATION.processEvents()
+        assert set(written(coordinator)) == {
+            ExtrasSection.NOTES,
+            ExtrasSection.CALENDARS,
+            ExtrasSection.CONTACTS,
+        }
+        operation, sent = results[-1]
+        assert operation == "extras-publish" and isinstance(sent, ExtrasSent)
+        assert (sent.notes, sent.calendars, sent.contacts) == (1, 0, 1)
+        assert sent.issues == ("Calendars: the iPod Library changed",)
+        coordinator.publish_extras.side_effect = None
+
         # Ticking them again brings them back.
         coordinator.publish_extras.reset_mock()
         made.set_memos_included(("memos/2",), True)
