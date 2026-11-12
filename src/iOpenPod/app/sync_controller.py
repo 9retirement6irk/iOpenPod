@@ -16,6 +16,7 @@ from iOpenPod.app.core.settings.definitions import (
     NORMALIZE_TAGS_AFTER_SYNC,
     ROCKBOX_METADATA_SUPPORT,
     ROTATE_TALL_PHOTOS,
+    STORE_LYRICS,
 )
 from iOpenPod.app.core.settings.transcoding import read_transcoder_settings
 from iOpenPod.app.display_text import exception_text, source_text
@@ -430,6 +431,7 @@ class SyncController(QObject):
                     rotate_tall_photos=self._settings.get(ROTATE_TALL_PHOTOS),
                     fit_thumbnails=self._settings.get(FIT_THUMBNAILS),
                     rockbox_metadata=self._settings.get(ROCKBOX_METADATA_SUPPORT),
+                    store_lyrics=self._settings.get(STORE_LYRICS),
                 ),
                 reconcile_playlists=reconcile_playlists,
                 playlist_choices=playlist_choices,

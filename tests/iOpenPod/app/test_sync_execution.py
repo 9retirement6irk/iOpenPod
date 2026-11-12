@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from os import PathLike
 from pathlib import Path
 from threading import Event
+from types import SimpleNamespace
 from typing import Protocol, cast
 
 import pytest
@@ -1662,6 +1663,86 @@ def test_sync_writes_lyrics_to_media_and_prefers_existing_file_text(
             )
             == WORDS
         )
+    finally:
+        device.coordinator.close()
+
+
+def test_lyrics_option_drops_new_text_and_keeps_retained_text() -> None:
+    def song(lyrics: str) -> Track:
+        return Track(1, "Song", "", "", 1000, metadata=TrackMetadata(lyrics=lyrics))
+
+    off = cast(
+        "SyncExecutionRequest",
+        SimpleNamespace(options=SyncOptions(store_lyrics=False)),
+    )
+    on = cast("SyncExecutionRequest", SimpleNamespace(options=SyncOptions()))
+    stored_lyrics = sync_execution._stored_lyrics
+    assert stored_lyrics(on, song("New"), None).metadata.lyrics == "New"
+    assert stored_lyrics(off, song("New"), None).metadata.lyrics == ""
+    # A retained Track keeps its text, so its media file is not rewritten.
+    assert stored_lyrics(off, song("New"), song("Old")).metadata.lyrics == "Old"
+    assert stored_lyrics(off, song("New"), song("")).metadata.lyrics == ""
+
+
+@pytest.mark.skipif(
+    any(shutil.which(tool) is None for tool in ("ffmpeg", "ffprobe", "fpcalc")),
+    reason="Sync media tools required",
+)
+def test_sync_keeps_lyrics_out_of_the_database_when_the_option_is_off(
+    tmp_path: Path,
+) -> None:
+    device = build_device(tmp_path)
+    try:
+        source = tmp_path / "lyrics.m4a"
+        original = base64.decodebytes((FIXTURES / "tone.m4a.b64").read_bytes())
+        source.write_bytes(rewrite_lyrics(original, source.name, WORDS))
+        observed = LocalHostFile.observe(HostPath(source))
+        host = HostMediaLibrary(
+            LibrarySnapshot(
+                tracks=(
+                    Track(
+                        100,
+                        "Lyrics song",
+                        "",
+                        "",
+                        1000,
+                        metadata=TrackMetadata(location=str(source), lyrics=WORDS),
+                    ),
+                )
+            ),
+            (
+                HostMediaSource(
+                    observed.path,
+                    HostMediaFileKind.AUDIO,
+                    observed.size_bytes,
+                    observed.modified_ns,
+                ),
+            ),
+            (),
+            HostMediaCacheStats(),
+        )
+        request = _request(device, host)
+        request = replace(
+            request,
+            plan=select_sync_plan(
+                request.plan,
+                selected_host_paths=frozenset({host_path_identity(str(source))}),
+                selected_ipod_removals=frozenset(),
+            ),
+            options=SyncOptions(store_lyrics=False),
+        )
+        result = SyncExecutor(device.coordinator).execute(
+            request, lambda _: None, Event()
+        )
+        assert result.status is SyncExecutionStatus.SUCCESS, result.issues
+        assert result.active is not None
+        added = next(
+            track
+            for track in result.active.library.tracks
+            if track.title == "Lyrics song"
+        )
+        assert added.metadata.lyrics == ""
+        assert not added.metadata.has_lyrics
     finally:
         device.coordinator.close()
 
