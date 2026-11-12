@@ -9501,6 +9501,14 @@ Playlists: %3</translation>
         <translation>Aplica ajustes de metadatos específicos del iPod a la biblioteca ya guardada. Los archivos del equipo no cambian.</translation>
     </message>
     <message>
+        <source>Store Lyrics in the iPod Library</source>
+        <translation>Guardar letras en la biblioteca del iPod</translation>
+    </message>
+    <message>
+        <source>Copy each song&apos;s lyrics into the iPod&apos;s Library database. Lyrics make the database several times larger, and an iPod with little memory can show an empty Library when it grows too large. Off leaves lyrics out for songs added or updated from now on; those songs show no lyrics on the iPod.</source>
+        <translation>Copia la letra de cada canción en la base de datos de la biblioteca del iPod. Las letras hacen que la base de datos sea varias veces mayor, y un iPod con poca memoria puede mostrar una biblioteca vacía cuando crece demasiado. Desactivado omite las letras de las canciones que se añadan o actualicen a partir de ahora; esas canciones no muestran letra en el iPod.</translation>
+    </message>
+    <message>
         <source>Rotate Tall Photos on Device</source>
         <translation>Girar fotos verticales en el dispositivo</translation>
     </message>

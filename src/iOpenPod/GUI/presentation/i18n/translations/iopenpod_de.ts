@@ -9501,6 +9501,14 @@ Playlists: %3</translation>
         <translation>iPod-spezifische Metadatenbereinigung auf die gespeicherte iPod-Mediathek anwenden. Dateien auf dem Computer bleiben unverändert.</translation>
     </message>
     <message>
+        <source>Store Lyrics in the iPod Library</source>
+        <translation>Liedtexte in der iPod-Mediathek speichern</translation>
+    </message>
+    <message>
+        <source>Copy each song&apos;s lyrics into the iPod&apos;s Library database. Lyrics make the database several times larger, and an iPod with little memory can show an empty Library when it grows too large. Off leaves lyrics out for songs added or updated from now on; those songs show no lyrics on the iPod.</source>
+        <translation>Kopiert den Liedtext jedes Titels in die Mediathek-Datenbank des iPod. Liedtexte machen die Datenbank um ein Mehrfaches größer, und ein iPod mit wenig Speicher kann eine leere Mediathek anzeigen, wenn sie zu groß wird. Aus lässt Liedtexte bei Titeln weg, die ab jetzt hinzugefügt oder aktualisiert werden; diese Titel zeigen auf dem iPod keine Liedtexte.</translation>
+    </message>
+    <message>
         <source>Rotate Tall Photos on Device</source>
         <translation>Hochformatfotos auf dem Gerät drehen</translation>
     </message>

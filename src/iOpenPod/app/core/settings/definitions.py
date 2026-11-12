@@ -375,6 +375,12 @@ NORMALIZE_TAGS_AFTER_SYNC = SettingDefinition[bool](
     default=False,
     device_overridable=True,
 )
+STORE_LYRICS = SettingDefinition[bool](
+    key="sync/store-lyrics",
+    value_type=bool,
+    default=True,
+    device_overridable=True,
+)
 ROTATE_TALL_PHOTOS = SettingDefinition[bool](
     key="sync/rotate-tall-photos",
     value_type=bool,

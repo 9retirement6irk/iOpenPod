@@ -20,6 +20,7 @@ from iOpenPod.app.core.settings.definitions import (
     SMART_QUALITY_BY_CONTENT_TYPE,
     SPOKEN_WORD_BITRATE,
     SPOKEN_WORD_MONO,
+    STORE_LYRICS,
     TRANSCODE_LOSSLESS_TO_LOSSY,
     TRANSCODE_PCM_TO_ALAC,
     SettingDefinition,
@@ -114,6 +115,7 @@ class SyncSettings(QWidget):
         self._rockbox = _Choice(
             scope, ROCKBOX_METADATA_SUPPORT, "rockboxMetadataSupport", self
         )
+        self._lyrics = _Choice(scope, STORE_LYRICS, "storeLyrics", self)
         self._scrobble = _Choice(
             scope, SCROBBLE_DURING_SYNC, "scrobbleDuringSync", self
         )
@@ -122,6 +124,7 @@ class SyncSettings(QWidget):
             self._genius,
             self._sound_check,
             self._normalize,
+            self._lyrics,
             self._rotate,
             self._fit,
             self._rockbox,
@@ -180,6 +183,16 @@ class SyncSettings(QWidget):
             self.tr(
                 "Apply iPod-specific metadata cleanup to the committed iPod Library. "
                 "Host files stay unchanged."
+            ),
+        )
+        self._lyrics.set_copy(
+            self.tr("Store Lyrics in the iPod Library"),
+            self.tr(
+                "Copy each song's lyrics into the iPod's Library database. Lyrics "
+                "make the database several times larger, and an iPod with little "
+                "memory can show an empty Library when it grows too large. Off "
+                "leaves lyrics out for songs added or updated from now on; those "
+                "songs show no lyrics on the iPod."
             ),
         )
         self._rotate.set_copy(

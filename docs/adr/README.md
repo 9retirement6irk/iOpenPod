@@ -308,3 +308,4 @@ What becomes easier, harder, required, or prohibited?
 - [ADR-0901: Choose Playlists in Select Media](0901-choose-playlists-in-select-media.md) (this fork)
 - [ADR-0902: Skip iPod Fingerprints for a Connected-Only Sync](0902-skip-ipod-fingerprints-for-connected-only-sync.md) (this fork)
 - [ADR-0903: Review Playlists in Their Own Sync Stage](0903-review-playlists-in-their-own-sync-stage.md) (this fork)
+- [ADR-0904: Optional Lyrics in the iPod Database](0904-optional-lyrics-in-the-ipod-database.md) (this fork)

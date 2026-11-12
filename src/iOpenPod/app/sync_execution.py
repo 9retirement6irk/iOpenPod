@@ -191,6 +191,8 @@ class SyncOptions:
     fit_thumbnails: bool = False
     rockbox_metadata: bool = False
     scrobble: bool = True
+    # Off keeps new lyric text out of the iPod database (ADR-0904).
+    store_lyrics: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -2376,6 +2378,24 @@ def _validate_plan(request: SyncExecutionRequest) -> SyncPlan:
     return comparison
 
 
+def _stored_lyrics(
+    request: SyncExecutionRequest, track: Track, old: Track | None
+) -> Track:
+    """Keep Host lyric text out of the iPod database when the option is off.
+
+    The database stores every lyric in full, so a lyric-rich Library can outgrow
+    what an iPod with little memory will load. A retained Track keeps the text it
+    already has, which avoids rewriting its media file.
+    """
+
+    if request.options.store_lyrics:
+        return track
+    lyrics = "" if old is None else old.metadata.lyrics
+    if track.metadata.lyrics == lyrics:
+        return track
+    return replace(track, metadata=replace(track.metadata, lyrics=lyrics))
+
+
 def _song(
     request: SyncExecutionRequest, host: Track, output: PreparedTranscode
 ) -> ImportedSong:
@@ -2584,11 +2604,13 @@ def _draft(
                     ),
                 ),
             )
+            track = _stored_lyrics(request, track, old)
             replaced.append(identity)
         else:
             identity = next_track_id
             next_track_id -= 1
             track = replace(song.track, track_id=identity, artwork_id=cover_id)
+            track = _stored_lyrics(request, track, None)
         tracks[identity] = track
         media.append(
             replace(song.source, media=replace(song.source.media, track_id=identity))
@@ -2603,6 +2625,7 @@ def _draft(
         host_track = host_tracks_by_path[host_path_identity(item.host_path or "")]
         cover_id = cover_identity(update.artwork) if item.artwork_changed else 0
         track = apply_track_tags(old, host_track) if item.metadata_changed else old
+        track = _stored_lyrics(request, track, old)
         if item.artwork_changed:
             track = replace(
                 track,
