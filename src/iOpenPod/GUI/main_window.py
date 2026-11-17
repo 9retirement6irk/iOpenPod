@@ -688,7 +688,9 @@ class MainWindow(QMainWindow):
             self._pages.addWidget(page)
         self._pages.addWidget(self._photo_page)
         self._pages.addWidget(self._games_page)
-        calendar_page = CalendarPage(context.extras_controller, self._pages)
+        calendar_page = CalendarPage(
+            context.extras_controller, self._pages, connected=self._connected
+        )
         self._page_widgets[PageId.CALENDAR] = calendar_page
         self._pages.addWidget(calendar_page)
         tones_page = TonesPage(context.extras_controller, self._pages)
@@ -2238,6 +2240,28 @@ class MainWindow(QMainWindow):
             self._context.status.show(
                 "connected.extras", " ".join(parts), timeout_ms=20_000
             )
+            # Calendar reads the iPod's files: show what was just written.
+            self._context.extras_controller.refresh()
+            return
+        if operation == "calendars-publish" and isinstance(_value, ExtrasSent):
+            logger.info(
+                "Calendars sent: calendars=%d issues=%s",
+                _value.calendars,
+                list(_value.issues),
+            )
+            self._context.status.show(
+                "connected.extras",
+                " ".join(
+                    (
+                        self.tr("On the iPod: {calendars} calendars.").format(
+                            calendars=_value.calendars
+                        ),
+                        *_value.issues[:3],
+                    )
+                ),
+                timeout_ms=20_000,
+            )
+            self._context.extras_controller.refresh()
             return
         folders = self._pending_sync_folders
         if operation == "prepare-sync" and folders is not None:

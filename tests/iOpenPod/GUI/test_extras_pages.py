@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 import pytest
 from PySide6.QtCore import (
@@ -82,6 +83,9 @@ from iPodDB.calendar import (
 )
 
 pytestmark = pytest.mark.usefixtures("enable_extras_pages")
+
+if TYPE_CHECKING:
+    from iOpenPod.app.connected_controller import ConnectedController
 
 
 def _open_entry_menu(
@@ -411,6 +415,68 @@ def test_device_switch_closes_captured_editor(
         assert not editor.isVisible()
         assert not controller.calendar_edits and not controller.alarm_edits
     finally:
+        page.close()
+        APPLICATION.processEvents()
+
+
+class _FakeConnected:
+    """Stands in for the Connected controller's calendar link methods."""
+
+    def __init__(self) -> None:
+        self.added: list[tuple[str, str]] = []
+        self.published = 0
+
+    def add_calendar_link(self, link: str, name: str = "") -> bool:
+        self.added.append((link, name))
+        return True
+
+    def publish_calendars(self) -> bool:
+        self.published += 1
+        return True
+
+
+def test_calendar_subscribes_to_a_link_and_sends_it_to_a_writable_ipod(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    controller = ExtrasTestController(
+        ExtrasCatalog(support=ExtrasSupport(calendar_write=True))
+    )
+    plain = CalendarPage(controller)
+    connected = _FakeConnected()
+    page = CalendarPage(controller, connected=cast("ConnectedController", connected))
+    answers = iter(
+        [("webcal://example.com/a.ics", True), ("Team", True), ("", True)]
+        + [("https://example.com/b.ics", True), ("", True)]
+        + [("https://example.com/c.ics", True), ("", False)]
+    )
+    monkeypatch.setattr(
+        "iOpenPod.GUI.pages.calendar_page.QInputDialog.getText",
+        lambda *_args, **_kwargs: next(answers),
+    )
+    try:
+        # Upstream's page without Connected Sources offers no link button.
+        assert find_widget(plain, QPushButton, "calendarSubscribe").isHidden()
+        button = find_widget(page, QPushButton, "calendarSubscribe")
+        assert not button.isHidden()
+
+        button.click()
+        assert connected.added == [("webcal://example.com/a.ics", "Team")]
+        assert connected.published == 1
+
+        button.click()  # an empty link adds nothing
+        assert len(connected.added) == 1
+
+        # Without a writable iPod the link is kept for the next Sync.
+        controller.current = None
+        controller.changed.emit()
+        button.click()
+        assert connected.added[-1] == ("https://example.com/b.ics", "")
+        assert connected.published == 1
+
+        button.click()  # cancelled at the name prompt
+        assert len(connected.added) == 2
+    finally:
+        plain.close()
         page.close()
         APPLICATION.processEvents()
 

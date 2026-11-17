@@ -79,6 +79,7 @@ from iPodDB.calendar import (
 if TYPE_CHECKING:
     from PySide6.QtGui import QAction, QResizeEvent, QShowEvent
 
+    from iOpenPod.app.connected_controller import ConnectedController
     from iOpenPod.app.extras_controller import ExtrasController
     from iOpenPod.app.models.device import ActiveIPod
     from iOpenPod.app.models.extras import CalendarGroup, CalendarItem
@@ -737,11 +738,17 @@ class CalendarPage(QWidget):
     """Browse and author events/To Dos through the connection-bound controller."""
 
     def __init__(
-        self, controller: ExtrasController, parent: QWidget | None = None
+        self,
+        controller: ExtrasController,
+        parent: QWidget | None = None,
+        *,
+        connected: ConnectedController | None = None,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("calendarPage")
         self._controller = controller
+        # This fork: calendar links (webcal) are kept by Connected Sources.
+        self._connected = connected
         self._shown_device: ActiveIPod | None = controller.active_ipod
         self._dialog: CalendarEditor | None = None
         self._dialog_target: ActiveIPod | None = None
@@ -749,9 +756,12 @@ class CalendarPage(QWidget):
         self._header = PageHeader(self)
         self._import = ActionButton(parent=self._header, kind=ActionButtonKind.QUIET)
         self._import.setObjectName("calendarImport")
+        self._subscribe = ActionButton(parent=self._header, kind=ActionButtonKind.QUIET)
+        self._subscribe.setObjectName("calendarSubscribe")
+        self._subscribe.setVisible(connected is not None)
         self._new = ActionButton(parent=self._header, kind=ActionButtonKind.PRIMARY)
         self._new.setObjectName("calendarNew")
-        for button in (self._import, self._new):
+        for button in (self._subscribe, self._import, self._new):
             self._header.add_action(button)
         self._calendar_filter = AppComboBox(self)
         self._calendar_filter.setObjectName("calendarSelector")
@@ -901,6 +911,7 @@ class CalendarPage(QWidget):
         self._rename_calendar.clicked.connect(self._rename_named_calendar)
         self._new.clicked.connect(lambda: self._open_editor())
         self._import.clicked.connect(self._import_file)
+        self._subscribe.clicked.connect(self._subscribe_link)
         self._tabs.currentChanged.connect(self._tab_changed)
         self._month.selected.connect(self._refresh)
         self._scope.currentIndexChanged.connect(self._refresh)
@@ -1390,6 +1401,30 @@ class CalendarPage(QWidget):
             if accepted and active is self._controller.active_ipod and self._writable():
                 self._controller.import_calendar(path, name if name.strip() else None)
 
+    def _subscribe_link(self) -> None:
+        """Add a calendar link and put its calendar on the iPod straight away."""
+
+        connected = self._connected
+        if connected is None:
+            return
+        link, accepted = QInputDialog.getText(
+            self,
+            self.tr("Subscribe to Calendar"),
+            self.tr("Calendar link (https:// or webcal://):"),
+        )
+        if not accepted or not link.strip():
+            return
+        name, accepted = QInputDialog.getText(
+            self,
+            self.tr("Subscribe to Calendar"),
+            self.tr("Calendar name (leave blank to use the calendar's own name):"),
+        )
+        if not accepted or not connected.add_calendar_link(link, name):
+            return
+        # Without a writable iPod the link waits for the next Sync.
+        if self._writable():
+            connected.publish_calendars()
+
     def retranslate_ui(self) -> None:
         self._header.set_title(self.tr("Calendar"))
         self._create_calendar.setAccessibleName(self.tr("New calendar…"))
@@ -1411,6 +1446,14 @@ class CalendarPage(QWidget):
             [self.tr("Title"), self.tr("Due"), self.tr("Location"), self.tr("Status")]
         )
         self._import.setText(self.tr("Import Calendar…"))
+        self._subscribe.setText(self.tr("Subscribe to Link…"))
+        self._subscribe.setToolTip(
+            self.tr(
+                "Add a calendar link (https:// or webcal://). Its calendar is "
+                "downloaded now and again at the end of each Sync. Manage links "
+                "under Connected → Calendars."
+            )
+        )
         self._search.setPlaceholderText(self.tr("Search entries"))
         self._search.setAccessibleName(self.tr("Search Calendar and To Dos"))
         self._scope.setItemText(0, self.tr("Selected day"))

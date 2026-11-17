@@ -23,6 +23,9 @@ the end of Sync with Host, whose CONNECTED checklists choose what goes on. Plex 
 Scrobbling service for iPod plays, with two-way star ratings. Virtual-volume and
 scripted-protocol tests cover the work; physical-device acceptance is unverified. See
 [ADR-0900](docs/adr/0900-add-connected-sources-and-ipod-extras.md).
+The Calendar page's **Subscribe to Link…** adds a calendar link to Connected Sources
+and publishes it immediately; see
+[ADR-0905](docs/adr/0905-subscribe-to-calendar-links-from-the-calendar-page.md).
 
 Settings > Sync offers default-off **Scrobble Ratings** for connected Last.fm and
 ListenBrainz accounts. During manual scrobbling or the enabled Sync scrobble step,
