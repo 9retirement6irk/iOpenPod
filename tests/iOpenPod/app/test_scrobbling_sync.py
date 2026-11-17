@@ -40,7 +40,9 @@ if TYPE_CHECKING:
 
 @pytest.mark.parametrize("enabled", [False, True])
 @pytest.mark.parametrize("offline", [False, True])
-@pytest.mark.parametrize("service", list(Service))
+# Rating feedback goes to Last.fm and ListenBrainz; this fork's Plex stars sync
+# separately from the Plex page.
+@pytest.mark.parametrize("service", [Service.LASTFM, Service.LISTENBRAINZ])
 def test_sync_captures_ratings_before_removal_without_host_tag_writeback(
     tmp_path: Path, enabled: bool, offline: bool, service: Service
 ) -> None:
