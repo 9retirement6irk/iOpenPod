@@ -445,9 +445,15 @@ def test_calendar_subscribes_to_a_link_and_sends_it_to_a_writable_ipod(
     connected = _FakeConnected()
     page = CalendarPage(controller, connected=cast("ConnectedController", connected))
     answers = iter(
-        [("webcal://example.com/a.ics", True), ("Team", True), ("", True)]
-        + [("https://example.com/b.ics", True), ("", True)]
-        + [("https://example.com/c.ics", True), ("", False)]
+        [
+            ("webcal://example.com/a.ics", True),
+            ("Team", True),
+            ("", True),  # an empty link
+            ("https://example.com/b.ics", True),
+            ("", True),
+            ("https://example.com/c.ics", True),
+            ("", False),  # cancelled at the name prompt
+        ]
     )
     monkeypatch.setattr(
         "iOpenPod.GUI.pages.calendar_page.QInputDialog.getText",

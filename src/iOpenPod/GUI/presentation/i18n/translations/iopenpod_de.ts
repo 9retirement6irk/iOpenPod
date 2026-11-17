@@ -1826,6 +1826,18 @@ iOpenPod kann den Timer über diese Verbindung weder auslesen noch ändern.</tra
         <translation>Kalendername (leer lassen, um die Namen in der Datei beizubehalten):</translation>
     </message>
     <message>
+        <source>Subscribe to Calendar</source>
+        <translation>Kalender abonnieren</translation>
+    </message>
+    <message>
+        <source>Calendar link (https:// or webcal://):</source>
+        <translation>Kalenderlink (https:// oder webcal://):</translation>
+    </message>
+    <message>
+        <source>Calendar name (leave blank to use the calendar&apos;s own name):</source>
+        <translation>Kalendername (leer lassen, um den Namen des Kalenders zu verwenden):</translation>
+    </message>
+    <message>
         <source>Calendar</source>
         <translation>Kalender</translation>
     </message>
@@ -1840,6 +1852,14 @@ iOpenPod kann den Timer über diese Verbindung weder auslesen noch ändern.</tra
     <message>
         <source>Calendar to show</source>
         <translation>Anzuzeigender Kalender</translation>
+    </message>
+    <message>
+        <source>Subscribe to Link…</source>
+        <translation>Link abonnieren…</translation>
+    </message>
+    <message>
+        <source>Add a calendar link (https:// or webcal://). Its calendar is downloaded now and again at the end of each Sync. Manage links under Connected → Calendars.</source>
+        <translation>Einen Kalenderlink hinzufügen (https:// oder webcal://). Der Kalender wird jetzt und am Ende jeder Synchronisation erneut geladen. Links verwalten Sie unter Verbunden → Kalender.</translation>
     </message>
     <message>
         <source>Search entries</source>
@@ -2627,6 +2647,10 @@ Der Kalender ist schreibgeschützt, da die Unterstützung für die Bearbeitung m
     <message>
         <source>Reading listening progress from Grimmory…</source>
         <translation>Hörfortschritt wird aus Grimmory gelesen…</translation>
+    </message>
+    <message>
+        <source>That calendar link is already added.</source>
+        <translation>Dieser Kalenderlink ist bereits hinzugefügt.</translation>
     </message>
     <message>
         <source>That contacts file is larger than 20 MB.</source>
@@ -5093,6 +5117,10 @@ Der Kalender ist schreibgeschützt, da die Unterstützung für die Bearbeitung m
     <message>
         <source>On the iPod: {notes} notes, {calendars} calendars, {contacts} contacts.</source>
         <translation>Auf dem iPod: {notes} Notizen, {calendars} Kalender, {contacts} Kontakte.</translation>
+    </message>
+    <message>
+        <source>On the iPod: {calendars} calendars.</source>
+        <translation>Auf dem iPod: {calendars} Kalender.</translation>
     </message>
     <message>
         <source>Plex stars: {problem}</source>

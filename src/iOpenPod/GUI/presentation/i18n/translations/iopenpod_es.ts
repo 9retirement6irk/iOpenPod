@@ -1826,6 +1826,18 @@ iOpenPod no puede leer ni cambiar el temporizador a través de esta conexión.</
         <translation>Nombre del calendario (dejar en blanco para conservar los nombres del archivo):</translation>
     </message>
     <message>
+        <source>Subscribe to Calendar</source>
+        <translation>Suscribirse a un calendario</translation>
+    </message>
+    <message>
+        <source>Calendar link (https:// or webcal://):</source>
+        <translation>Enlace del calendario (https:// o webcal://):</translation>
+    </message>
+    <message>
+        <source>Calendar name (leave blank to use the calendar&apos;s own name):</source>
+        <translation>Nombre del calendario (déjalo en blanco para usar el nombre propio del calendario):</translation>
+    </message>
+    <message>
         <source>Calendar</source>
         <translation>Calendario</translation>
     </message>
@@ -1840,6 +1852,14 @@ iOpenPod no puede leer ni cambiar el temporizador a través de esta conexión.</
     <message>
         <source>Calendar to show</source>
         <translation>Calendario que mostrar</translation>
+    </message>
+    <message>
+        <source>Subscribe to Link…</source>
+        <translation>Suscribirse a un enlace…</translation>
+    </message>
+    <message>
+        <source>Add a calendar link (https:// or webcal://). Its calendar is downloaded now and again at the end of each Sync. Manage links under Connected → Calendars.</source>
+        <translation>Añade un enlace de calendario (https:// o webcal://). El calendario se descarga ahora y de nuevo al final de cada sincronización. Gestiona los enlaces en Conectados → Calendarios.</translation>
     </message>
     <message>
         <source>Search entries</source>
@@ -2627,6 +2647,10 @@ El calendario es de solo lectura porque no se ha podido confirmar la compatibili
     <message>
         <source>Reading listening progress from Grimmory…</source>
         <translation>Leyendo el progreso de escucha de Grimmory…</translation>
+    </message>
+    <message>
+        <source>That calendar link is already added.</source>
+        <translation>Ese enlace de calendario ya está añadido.</translation>
     </message>
     <message>
         <source>That contacts file is larger than 20 MB.</source>
@@ -5093,6 +5117,10 @@ El calendario es de solo lectura porque no se ha podido confirmar la compatibili
     <message>
         <source>On the iPod: {notes} notes, {calendars} calendars, {contacts} contacts.</source>
         <translation>En el iPod: {notes} notas, {calendars} calendarios, {contacts} contactos.</translation>
+    </message>
+    <message>
+        <source>On the iPod: {calendars} calendars.</source>
+        <translation>En el iPod: {calendars} calendarios.</translation>
     </message>
     <message>
         <source>Plex stars: {problem}</source>
