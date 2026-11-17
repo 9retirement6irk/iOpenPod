@@ -1,10 +1,12 @@
 """Settings expose encoder capabilities without overwriting hidden preferences."""
 
+import pytest
 from PySide6.QtTest import QSignalSpy
-from PySide6.QtWidgets import QApplication, QSpinBox, QWidget
+from PySide6.QtWidgets import QApplication, QComboBox, QWidget
 
 from iOpenPod.app.core.settings.definitions import (
     ANALYZE_FOR_GENIUS,
+    COMPUTE_MISSING_BPM,
     COMPUTE_SOUND_CHECK,
     LOSSY_ENCODER,
     ROCKBOX_METADATA_SUPPORT,
@@ -40,7 +42,10 @@ def _app() -> QApplication:
     return QApplication([])
 
 
-def test_podcast_defaults_dialog_saves_only_on_accept_and_is_host_only() -> None:
+@pytest.mark.parametrize("episode_slots", (0, -1))
+def test_podcast_defaults_dialog_saves_only_on_accept_and_is_host_only(
+    episode_slots: int,
+) -> None:
     application = _app()
     parent = QWidget()
     settings = SettingsService(GlobalSettingsStore(), DeviceSettingsStore())
@@ -54,7 +59,7 @@ def test_podcast_defaults_dialog_saves_only_on_accept_and_is_host_only() -> None
     assert button is not None and button.isVisible()
     changes = QSignalSpy(settings.settingChanged)
 
-    def open_dialog() -> tuple[PodcastSyncSettingsDialog, QSpinBox]:
+    def open_dialog() -> tuple[PodcastSyncSettingsDialog, QComboBox]:
         button.click()
         application.processEvents()
         dialog = next(
@@ -62,13 +67,13 @@ def test_podcast_defaults_dialog_saves_only_on_accept_and_is_host_only() -> None
             for item in widget.findChildren(PodcastSyncSettingsDialog)
             if item.isVisible()
         )
-        slots = dialog.findChild(QSpinBox, "podcastSyncEpisodeSlots")
+        slots = dialog.findChild(QComboBox, "podcastSyncEpisodeSlots")
         assert slots is not None
         return dialog, slots
 
     dialog, slots = open_dialog()
     assert dialog.selected_settings == original
-    slots.setValue(0)
+    slots.setCurrentIndex(slots.findData(episode_slots))
     cancel = dialog.findChild(ActionButton, "podcastSyncSettingsCancel")
     assert cancel is not None
     cancel.click()
@@ -76,15 +81,15 @@ def test_podcast_defaults_dialog_saves_only_on_accept_and_is_host_only() -> None
     assert read_default_podcast_sync_settings(settings) == original
 
     dialog, slots = open_dialog()
-    assert slots.value() == 8
-    slots.setValue(0)
+    assert slots.currentData() == 8
+    slots.setCurrentIndex(slots.findData(episode_slots))
     save = dialog.findChild(ActionButton, "podcastSyncSettingsSave")
     assert save is not None
     save.click()
     assert changes.count() == 1
-    assert read_default_podcast_sync_settings(settings).episode_slots == 0
+    assert read_default_podcast_sync_settings(settings).episode_slots == episode_slots
     dialog, slots = open_dialog()
-    assert slots.value() == 0
+    assert slots.currentData() == episode_slots
     dialog.reject()
     editor.set_device(True)
     assert not button.isVisible()
@@ -153,6 +158,10 @@ def test_policy_precedence_is_visible_and_optional_sync_settings_save() -> None:
     settings.set_global(SMART_QUALITY_BY_CONTENT_TYPE, True)
     assert _combo(widget, "spokenWordBitrate").isEnabled()
     sound = _combo(sync, "computeSoundCheck")
+    bpm = _combo(sync, "computeMissingBpm")
+    assert bpm.currentData() is False
+    bpm.setCurrentIndex(bpm.findData(True))
+    assert settings.get(COMPUTE_MISSING_BPM) is True
     sound.setCurrentIndex(sound.findData(True))
     genius = _combo(sync, "analyzeForGenius")
     assert genius.currentData() is True
@@ -164,3 +173,29 @@ def test_policy_precedence_is_visible_and_optional_sync_settings_save() -> None:
     assert settings.get(ROCKBOX_METADATA_SUPPORT) is True
     parent.close()
     application.processEvents()
+
+
+def test_rating_back_sync_defaults_off_and_conflict_choice_persists() -> None:
+    from iOpenPod.app.core.settings.definitions import (
+        BACK_SYNC_RATINGS,
+        RATING_CONFLICT_POLICY,
+    )
+
+    _app()
+    parent = QWidget()
+    settings = SettingsService(GlobalSettingsStore(), DeviceSettingsStore())
+    settings.set_global(BACK_SYNC_RATINGS, False)
+    settings.set_global(RATING_CONFLICT_POLICY, "host")
+    widget = SyncSettings(settings, parent)
+    toggle = widget.findChild(AppComboBox, "backSyncRatings")
+    policy = widget.findChild(AppComboBox, "ratingConflictPolicy")
+    assert toggle is not None and policy is not None
+    assert toggle.currentData() is False
+    assert policy.currentData() == "host"
+    toggle.setCurrentIndex(toggle.findData(True))
+    policy.setCurrentIndex(policy.findData("average"))
+    assert settings.get(BACK_SYNC_RATINGS) is True
+    assert settings.get(RATING_CONFLICT_POLICY) == "average"
+    settings.set_global(BACK_SYNC_RATINGS, False)
+    settings.set_global(RATING_CONFLICT_POLICY, "host")
+    parent.close()

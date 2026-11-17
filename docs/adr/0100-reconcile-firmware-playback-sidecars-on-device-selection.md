@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-09-30
+- Amended by: [ADR-0240](0240-treat-calendar-dates-as-best-effort-metadata.md), allowing approximate dates while preserving native playback words
 - Extends: ADR-0019, ADR-0029, ADR-0030, ADR-0098
 - Supersedes: ADR-0085's preservation-only treatment of understood, loaded sidecars
 - Extended by: [ADR-0144](0144-expand-track-headers-with-device-capabilities.md)
@@ -42,6 +43,9 @@ file is archived. Duplicate Track occurrences and distinct identical Playlists
 survive. Multiple competing playback sources, malformed records, unavailable
 identities, unrepresentable totals, and ambiguous Device Time Context dates
 produce diagnostics and fail selection without publishing a pending Library.
+Positional Play Counts rows are applied to the matching Track prefix; trailing
+rows with no corresponding Track are ignored so stale evidence cannot block an
+otherwise loadable Library. The original sidecar is still archived verbatim.
 Read-only devices with understood pending evidence cannot complete selection.
 Pre-publication failures preserve the database and sidecars; interrupted writes
 use the existing recovery workflow. Verified commits remain successful when only

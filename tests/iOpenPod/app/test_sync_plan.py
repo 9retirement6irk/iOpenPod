@@ -423,6 +423,41 @@ def test_matching_prior_host_facts_remain_unchanged(tmp_path: Path) -> None:
     assert plan.items[0].basis is SyncPlanBasis.HOST_FACTS_MATCH
 
 
+@pytest.mark.parametrize("baselines", ["both", "ipod", "pending", "refreshed"])
+def test_eq_only_difference_is_not_a_host_metadata_update(
+    tmp_path: Path, baselines: str
+) -> None:
+    path = tmp_path / "eq.mp3"
+    host_track, source = _host_track(path, track_id=10, fingerprint="1,2,3")
+    original = _ipod_snapshot(10)
+    snapshot = replace(
+        original,
+        tracks=(
+            replace(
+                original.tracks[0],
+                metadata=replace(original.tracks[0].metadata, equalizer="#!#116#!#"),
+            ),
+        ),
+    )
+    sync = replace(
+        _sync(path),
+        host_tag_sha256=track_tag_sha256(host_track) if baselines == "both" else None,
+        ipod_tag_sha256=track_tag_sha256(original.tracks[0])
+        if baselines in ("both", "ipod")
+        else None,
+        ipod_baseline_pending=baselines == "pending",
+    )
+    if baselines == "refreshed":
+        source = replace(source, modified_ns=source.modified_ns + 1)
+    plan = prepare_sync_plan(
+        _host_library((host_track,), (), (source,)),
+        _ipod_library((_ipod_track(track_id=10, fingerprint="1,2,3", sync=sync),)),
+        snapshot,
+    )
+    assert plan.items[0].action is SyncPlanAction.UNCHANGED
+    assert not plan.items[0].metadata_changed
+
+
 def test_ipod_tag_edit_updates_with_unchanged_host_file_facts(tmp_path: Path) -> None:
     path = tmp_path / "manually-edited.mp3"
     track, source = _host_track(path, track_id=1, fingerprint="1,2,3")
@@ -1610,3 +1645,44 @@ def test_selecting_a_host_video_without_a_fingerprint_plans_an_add(
     item = selection.selected_plan.items[0]
     assert item.action is SyncPlanAction.ADD
     assert item.basis is SyncPlanBasis.HOST_ONLY
+
+
+def test_prepare_sync_plan_ignores_lyrics_differences_when_unsupported(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "song.flac"
+    host_track, host_source = _host_track(path, track_id=1, fingerprint="101,102")
+    host_track = replace(
+        host_track,
+        metadata=replace(host_track.metadata, lyrics="La la la"),
+    )
+    ipod_source = _ipod_track(
+        track_id=10,
+        fingerprint="101,102",
+        sync=replace(_sync(path), ipod_baseline_pending=True),
+    )
+    ipod_snapshot = LibrarySnapshot(
+        tracks=(
+            replace(
+                host_track,
+                track_id=10,
+                metadata=replace(host_track.metadata, lyrics=""),
+            ),
+        )
+    )
+    with_lyrics = prepare_sync_plan(
+        _host_library((host_track,), (), (host_source,)),
+        _ipod_library((ipod_source,)),
+        ipod_snapshot,
+        include_lyrics=True,
+    )
+    without_lyrics = prepare_sync_plan(
+        _host_library((host_track,), (), (host_source,)),
+        _ipod_library((ipod_source,)),
+        ipod_snapshot,
+        include_lyrics=False,
+    )
+    assert with_lyrics.items[0].action is SyncPlanAction.UPDATE
+    assert with_lyrics.items[0].metadata_changed is True
+    assert without_lyrics.items[0].action is SyncPlanAction.UNCHANGED
+    assert without_lyrics.items[0].metadata_changed is False

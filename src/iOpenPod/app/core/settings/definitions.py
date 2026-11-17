@@ -357,6 +357,23 @@ SPOKEN_WORD_BITRATE = SettingDefinition[int](
     device_overridable=True,
     validator=lambda value: type(value) is int and value in (32, 48, 64, 80, 96),
 )
+BACK_SYNC_RATINGS = SettingDefinition[bool](
+    key="sync/back-sync-ratings",
+    value_type=bool,
+    default=False,
+)
+RATING_CONFLICT_POLICY = SettingDefinition[str](
+    key="sync/rating-conflict-policy",
+    value_type=str,
+    default="host",
+    validator=_one_of("host", "ipod", "average"),
+)
+COMPUTE_MISSING_BPM = SettingDefinition[bool](
+    key="sync/compute-missing-bpm",
+    value_type=bool,
+    default=False,
+    device_overridable=True,
+)
 COMPUTE_SOUND_CHECK = SettingDefinition[bool](
     key="sync/compute-sound-check",
     value_type=bool,
@@ -373,12 +390,6 @@ NORMALIZE_TAGS_AFTER_SYNC = SettingDefinition[bool](
     key="sync/normalize-tags-after-sync",
     value_type=bool,
     default=False,
-    device_overridable=True,
-)
-STORE_LYRICS = SettingDefinition[bool](
-    key="sync/store-lyrics",
-    value_type=bool,
-    default=True,
     device_overridable=True,
 )
 ROTATE_TALL_PHOTOS = SettingDefinition[bool](

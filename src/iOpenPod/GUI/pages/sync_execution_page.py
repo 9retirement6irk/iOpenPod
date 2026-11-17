@@ -42,6 +42,23 @@ if TYPE_CHECKING:
     from iPodDB.library import WriteIssue
 
 
+_TECHNICAL_TIME_WARNINGS = frozenset(
+    {
+        "source.timezone_unresolved",
+        "source.timezone_fallback",
+        "source.timezone_policy",
+        "source.approximate_dates",
+    }
+)
+
+
+def _technical_time_warning(issue: WriteIssue) -> bool:
+    return (
+        issue.severity is IssueSeverity.WARNING
+        and issue.code in _TECHNICAL_TIME_WARNINGS
+    )
+
+
 class SyncExecutionPage(QWidget):
     _STAGES = (
         "sync.validate",
@@ -289,7 +306,10 @@ class SyncExecutionPage(QWidget):
         self._render_progress(progress)
 
     def _render_progress(self, progress: WriteProgress) -> None:
-        analyzing_genius = progress.phase in ("draft.genius", "draft.genius.audio")
+        analyzing_genius = progress.phase in (
+            "draft.genius",
+            "draft.genius.audio",
+        )
         self._skip_genius.setVisible(analyzing_genius and self._recovery_mode is None)
         self._skip_genius.setEnabled(
             not self._genius_skip_requested and not self._cancel_requested
@@ -313,7 +333,7 @@ class SyncExecutionPage(QWidget):
         message = workflow_text(progress.message)
         if analyzing_genius and self._genius_skip_requested:
             message += " " + self.tr(
-                "Skipping remaining Genius analysis. Completed profiles will be kept."
+                "Skipping remaining music analysis. Completed results will be kept."
             )
         if analyzing_phase and self._phase_skip_requested:
             message += " " + self.tr(
@@ -368,7 +388,7 @@ class SyncExecutionPage(QWidget):
         if progress.current_item and not (preparing and progress.active_items):
             label = (
                 self.tr("Item: %1")
-                if progress.phase in ("sync.prepare", "sync.photos")
+                if progress.phase.startswith("sync.")
                 else self.tr("Current file: %1")
             )
             item = (
@@ -599,7 +619,9 @@ class SyncExecutionPage(QWidget):
         }
         tone = tones[result.status]
         if result.status is SyncExecutionStatus.SUCCESS and any(
-            issue.severity is IssueSeverity.WARNING for issue in result.issues
+            issue.severity is IssueSeverity.WARNING
+            and not _technical_time_warning(issue)
+            for issue in result.issues
         ):
             description = self.tr(
                 "Your changes were saved to your iPod. There are warnings to review below; they did not stop the Sync."
@@ -700,6 +722,8 @@ class SyncExecutionPage(QWidget):
                         "More affected items are listed in Technical details."
                     )
             lines.append(line)
+            if _technical_time_warning(issues[0]):
+                continue
             messages.append(
                 SyncResultMessage(
                     IssueSeverity(severity),
@@ -768,7 +792,26 @@ class SyncExecutionPage(QWidget):
         return reference + (" · " + issue.field if issue.field else "")
 
     def _stage_index(self, phase: str) -> int:
-        if phase == "sync.prepare" or phase == "sync.photos":
+        if any(
+            phase == prefix or phase.startswith(prefix + ".")
+            for prefix in ("sync.database", "draft", "resources")
+        ):
+            return self._STAGES.index("database.")
+        if any(
+            phase == prefix or phase.startswith(prefix + ".")
+            for prefix in (
+                "sync.prepare",
+                "sync.photos",
+                "sync.podcasts",
+                "sync.podcast_prepare",
+                "sync.podcast_artwork",
+                "sync.metadata",
+                "sync.artwork",
+                "sync.tools",
+                "sync.sources",
+                "sync.playlists",
+            )
+        ):
             return self._STAGES.index("sync.media")
         for index, prefix in enumerate(self._STAGES):
             if phase == prefix or phase.startswith(prefix):

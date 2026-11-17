@@ -17,6 +17,10 @@ sessions.
   typography, metric, and interaction foundations for the desktop GUI.
 - [`eta.md`](eta.md) — reusable stage ETA model, integration, and accuracy limits.
 - [iPod timestamp conversion](ipod-time.md)
+- [Alarms and countdown timers](alarms.md) — firmware-wide coverage, supported
+  editing, native formats, saved-state limitations and validation.
+- [Datetime engineering guide](datetime-engineering.md) — code inventory, Whenever
+  boundaries, file interpretation, firmware hints and unresolved questions.
 - [Further firmware contract corrections](research/classic201-additional-contracts-2026-10-26.md) —
   Podcast group markers, Smart boolean and numeric operands, city identity fixes,
   and remaining research-to-product work.
@@ -27,6 +31,20 @@ sessions.
   transactional consumption, and recovery of playback history and OTG Playlists.
 - [`ipod-preferences.md`](ipod-preferences.md) — typed, lossless firmware Preferences
   and iTunesPrefs readers/writers, supported layouts, and model limitations.
+- [Native iPod EQ](research/ipod-eq-firmware.md) — firmware preset IDs, Preferences,
+  Track encoding and precedence, custom-preset limits, and native execution evidence.
+- [EQ viewing and configuration](research/ipod-eq-implementation-readiness.md) —
+  concrete application seams, saved versus runtime state, Track editing,
+  Sync ownership, CDB/SQLite differences, and publication acceptance criteria.
+- [EQ evolution and device support](research/ipod-eq-evolution-and-device-support.md) —
+  Mini 2 and Video 5/5.5 versus four Classics: shared filters, different saved
+  representations and Flat rules, and exact support boundaries for iOpenPod.
+- [iPod mini 2 firmware workspace](../../ipod-firmware-lab/notes/mini2-firmware-workspace.md) —
+  verified RetailOS 1.4.1 extraction, Ghidra project, searchable decompilation,
+  and startup-map evidence in the sibling firmware lab.
+- [Mini 2 type-10 database loading](research/mini2-mhod10-memory-2026-11-15.md) —
+  issue 333, native text-pool allocation and failure propagation, unresolved field
+  meaning, and implications for lyrics authoring and database-size guards.
 - [`sync-workflow-audit-2026-09-26.md`](sync-workflow-audit-2026-09-26.md) — scan and Sync findings, fixes, and remaining limits.
 - [`sync-artwork-audit-2026-10-08.md`](sync-artwork-audit-2026-10-08.md) — artwork loss reproductions, automatic repairs, publication safety, and source research.
 - [Photo shard research](research/photo-sharding-2026-10-08.md) — shared per-format

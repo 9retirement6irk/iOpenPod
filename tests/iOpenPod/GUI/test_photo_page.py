@@ -8,11 +8,13 @@ from typing import TYPE_CHECKING, cast
 import pytest
 from PySide6.QtCore import (
     QCoreApplication,
+    QDate,
     QEvent,
     QItemSelectionModel,
     QPoint,
     QPointF,
     Qt,
+    QTime,
     QTimer,
 )
 from PySide6.QtGui import (
@@ -29,7 +31,6 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFrame,
     QLabel,
-    QLineEdit,
     QListView,
     QMenu,
     QMessageBox,
@@ -45,6 +46,7 @@ from tests.iOpenPod.GUI.application_shell_test_support import (
     build_context,
 )
 
+from iOpenPod.app.core.dates import HostDateZone, parse_iso_instant
 from iOpenPod.app.models.library_drag import PhotoSelectionMimeData
 from iOpenPod.app.models.photo_album_membership_model import (
     PhotoAlbumMembershipRole,
@@ -71,6 +73,7 @@ from iOpenPod.GUI.presentation.theme.tokens import LAYOUT
 from iOpenPod.GUI.widgets.app_combo_box import AppComboBox
 from iOpenPod.GUI.widgets.browser_chrome import PageHeader, SourceListPanel
 from iOpenPod.GUI.widgets.equalized_grid import EqualizedGridView
+from iOpenPod.GUI.widgets.metadata_date_edit import MetadataDateEdit
 from iOpenPod.GUI.widgets.photo_album_membership_grid import (
     PhotoAlbumMembershipGrid,
 )
@@ -547,6 +550,23 @@ def test_photo_album_creation_action_tracks_workspace_availability(
     assert create.toolTip() == "Choose an iPod with a readable Photo Database."
 
 
+@pytest.mark.parametrize(
+    "timestamp,label",
+    [(-1, "1969-12-31 23:59:59 UTC"), (0, "Unknown"), (10**30, "Unknown")],
+)
+def test_photo_dates_display_signed_values_and_tolerate_unknowns(
+    browser: _Browser, timestamp: int, label: str
+) -> None:
+    inspector = browser.page.findChild(PhotoInspector, "photoInspector")
+    assert inspector is not None
+    photo = replace(_PHOTOS.photos[0], original_date=timestamp, taken_date=timestamp)
+    inspector.set_photo(photo, _PHOTOS)
+    metadata = inspector.findChild(QTreeWidget, "photoMetadata")
+    assert metadata is not None
+    section = _metadata_section(metadata, "Photo")
+    assert section["Original date"] == section["Taken date"] == label
+
+
 def test_grid_selection_populates_inspector_metadata_and_format_picker(
     browser: _Browser,
 ) -> None:
@@ -728,8 +748,8 @@ def test_photo_metadata_editor_applies_only_explicit_fields_to_the_batch(
         original_date = dialog.rows["original_date"]
         assert rating.mixed and original_date.mixed
         assert isinstance(rating.editor, StarRating)
-        assert isinstance(original_date.editor, QLineEdit)
-        assert original_date.editor.text() == ""
+        assert isinstance(original_date.editor, MetadataDateEdit)
+        assert not original_date.is_modified()
         dialog.show()
         APPLICATION.processEvents()
         center = rating.editor.rect().center()
@@ -754,7 +774,14 @@ def test_photo_metadata_editor_applies_only_explicit_fields_to_the_batch(
         rating.reset()
         assert not rating.is_modified() and rating.mixed
         QTest.keyClick(rating.editor, Qt.Key.Key_5)
-        original_date.editor.setText("1700001234")
+        set_date = original_date.editor.findChild(QPushButton, "metadataDateSet")
+        assert set_date is not None
+        set_date.click()
+        original_date.editor.date.setDate(QDate(2026, 12, 13))
+        original_date.editor.time.setTime(QTime(8, 15, 42))
+        expected = parse_iso_instant(
+            "2026-12-13T08:15:42", naive_zone=HostDateZone.SYSTEM
+        ).timestamp()
         dialog.accept()
 
         assert dialog.result() == QDialog.DialogCode.Accepted
@@ -762,8 +789,8 @@ def test_photo_metadata_editor_applies_only_explicit_fields_to_the_batch(
         assert photos is not None
         assert tuple(photo.rating for photo in photos.photos) == (100, 100, 80)
         assert tuple(photo.original_date for photo in photos.photos) == (
-            1_700_001_234,
-            1_700_001_234,
+            expected,
+            expected,
             1_700_000_005,
         )
         assert tuple(photo.taken_date for photo in photos.photos) == (
@@ -828,19 +855,21 @@ def test_photo_rating_stars_preserve_untouched_values_and_clear_explicitly(
         cleared.close()
 
 
-def test_photo_metadata_editor_rejects_invalid_and_stale_edits(
+def test_photo_metadata_editor_constrains_dates_and_rejects_stale_edits(
     browser: _Browser,
 ) -> None:
     workspace = browser.context.library_workspace
     invalid = PhotoMetadataEditorDialog(workspace, (1,), browser.page)
     try:
         date = invalid.rows["original_date"]
-        assert isinstance(date.editor, QLineEdit)
-        date.editor.setText("invalid date")
+        assert isinstance(date.editor, MetadataDateEdit)
+        initial = date.value()
+        date.editor.date.setFocus()
+        QTest.keyClicks(date.editor.date, "invalid date")
+        date.editor.date.clearFocus()
+        assert date.value() == initial and not date.is_modified()
         invalid.accept()
-        error = invalid.findChild(QLabel, "metadataEditError")
-        assert error is not None and "Original date" in error.text()
-        assert invalid.result() != QDialog.DialogCode.Accepted
+        assert invalid.result() == QDialog.DialogCode.Accepted
         assert not workspace.dirty
     finally:
         invalid.close()

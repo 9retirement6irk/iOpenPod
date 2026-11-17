@@ -162,6 +162,176 @@ QLabel[browserTitle="true"] {{
     font-weight: 700;
 }}
 
+/* Hallmark · native app redesign · Calendar and Alarms
+ * system: iOpenPod semantic tokens · structure: month/agenda and time-led lists
+ * motion: existing controls · enrichment: none · preserve native keyboard input
+ * pre-emit critique: P5 H4 E4 S5 R5 V4 · native app gates reviewed
+ */
+QWidget#calendarPage,
+QWidget#alarmsPage,
+QWidget#tonesPage {{
+    background-color: {tokens.window};
+}}
+
+QLabel[extrasHeading="true"] {{
+    font-family: "{typography.display}";
+    font-size: {typography.heading_pt:g}pt;
+    font-weight: 600;
+}}
+
+QLabel[extrasTitle="true"] {{
+    font-family: "{typography.display}";
+    font-size: {typography.title_pt:g}pt;
+    font-weight: 600;
+}}
+
+QLabel[extrasMuted="true"] {{
+    color: {tokens.text_secondary};
+}}
+
+QLabel[extrasEmpty="true"] {{
+    color: {tokens.text_secondary};
+    font-size: {typography.heading_pt:g}pt;
+    padding: {LAYOUT.space_lg}px;
+}}
+
+QTabWidget[extrasTabs="true"]::pane {{
+    border: none;
+    border-top: 1px solid {tokens.border};
+    padding-top: {LAYOUT.space_md}px;
+}}
+
+QTabWidget[extrasTabs="true"] QTabBar::tab {{
+    background: transparent;
+    color: {tokens.text_secondary};
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 0 {LAYOUT.space_md}px;
+}}
+
+QTabWidget[extrasTabs="true"] QTabBar::tab:selected {{
+    color: {tokens.accent};
+    border-bottom-color: {tokens.accent};
+}}
+
+QTabWidget[extrasTabs="true"] QTabBar::tab:hover {{
+    background-color: {tokens.surface_hover};
+}}
+
+QTabWidget[extrasTabs="true"] QTabBar::tab:focus {{
+    border: 1px solid {tokens.focus};
+}}
+
+QTreeWidget[extrasList="true"],
+QCalendarWidget#calendarMonthGrid,
+QCalendarWidget#calendarMonthGrid QAbstractItemView {{
+    background-color: {tokens.surface};
+    alternate-background-color: {tokens.surface};
+    border: none;
+    selection-background-color: {tokens.surface_selected};
+    selection-color: {tokens.text};
+    outline: none;
+}}
+
+/* Hallmark · genre: modern-minimal · structure: month workspace with agenda rail
+ * system: existing iOpenPod tokens · enrichment: none · native keyboard controls
+ * pre-emit critique: P5 H5 E4 S5 R5 V4
+ */
+QFrame#calendarMonth,
+QFrame#calendarAgenda,
+QFrame#calendarTodoPanel {{
+    color: {tokens.text};
+    background-color: {tokens.surface};
+    border: 1px solid {tokens.border};
+    border-radius: {LAYOUT.radius_panel}px;
+}}
+
+QLabel#calendarMonthTitle {{
+    color: {tokens.text};
+    font-family: "{typography.display}";
+    font-size: {typography.title_pt:g}pt;
+    font-weight: 700;
+}}
+
+QLabel#calendarAgendaTitle {{
+    color: {tokens.text};
+    font-family: "{typography.display}";
+    font-size: {typography.heading_pt:g}pt;
+    font-weight: 700;
+}}
+
+QLabel#calendarEmpty {{
+    color: {tokens.text_secondary};
+    padding: {LAYOUT.space_md}px;
+}}
+
+QTabWidget#calendarTabs::pane {{
+    border: none;
+    padding-top: {LAYOUT.space_md}px;
+}}
+
+QTabWidget#calendarTabs QTabBar::tab {{
+    color: {tokens.text_secondary};
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: {LAYOUT.radius_control}px;
+    padding: 0 {LAYOUT.space_lg}px;
+    min-height: {LAYOUT.control_height_large}px;
+}}
+
+QTabWidget#calendarTabs QTabBar::tab:selected {{
+    color: {tokens.text};
+    background-color: transparent;
+    font-weight: 600;
+}}
+
+QTabWidget#calendarTabs QTabBar::tab:hover {{
+    color: {tokens.text};
+    background-color: transparent;
+}}
+
+QTabWidget#calendarTabs QTabBar::tab:focus {{
+    border-color: transparent;
+}}
+
+QSplitter#calendarSplit::handle {{
+    background: transparent;
+}}
+
+QTreeWidget#calendarEvents,
+QTreeWidget#calendarTodos {{
+    background: transparent;
+}}
+
+QTimeEdit#alarmTime {{
+    font-family: "{typography.display}";
+    font-size: {typography.title_pt:g}pt;
+}}
+
+/* Hallmark · modern-minimal · Alarms and Tones collection workspace
+ * system: existing iOpenPod tokens · content-sized lists and attached action bars
+ * depth: surface contrast and quiet borders · enrichment: none
+ * pre-emit critique: P5 H5 E4 S5 R5 V4 · native keyboard and palette states
+ */
+QFrame[extrasCollection="true"] {{
+    background-color: {tokens.surface};
+    border: 1px solid {tokens.border};
+    border-radius: {LAYOUT.radius_panel}px;
+}}
+
+QFrame[extrasCollectionActions="true"] {{
+    background-color: {tokens.surface_alt};
+    border: none;
+    border-top: 1px solid {tokens.border};
+    border-bottom-left-radius: {LAYOUT.radius_panel - 1}px;
+    border-bottom-right-radius: {LAYOUT.radius_panel - 1}px;
+}}
+
+QTreeWidget[extrasCollectionList="true"] {{
+    background: transparent;
+    padding: {LAYOUT.space_xs}px;
+}}
+
 QLabel#pageDescription,
 QLabel#gamesEmptyDetail,
 QLabel#pageMeta,
@@ -251,6 +421,9 @@ QLabel#playlistEmpty {{
 }}
 
 QLabel#playlistEditorError,
+QLabel#calendarEditorError,
+QLabel#alarmEditorError,
+QLabel#toneError,
 QLabel#metadataEditError,
 QLabel#photoAlbumManagerError {{
     color: {tokens.danger};
@@ -259,6 +432,10 @@ QLabel#photoAlbumManagerError {{
 QDialog#onboardingDialog,
 QDialog#helpSupportDialog,
 QDialog#playlistEditor,
+QDialog#calendarEditor,
+QDialog#calendarPicker,
+QDialog#alarmEditor,
+QDialog#toneConversionDialog,
 QDialog#metadataEditor,
 QDialog#artworkCropDialog,
 QDialog#consolidateArtworkDialog,
@@ -268,6 +445,7 @@ QDialog#libraryReviewDialog,
 QDialog#scrobbleReport,
 QDialog#playlistExportDialog,
 QDialog#podcastSyncSettingsDialog,
+QDialog#podcastLoginDialog,
 QDialog#addGeniusMixesDialog,
 QDialog#geniusMixSettingsDialog,
 QDialog#photoAlbumManager,
@@ -1100,6 +1278,7 @@ QLabel#metadataFieldLabel {{
 QLabel#metadataSectionTitle,
 QLabel#metadataEditorSubtitle,
 QLabel#metadataGroupDescription,
+QLabel#metadataDateStatus,
 QLabel#metadataChangeSummary {{
     color: {tokens.text_secondary};
 }}
@@ -1121,6 +1300,16 @@ QFrame#metadataFieldRow {{
 QFrame#metadataFieldRow[modified="true"] {{
     background-color: {tokens.surface_selected};
     border-color: {tokens.accent};
+}}
+
+/* Hallmark · component: metadata date/time fields · genre: modern-minimal
+ * theme: iOpenPod · native typography · compact leading-edge control group
+ * states: shared input/button states; synchronous edits, quiet success
+ * pre-emit critique: P4 H4 E4 S5 R4 V3
+ */
+QPushButton#metadataFieldReset[metadataDateReset="true"] {{
+    min-height: {LAYOUT.icon_size + LAYOUT.space_2xs}px;
+    padding: 0 {LAYOUT.space_xs}px;
 }}
 
 QLabel#metadataArtworkImage {{
@@ -1211,6 +1400,7 @@ QListWidget#metadataSectionNav::item:selected {{
 }}
 
 QDialog#metadataEditor QPlainTextEdit,
+QDialog#calendarEditor QPlainTextEdit,
 QTreeWidget#metadataTechnicalDetails,
 QDialog#metadataEditor QTableWidget {{
     color: {tokens.text};
@@ -1222,6 +1412,7 @@ QDialog#metadataEditor QTableWidget {{
 }}
 
 QDialog#metadataEditor QPlainTextEdit:focus,
+QDialog#calendarEditor QPlainTextEdit:focus,
 QDialog#metadataEditor QTableWidget:focus,
 QTreeWidget#metadataTechnicalDetails:focus {{
     border-color: {tokens.focus};
@@ -1336,6 +1527,99 @@ QFrame#nowPlayingSurface[playbackState="idle"] {{
     border-color: transparent;
 }}
 
+/* Hallmark · Now Playing · atmospheric · two-column listening view
+ * theme: iOpenPod · enlarged, blurred actual artwork · native window chrome
+ * pre-emit critique: P5 H5 E4 S5 R5 V4
+ */
+QToolButton#playerArtworkButton {{
+    background: transparent;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: {LAYOUT.radius_control + 2}px;
+}}
+
+QToolButton#playerArtworkButton:hover {{
+    border-color: {tokens.border_strong};
+}}
+
+QToolButton#playerArtworkButton:pressed,
+QToolButton#playerArtworkButton:focus {{
+    border-color: {tokens.focus};
+}}
+
+QListView#nowPlayingQueueView {{
+    background: transparent;
+}}
+
+QListView#nowPlayingQueueView {{
+    color: {tokens.text};
+    border: none;
+    outline: none;
+}}
+
+QListView#nowPlayingQueueView::item {{
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid {tokens.border};
+}}
+
+QListView#nowPlayingQueueView::item:hover {{
+    background: {tokens.surface_hover};
+}}
+
+QListView#nowPlayingQueueView::item:selected {{
+    background: {tokens.surface_selected};
+}}
+
+QListView#nowPlayingQueueView::item:focus {{
+    border: 1px solid {tokens.focus};
+}}
+
+QLabel#nowPlayingTitle {{
+    color: {tokens.text};
+    font-size: {typography.title_pt:g}pt;
+    font-weight: 700;
+}}
+
+QLabel#nowPlayingQueueTitle {{
+    color: {tokens.text};
+    font-size: {typography.heading_pt:g}pt;
+    font-weight: 600;
+}}
+
+QLabel#nowPlayingArtist,
+QLabel#nowPlayingAlbum,
+QLabel#nowPlayingElapsed,
+QLabel#nowPlayingDuration,
+QLabel#nowPlayingQueueEmpty {{
+    color: {tokens.text_secondary};
+}}
+
+QLabel#nowPlayingElapsed,
+QLabel#nowPlayingDuration {{
+    font-size: {typography.small_pt:g}pt;
+}}
+
+QSlider#nowPlayingProgress {{
+    min-height: {LAYOUT.control_height_compact}px;
+}}
+
+QSlider#nowPlayingProgress::sub-page:horizontal,
+QSlider#nowPlayingProgress::handle:horizontal {{
+    background: {tokens.text};
+    border-color: {tokens.text};
+}}
+
+QSlider#nowPlayingProgress::groove:horizontal,
+QSlider#nowPlayingProgress::add-page:horizontal {{
+    background: {tokens.border_strong};
+}}
+
+QSlider#nowPlayingProgress::handle:horizontal:focus,
+QSlider#nowPlayingProgress::handle:horizontal:hover {{
+    border-color: {tokens.focus};
+}}
+
 QFrame#playbackPaneHost {{
     color: {tokens.text};
     background-color: {tokens.surface};
@@ -1372,10 +1656,6 @@ QTabWidget#settingsTabs::pane {{
     border-top: 1px solid {tokens.border};
 }}
 
-QTabWidget#settingsTabs::tab-bar {{
-    left: {LAYOUT.space_lg}px;
-}}
-
 QTabBar::tab {{
     min-width: 92px;
     min-height: {LAYOUT.control_height_large}px;
@@ -1389,6 +1669,10 @@ QTabBar::tab {{
 QTabBar::tab:hover {{
     color: {tokens.text};
     background-color: {tokens.surface_hover};
+}}
+
+QTabWidget#settingsTabs QTabBar::tab {{
+    min-width: 0px;
 }}
 
 QTabWidget#playbackTabs QTabBar::tab {{
@@ -2165,7 +2449,12 @@ QFrame[viewModes="true"] QToolButton[iconButton="true"]:checked {{
     background-color: {tokens.surface};
 }}
 
-QLineEdit {{
+QLineEdit,
+QDateEdit[themedDatePicker="true"],
+QTimeEdit[themedTimeInput="true"],
+QSpinBox#datePickerYear,
+QSpinBox[ipodPreferenceEditor="true"],
+QDialog#calendarEditor QSpinBox {{
     min-height: {LAYOUT.control_height}px;
     padding: 0 {LAYOUT.space_sm}px;
     color: {tokens.text};
@@ -2176,12 +2465,26 @@ QLineEdit {{
     selection-background-color: {tokens.accent};
 }}
 
-QLineEdit:hover {{
+QLineEdit:hover,
+QDateEdit[themedDatePicker="true"]:hover,
+QTimeEdit[themedTimeInput="true"]:hover,
+QSpinBox#datePickerYear:hover,
+QSpinBox[ipodPreferenceEditor="true"]:hover,
+QDialog#calendarEditor QSpinBox:hover {{
     border-color: {tokens.text_secondary};
 }}
 
-QLineEdit:focus {{
+QLineEdit:focus,
+QDateEdit[themedDatePicker="true"]:focus,
+QTimeEdit[themedTimeInput="true"]:focus,
+QSpinBox#datePickerYear:focus,
+QSpinBox[ipodPreferenceEditor="true"]:focus,
+QDialog#calendarEditor QSpinBox:focus {{
     border: 1px solid {tokens.focus};
+}}
+
+QDialog#alarmEditor QTimeEdit#alarmTime {{
+    min-height: {LAYOUT.control_height_large * 2}px;
 }}
 
 QLineEdit#renameIPod {{
@@ -2225,7 +2528,8 @@ QComboBox:disabled {{
     border-color: {tokens.border};
 }}
 
-QComboBox[themedIndicator="true"]::drop-down {{
+QComboBox[themedIndicator="true"]::drop-down,
+QDateEdit[themedDatePicker="true"]::drop-down {{
     subcontrol-origin: padding;
     subcontrol-position: top right;
     width: {LAYOUT.combo_indicator_width}px;
@@ -2233,14 +2537,63 @@ QComboBox[themedIndicator="true"]::drop-down {{
     border: none;
 }}
 
-QComboBox[themedIndicator="true"]:right-to-left::drop-down {{
+QComboBox[themedIndicator="true"]:right-to-left::drop-down,
+QDateEdit[themedDatePicker="true"]:right-to-left::drop-down {{
     subcontrol-position: top left;
 }}
 
-QComboBox[themedIndicator="true"]::down-arrow {{
+QComboBox[themedIndicator="true"]::down-arrow,
+QDateEdit[themedDatePicker="true"]::down-arrow {{
     width: 0;
     height: 0;
     image: none;
+}}
+
+/* Hallmark · date picker · native editing with the shared dropdown indicator
+ * system: iOpenPod semantic tokens · compact month/year header and rounded days
+ * pre-emit critique: P5 H5 E4 S5 R5 V4 · no decorative motion
+ */
+QDateEdit[themedDatePicker="true"] {{
+    padding: 0 {LAYOUT.combo_indicator_width}px 0 {LAYOUT.space_sm}px;
+}}
+
+QDateEdit[themedDatePicker="true"]:right-to-left {{
+    padding: 0 {LAYOUT.space_sm}px 0 {LAYOUT.combo_indicator_width}px;
+}}
+
+QDateEdit[themedDatePicker="true"]:disabled,
+QTimeEdit[themedTimeInput="true"]:disabled {{
+    color: {tokens.text_disabled};
+    background-color: {tokens.surface_alt};
+    border-color: {tokens.border};
+}}
+
+QWidget#datePickerPopup {{
+    background-color: transparent;
+    border: none;
+}}
+
+QCalendarWidget#datePickerCalendar {{
+    color: {tokens.text};
+    background-color: {tokens.surface};
+    border: 1px solid {tokens.border_strong};
+    border-radius: {LAYOUT.radius_panel}px;
+}}
+
+QCalendarWidget#datePickerCalendar QAbstractItemView {{
+    color: {tokens.text};
+    background-color: {tokens.surface};
+    alternate-background-color: {tokens.surface};
+    selection-background-color: {tokens.surface_selected};
+    selection-color: {tokens.text};
+    border: none;
+    outline: none;
+    padding: 0;
+}}
+
+QComboBox#datePickerMonth,
+QSpinBox#datePickerYear {{
+    font-weight: 600;
 }}
 
 QListView[themedComboPopup="true"] {{

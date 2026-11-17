@@ -241,7 +241,7 @@ Clone the repository and use the locked UV environment:
 
 ```shell
 uv sync --locked
-uv run python scripts/prepare_qt_typing.py
+uv run python -m scripts.prepare_typing
 uv run iopenpod
 ```
 

@@ -26,6 +26,7 @@ from iOpenPod.app.podcasts.sync_preparation import (
 from iPodDB.library import LibrarySnapshot
 
 if TYPE_CHECKING:
+    from iOpenPod.app.library_write import WriteProgress
     from iOpenPod.app.services.device_coordinator import DeviceCoordinator
 
 
@@ -52,7 +53,9 @@ class _Feeds:
         self.subscription = subscription
         self.calls = 0
 
-    def fetch(self, feed_url: str) -> PodcastSubscription:
+    def fetch(
+        self, feed_url: str, *, credentials: object = None
+    ) -> PodcastSubscription:
         del feed_url
         self.calls += 1
         if self.subscription is None:
@@ -72,18 +75,25 @@ def test_failed_refresh_cannot_clear_a_listened_episode() -> None:
     source, snapshot = _state()
     coordinator = _Coordinator(snapshot)
     feeds = _Feeds()
+    events: list[WriteProgress] = []
     prepared = prepare_podcast_sync(
         PodcastSyncRequest(snapshot),
         source,
         cast("DeviceCoordinator", coordinator),
         lambda: None,
         feeds=feeds,
+        progress=events.append,
     )
     plan = prepared.plan
     assert feeds.calls == 1
     assert not plan.removals and not plan.additions
     assert plan.issues[0].code == "podcast.refresh_failed"
     assert coordinator.saved[0].snapshot.history[0].listened
+    refresh = [event for event in events if event.phase == "sync.podcasts"]
+    assert [(event.completed, event.total) for event in refresh] == [(0, 1), (1, 1)]
+    assert all(event.unit == "feeds" for event in refresh)
+    assert events[-1].phase == "sync.podcasts.save"
+    assert events[-1].total is None
 
 
 @pytest.mark.parametrize("scoped", (False, True))
@@ -112,6 +122,44 @@ def test_saved_zero_slots_skip_sync_feed_refresh_and_artwork_repairs(
     assert prepared.refreshed_subscription_ids == ()
     assert prepared.state.snapshot.subscriptions[0].sync_settings.episode_slots == 0
     assert coordinator.saved[0].snapshot.history[0].listened
+
+
+@pytest.mark.parametrize("scoped", (False, True))
+def test_saved_all_slots_refresh_and_select_large_feed_catalog(scoped: bool) -> None:
+    source, captured = _state()
+    subscription = captured.subscriptions[0]
+    saved = replace(
+        subscription,
+        sync_settings=PodcastSyncSettings(episode_slots=-1, clear_when_listened=False),
+    )
+    coordinator = _Coordinator(replace(captured, subscriptions=(saved,)))
+    incoming = tuple(
+        PodcastEpisode(
+            f"new-{number}",
+            title=f"New {number}",
+            enclosure_url=f"https://example.test/new-{number}.mp3",
+            published_at=number,
+        )
+        for number in range(1, 126)
+    )
+    feeds = _Feeds(replace(subscription, episodes=incoming))
+
+    prepared = prepare_podcast_sync(
+        PodcastSyncRequest(
+            captured,
+            subscription_ids=(subscription.subscription_id,) if scoped else None,
+        ),
+        source,
+        cast("DeviceCoordinator", coordinator),
+        lambda: None,
+        feeds=feeds,
+    )
+
+    assert feeds.calls == 1
+    assert prepared.refreshed_subscription_ids == (subscription.subscription_id,)
+    assert prepared.state.snapshot.subscriptions[0].sync_settings == saved.sync_settings
+    assert len(prepared.plan.additions) == 125
+    assert not prepared.plan.removals and not prepared.plan.issues
 
 
 def test_repeated_feed_ids_preserve_episodes_while_other_shows_refresh(

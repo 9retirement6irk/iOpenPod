@@ -16,11 +16,9 @@ import weakref
 from collections.abc import Callable
 from contextlib import ExitStack
 from dataclasses import replace
-from datetime import UTC, datetime
 from os import PathLike
 from pathlib import Path
 from threading import Event
-from types import SimpleNamespace
 from typing import Protocol, cast
 
 import pytest
@@ -32,6 +30,7 @@ from tests.iOpenPod.app.services.test_first_artwork_save import bare_device
 from tests.iOpenPod.app.services.test_library_resources import Device, build_device
 from tests.iOpenPod.app.test_media_lyrics import WORDS
 from tests.iOpenPod.app.test_music_import import FIXTURES
+from whenever import Instant
 
 from iOpenPod.app import sync_execution
 from iOpenPod.app.display_text import SourceText
@@ -608,7 +607,7 @@ class _Executor(SyncExecutor):
                 DevicePath(location),
                 source.acoustic_fingerprint or "1,2,3",
                 SyncDetails(
-                    datetime.now(UTC).isoformat(),
+                    Instant.now().to_fixed_offset().format_iso(unit="microsecond"),
                     str(source.path),
                     source.size_bytes,
                     source.modified_ns,
@@ -815,7 +814,12 @@ def test_execution_validation_does_not_revisit_unchanged_media(
 
     class CountingExecutor(_Executor):
         def _validate_sources(
-            self, request: SyncExecutionRequest, checkpoint: Callable[[], None]
+            self,
+            request: SyncExecutionRequest,
+            checkpoint: Callable[[], None],
+            *,
+            progress: Callable[[WriteProgress], None] = lambda _: None,
+            phase: str = "sync.validate.media",
         ) -> None:
             paths: list[DevicePath] = []
 
@@ -827,7 +831,9 @@ def test_execution_validation_does_not_revisit_unchanged_media(
 
             with monkeypatch.context() as scoped:
                 scoped.setattr(FilesystemSession, "stat", record_stat)
-                super()._validate_sources(request, checkpoint)
+                super()._validate_sources(
+                    request, checkpoint, progress=progress, phase=phase
+                )
             validations.append(tuple(paths))
 
     try:
@@ -883,7 +889,12 @@ def test_execution_validates_shared_media_once_per_checkpoint(
 
     class CountingExecutor(_Executor):
         def _validate_sources(
-            self, request: SyncExecutionRequest, checkpoint: Callable[[], None]
+            self,
+            request: SyncExecutionRequest,
+            checkpoint: Callable[[], None],
+            *,
+            progress: Callable[[WriteProgress], None] = lambda _: None,
+            phase: str = "sync.validate.media",
         ) -> None:
             paths: list[DevicePath] = []
 
@@ -895,7 +906,9 @@ def test_execution_validates_shared_media_once_per_checkpoint(
 
             with monkeypatch.context() as scoped:
                 scoped.setattr(FilesystemSession, "stat", record_stat)
-                super()._validate_sources(request, checkpoint)
+                super()._validate_sources(
+                    request, checkpoint, progress=progress, phase=phase
+                )
             validations.append(tuple(paths))
 
     try:
@@ -925,10 +938,19 @@ def test_execution_builds_one_comparison_for_validation_and_playlists(
         library: LibrarySnapshot,
         *,
         file_tag_policy: str | None = None,
+        rating_conflict_policy: str | None = None,
+        include_lyrics: bool = True,
     ) -> SyncPlan:
         nonlocal comparisons
         comparisons += 1
-        return prepare_sync_plan(host, ipod, library, file_tag_policy=file_tag_policy)
+        return prepare_sync_plan(
+            host,
+            ipod,
+            library,
+            file_tag_policy=file_tag_policy,
+            rating_conflict_policy=rating_conflict_policy,
+            include_lyrics=include_lyrics,
+        )
 
     try:
         request = _request(device, _host(tmp_path, "New", playlists=True))
@@ -1028,6 +1050,8 @@ def test_preparation_reports_all_concurrent_tracks(
 
     def progress(event: WriteProgress) -> None:
         observed.append(event)
+        if event.phase != "sync.prepare":
+            return
         if event.current_item:
             started.add(event.current_item)
         started.update(item.name for item in event.active_items)
@@ -1047,7 +1071,11 @@ def test_preparation_reports_all_concurrent_tracks(
             "cancel": SyncExecutionStatus.CANCELLED,
         }
         assert result.status is expected_status[outcome], result.issues
-        concurrent = next(event for event in observed if len(event.active_items) == 2)
+        concurrent = next(
+            event
+            for event in observed
+            if event.phase == "sync.prepare" and len(event.active_items) == 2
+        )
         assert {item.name for item in concurrent.active_items} == {
             "First song",
             second_title,
@@ -1116,6 +1144,22 @@ def test_add_and_playlist_publish_before_successful_sync_history(
         assert track_progress[0].total == 1
         assert track_progress[-1].completed == 1
         assert track_progress[-1].current_item == "New song"
+        allocation = [
+            event
+            for event in observed_progress
+            if event.phase == "sync.prepare.allocate"
+        ]
+        assert [(event.completed, event.total) for event in allocation] == [
+            (0, 1),
+            (1, 1),
+        ]
+        validation = [
+            event for event in observed_progress if event.phase == "sync.validate.media"
+        ]
+        assert validation[0].completed == 0
+        assert (
+            validation[-1].completed == validation[-1].total == len(request.plan.items)
+        )
         storage_progress = next(
             event
             for event in observed_progress
@@ -1655,7 +1699,7 @@ def test_sync_writes_lyrics_to_media_and_prefers_existing_file_text(
             for track in result.active.library.tracks
             if track.title == "Lyrics song"
         )
-        assert added.metadata.lyrics == WORDS
+        assert added.metadata.lyrics == ""
         assert added.metadata.has_lyrics
         assert (
             embedded_lyrics(
@@ -1663,86 +1707,6 @@ def test_sync_writes_lyrics_to_media_and_prefers_existing_file_text(
             )
             == WORDS
         )
-    finally:
-        device.coordinator.close()
-
-
-def test_lyrics_option_drops_new_text_and_keeps_retained_text() -> None:
-    def song(lyrics: str) -> Track:
-        return Track(1, "Song", "", "", 1000, metadata=TrackMetadata(lyrics=lyrics))
-
-    off = cast(
-        "SyncExecutionRequest",
-        SimpleNamespace(options=SyncOptions(store_lyrics=False)),
-    )
-    on = cast("SyncExecutionRequest", SimpleNamespace(options=SyncOptions()))
-    stored_lyrics = sync_execution._stored_lyrics
-    assert stored_lyrics(on, song("New"), None).metadata.lyrics == "New"
-    assert stored_lyrics(off, song("New"), None).metadata.lyrics == ""
-    # A retained Track keeps its text, so its media file is not rewritten.
-    assert stored_lyrics(off, song("New"), song("Old")).metadata.lyrics == "Old"
-    assert stored_lyrics(off, song("New"), song("")).metadata.lyrics == ""
-
-
-@pytest.mark.skipif(
-    any(shutil.which(tool) is None for tool in ("ffmpeg", "ffprobe", "fpcalc")),
-    reason="Sync media tools required",
-)
-def test_sync_keeps_lyrics_out_of_the_database_when_the_option_is_off(
-    tmp_path: Path,
-) -> None:
-    device = build_device(tmp_path)
-    try:
-        source = tmp_path / "lyrics.m4a"
-        original = base64.decodebytes((FIXTURES / "tone.m4a.b64").read_bytes())
-        source.write_bytes(rewrite_lyrics(original, source.name, WORDS))
-        observed = LocalHostFile.observe(HostPath(source))
-        host = HostMediaLibrary(
-            LibrarySnapshot(
-                tracks=(
-                    Track(
-                        100,
-                        "Lyrics song",
-                        "",
-                        "",
-                        1000,
-                        metadata=TrackMetadata(location=str(source), lyrics=WORDS),
-                    ),
-                )
-            ),
-            (
-                HostMediaSource(
-                    observed.path,
-                    HostMediaFileKind.AUDIO,
-                    observed.size_bytes,
-                    observed.modified_ns,
-                ),
-            ),
-            (),
-            HostMediaCacheStats(),
-        )
-        request = _request(device, host)
-        request = replace(
-            request,
-            plan=select_sync_plan(
-                request.plan,
-                selected_host_paths=frozenset({host_path_identity(str(source))}),
-                selected_ipod_removals=frozenset(),
-            ),
-            options=SyncOptions(store_lyrics=False),
-        )
-        result = SyncExecutor(device.coordinator).execute(
-            request, lambda _: None, Event()
-        )
-        assert result.status is SyncExecutionStatus.SUCCESS, result.issues
-        assert result.active is not None
-        added = next(
-            track
-            for track in result.active.library.tracks
-            if track.title == "Lyrics song"
-        )
-        assert added.metadata.lyrics == ""
-        assert not added.metadata.has_lyrics
     finally:
         device.coordinator.close()
 
@@ -1943,8 +1907,9 @@ def test_shared_album_artwork_is_captured_once_and_referenced_by_new_tracks(
             ),
             artwork_sources=(artwork_source,),
         )
+        events: list[WriteProgress] = []
         result = _Executor(device.coordinator, transcoder=_AvailableTools()).execute(
-            _request(device, host), lambda _: None, Event()
+            _request(device, host), events.append, Event()
         )
         assert result.status is SyncExecutionStatus.SUCCESS, result.issues
         assert result.active is not None
@@ -1956,6 +1921,8 @@ def test_shared_album_artwork_is_captured_once_and_referenced_by_new_tracks(
         assert len(incoming) == 2
         assert incoming[0].artwork_id == incoming[1].artwork_id > 0
         assert all(track.metadata.artwork_count > 0 for track in incoming)
+        artwork = [event for event in events if event.phase == "sync.artwork"]
+        assert [(event.completed, event.total) for event in artwork] == [(0, 1), (1, 1)]
     finally:
         device.coordinator.close()
 
@@ -2039,6 +2006,80 @@ def test_payload_update_retains_artwork_when_review_does_not_change_it(
             t for t in result.active.library.tracks if t.track_id == original.track_id
         )
         assert updated.artwork_id == original.artwork_id > 0
+    finally:
+        device.coordinator.close()
+
+
+@pytest.mark.parametrize("equalizer", ["#!#116#!#", "Unrecognized custom EQ"])
+@pytest.mark.parametrize("replace_audio", [False, True])
+def test_sync_preserves_eq_through_metadata_and_media_replacement(
+    tmp_path: Path, equalizer: str, replace_audio: bool
+) -> None:
+    device = build_device(tmp_path)
+    try:
+        baseline = device.active.library
+        original = baseline.tracks[0]
+        edited = replace(
+            original, metadata=replace(original.metadata, equalizer=equalizer)
+        )
+        saved = device.save(
+            device.prepare(replace(baseline, tracks=(edited, *baseline.tracks[1:])))
+        )
+        assert saved.active is not None, saved.issues
+        host = _host(tmp_path, "New Host title")
+        request = _request(device, host, update=True)
+        if not replace_audio:
+            ipod = replace(
+                request.ipod,
+                tracks=(
+                    replace(
+                        request.ipod.tracks[0],
+                        acoustic_fingerprint=host.sources[0].acoustic_fingerprint or "",
+                    ),
+                    *request.ipod.tracks[1:],
+                ),
+            )
+            comparison = prepare_sync_plan(host, ipod, request.source.library)
+            request = replace(
+                request,
+                ipod=ipod,
+                plan=replace(
+                    comparison,
+                    items=tuple(
+                        item
+                        for item in comparison.items
+                        if item.action is not SyncPlanAction.REMOVE
+                    ),
+                ),
+            )
+        item = next(
+            item for item in request.plan.items if item.action is SyncPlanAction.UPDATE
+        )
+        assert item.metadata_changed
+        assert item.audio_payload_changed is replace_audio
+        result = _Executor(device.coordinator, transcoder=_AvailableTools()).execute(
+            request, lambda _: None, Event()
+        )
+        assert result.status is SyncExecutionStatus.SUCCESS, result.issues
+        assert result.active is not None and result.helper is not None
+        track = next(
+            t for t in result.active.library.tracks if t.track_id == original.track_id
+        )
+        assert track.title == "New Host title"
+        assert track.metadata.equalizer == equalizer
+        assert (
+            equalizer.encode("utf-16le")
+            in (device.root / "iPod_Control/iTunes/iTunesDB").read_bytes()
+        )
+        next_plan = prepare_sync_plan(host, result.helper, result.active.library)
+        assert (
+            next(
+                item
+                for item in next_plan.items
+                if item.host_path == str(host.sources[0].path)
+            ).action
+            is SyncPlanAction.UNCHANGED
+        )
     finally:
         device.coordinator.close()
 
@@ -3099,6 +3140,83 @@ def test_disabling_playlist_reconciliation_still_cleans_explicit_track_removal(
         device.coordinator.close()
 
 
+@pytest.mark.parametrize("encoding", list(AudioEncoding))
+@pytest.mark.parametrize(
+    "kind", [MediaType.AUDIO, MediaType.AUDIOBOOK, MediaType.PODCAST]
+)
+def test_sync_audio_destination_matches_classification_and_encoding(
+    tmp_path: Path, encoding: AudioEncoding, kind: MediaType
+) -> None:
+    device = build_device(tmp_path)
+    try:
+        request = _request(device, _host(tmp_path, "Book"))
+        host = replace(request.host.snapshot.tracks[0], media_types=(kind,))
+        with capture_host_file(
+            request.host.sources[0].path, checkpoint=lambda: None
+        ) as captured:
+            inspection = _parse(
+                json.dumps(
+                    {
+                        "format": {
+                            "format_name": "mov",
+                            "size": str(captured.fingerprint.size),
+                        },
+                        "streams": [
+                            {
+                                "index": 0,
+                                "codec_type": "audio",
+                                "codec_name": encoding.value,
+                                "duration": "1.5",
+                                "sample_rate": "44100",
+                            }
+                        ],
+                    }
+                ).encode(),
+                captured,
+            )
+            output = PreparedTranscode(
+                captured.snapshot, inspection, encoding, captured.fingerprint, True
+            )
+            song = _song(request, host, output)
+        mp4_book = kind is MediaType.AUDIOBOOK and encoding in (
+            AudioEncoding.AAC,
+            AudioEncoding.ALAC,
+        )
+        extension = (
+            "m4b"
+            if mp4_book
+            else {
+                AudioEncoding.AAC: "m4a",
+                AudioEncoding.ALAC: "m4a",
+                AudioEncoding.MP3: "mp3",
+                AudioEncoding.WAV: "wav",
+                AudioEncoding.AIFF: "aiff",
+            }[encoding]
+        )
+        assert song.track.metadata.location.endswith("." + extension)
+        assert song.source.media.file.relative_path == song.track.metadata.location
+        code = (
+            b"M4B "
+            if kind is MediaType.AUDIOBOOK and encoding is AudioEncoding.AAC
+            else {
+                AudioEncoding.AAC: b"M4A ",
+                AudioEncoding.ALAC: b"M4A ",
+                AudioEncoding.MP3: b"MP3 ",
+                AudioEncoding.WAV: b"WAV ",
+                AudioEncoding.AIFF: b"AIFF",
+            }[encoding]
+        )
+        assert song.source.media.filetype == int.from_bytes(code, "big")
+        assert song.track.media_types == (kind,)
+        if encoding in (AudioEncoding.AAC, AudioEncoding.ALAC):
+            assert song.source.media.audio_format_flag == 0xFFFF
+            assert song.source.media.mpeg_audio_type == (
+                51 if encoding is AudioEncoding.AAC else 0
+            )
+    finally:
+        device.coordinator.close()
+
+
 def test_prepared_silent_video_uses_motion_duration_without_audio_sample_rate(
     tmp_path: Path,
 ) -> None:
@@ -3710,5 +3828,37 @@ def test_changed_source_cannot_enable_a_previously_conflicting_playlist(
         assert result.playlist_change_count == 0
         assert device.active.library.playlists == saved.active.library.playlists
         assert result.helper is None or not result.helper.playlist_associations
+    finally:
+        device.coordinator.close()
+
+
+def test_review_playlist_sync_reuses_explicit_comparison(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    device = build_device(tmp_path)
+    try:
+        host = _playlist_host(tmp_path, "A", "B")
+        request = _request(device, host)
+        comparison = prepare_sync_plan(host, request.ipod, request.source.library)
+        expected = review_playlist_sync(
+            request.plan, host, request.ipod, request.source
+        )
+
+        def fail_prepare(*_args: object, **_kwargs: object) -> object:
+            raise AssertionError(
+                "prepare_sync_plan should not run when comparison is passed"
+            )
+
+        monkeypatch.setattr(
+            "iOpenPod.app.sync_execution.prepare_sync_plan", fail_prepare
+        )
+        actual = review_playlist_sync(
+            request.plan,
+            host,
+            request.ipod,
+            request.source,
+            comparison=comparison,
+        )
+        assert actual == expected
     finally:
         device.coordinator.close()

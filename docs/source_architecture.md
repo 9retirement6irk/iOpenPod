@@ -19,13 +19,108 @@ Brief Summary:
   it does not query host devices itself.
 - **iPodDB** knows how to parse, model, and write iPod-specific database formats,
   including iTunesDB, ArtworkDB, and PhotosDB, and the flat firmware Preferences
-  and binary iTunesPrefs artifacts. Its preferences codecs consume bytes and return typed
-  settings plus retained Unknown Data; model identity and file publication remain
+  and binary iTunesPrefs artifacts, named Nano settings and read-only Firmware DST
+  Rules. Its preferences codecs consume bytes and return typed settings plus
+  retained Unknown Data. Pure inspectors return non-authorizing saved-field
+  observations and bounded issues; model identity and file publication remain
   outside this boundary. The Application Layer supplies a captured Device Time
-  Context; iPodDB owns field-specific epoch conversion using those supplied rules.
+  Context; iPodDB owns field-specific epoch conversion using Whenever with the
+  supplied IANA key or effective fixed offset. Native words and semantic Unix
+  seconds retain integer contracts; the context does not snapshot a tzdb version.
+  Calendar metadata is best effort: iPodDB preserves native evidence, resolves
+  approximate dates before verification, and never blocks a Library workflow solely
+  for a date. Preferences evidence is not a Library publication precondition.
+  See [ADR-0240](adr/0240-treat-calendar-dates-as-best-effort-metadata.md).
+  Host calendar parsing/display and persistence also use Whenever, while elapsed
+  clocks and required plistlib/WinRT adapters retain their separate roles. See
+  [ADR-0243](adr/0243-use-whenever-for-calendar-interpretation.md) and the
+  [datetime engineering guide](datetime-engineering.md).
+  Explicit firmware profiles own DST framing and nominal selectors; application
+  identity qualification stays separate. Optional saved rules never alter historical
+  date policy or become save dependencies. See
+  [ADR-0241](adr/0241-inspect-firmware-dst-rules-as-optional-evidence.md).
+  Latest Classic Calendar Targets use independent updater-family/retail-release
+  qualification, strongest evidence authority and exact Preferences framing;
+  see [ADR-0242](adr/0242-qualify-the-latest-classic-calendar-targets.md).
   See [the Preferences contract](ipod-preferences.md) and [time contract](ipod-time.md).
 - **iOpenPod** is the application. Its Application Layer coordinates Device Registry,
   iPodDB, Storage, application state, and the GUI.
+
+Device Registry describes Extras availability and qualifies Clock Alarm layouts
+using firmware evidence, with an explicit Nano 1-compatible Clock policy for
+Nano 2 1.1.3 by user direction (ADR-0261).
+`iPodDB.calendar` retains and edits Calendar bytes, and `iPodDB.alarms` owns
+qualified Mini settings, per-city Clock records and dated Alarm collections.
+The Application Layer owns background capture,
+connection/revision checks and Storage Transactions. GUI pages only submit typed
+intents. Sleep Timer has no qualified mounted-file control protocol. See
+[ADR-0247](adr/0247-manage-extras-through-qualified-lossless-file-edits.md).
+Video's Preferences alarm word is a Clock Alarm Projection; the qualified editor
+changes its separate per-city `Device/clock` artifact. Its native city catalog
+owns 204 region/ordinal identities. Adding or removing a city creates or removes
+its embedded daily Alarm; manual DST edits change the retained city flag.
+Classic and Nano 3–5 support native-default creation and exact record removal,
+plus date/time, repeat, label-index, enable, tone and Playlist edits.
+`IPodLibrary.alarm_playlists` projects native Mini/Nano 1/Video/Classic/Nano 3/4
+sound arrays from retained database records. Nano 5 instead projects captured
+SQLite Library/Dynamic companions. Source import, native collation and native
+selector numbering remain iPodDB concerns. Sound and Mini enable intents bind to captured source
+identities. Library saves leave Alarm bytes unchanged and do not depend on Alarm
+files, even when Playlists move or disappear (ADR-0262).
+Tone catalogs bind native names and saved language to Storage captures. See
+[ADR-0260](adr/0260-bind-alarm-sounds-to-native-sources-and-preserve-playlist-identities.md).
+Nano 6/7 Countdown Timer support is removed under
+[ADR-0267](adr/0267-remove-nano-countdown-timer-support.md); native Sleep Timer
+availability does not make the Alarms route available.
+This distinction does not restrict Video Calendar editing or Library workflows.
+
+Classic and Nano 3–5 expose a separate Tones page and a single-Track conversion
+action. `iPodDB.alarms` authors native frequency/duration sequences; the Extras
+workflow publishes explicit new files through source-checked Storage Transactions.
+`ToneConversionController` owns a cancellable read reservation and delegates
+bounded local audio analysis to `tone_conversion`. Ordered phrase recurrence,
+harmonic salience and a continuous pitch path produce an immutable arrangement.
+The GUI previews the generated notes and submits a typed `CreateTone` only after
+Save. Temporary audio never becomes Library media, and saved Alarm selections
+remain unchanged. See [ADR-0265](adr/0265-author-alarm-tones-from-local-melody-arrangements.md).
+
+Calendar uses model-level availability and one format implementation in iPodDB.
+The codec owns the supported recurrence selectors, exception lists, Calendar
+zone binding and saved reminder evaluation. The GUI displays projected day spans
+and submits edits to the source series. A Calendar write uses the current
+Filesystem Session and source fingerprints. Clock Alarm writes still recheck
+their own firmware evidence. Nano 2 follows the shared Calendar policy by user
+direction, and Nano 6/7 remain unavailable. See
+[ADR-0251](adr/0251-use-shared-calendar-behavior-by-model.md) and the
+[lab-wide Calendar matrix](research/calendar-firmware-coverage-2026-11-08.md).
+
+Firmware Preferences uses a separate capture and explicit Apply/Revert workflow.
+Device Registry qualifies the exact firmware target through one shared resolver
+for Preferences, Extras and captured clock evidence. Each workflow retains its
+own capability subset. iPodDB owns saved-field
+inspection, authorable domains and lossless coupled edits. Binary inspection
+requires exact profile/version/extent, including readable reset-request files
+whose edits remain disabled. Named inspection selects an exact profile and store.
+Raw values, partial meanings and bounded Unknown Data summaries are retained;
+interpretation issues do not create Library dependencies. The Application Layer
+merges qualified edit descriptors into observations by logical key and publishes
+through Storage against the captured source and current identity. The GUI groups
+and searches the resulting display model without receiving bytes or writer access.
+
+Preferences framing and native edit definitions live separately from edit
+execution. Named inspection, scalar editing and clock evidence share a bounded
+XML parser while retaining independent interpretation and authoring rules.
+Alarm codecs reuse Preferences framing; application date policy does not repeat
+native sizes or version words. See the [source ownership map](ipod-preferences.md#source-ownership).
+
+Nano 5/6/7 named settings use a separate lossless `iPodSettings.xml` document and
+source precondition. Their optional legacy binary blob does not authorize or block
+XML edits. Nano 4's extensionless `iPodSettings` is independently captured as a
+read-only store in the Preferences workflow. Nano 6's `iPodTimerSettings.xml` is
+not captured. Timer fields in the shared named store retain generic Unknown Data
+handling without dedicated interpretation or editors. Saved bytes and live firmware adoption
+remain distinct. See
+[ADR-0248](adr/0248-edit-qualified-firmware-preferences.md).
 
 The four packages ship together as one iOpenPod application and one distribution.
 They are separate to keep responsibilities and dependencies clear, not because they
@@ -701,6 +796,10 @@ so it does not assume a desktop-specific mount directory. UDisks2 lifecycle even
 remain the preferred next integration for event-driven discovery. User-directed
 eject already resolves the selected block object through UDisks2, unmounts every
 mounted filesystem on its Drive without force, and requires confirmed Drive power-off.
+Sibling checks enumerate the documented UDisks Drive subtree through standard
+D-Bus introspection, including on releases before `Manager.GetDrives` was added in
+UDisks 2.11. Incomplete inventories fail before unmount; see
+[the safe-removal research](research/safe-native-eject.md).
 
 Host-path separation compares live backing relationships independently of persisted
 Device Identity. Linux follows partition parents, all device-mapper/MD RAID backing
@@ -969,9 +1068,12 @@ Cache lookup precedes worker admission, so only uncached Tracks enter audio-anal
 progress. After commit, matching published size and SHA-256 associate prepared Host
 profiles with final iPod identities using Storage's verified output fingerprints.
 This adds no device media read, and a cache failure cannot undo a committed Library.
-At most two Tracks are decoded and profiled concurrently; result collection,
-progress, and cache writes stay on the preparation thread. Per-Track source
-validation and cancellation still apply before any profile is accepted.
+A continuously refilled pool of two to six workers decodes and profiles Tracks
+(ADR-0271). At most two device Tracks are in flight, and only one reads from the
+device at a time while the other is profiled (ADR-0274). Staged Host captures may
+use every worker. Result collection, progress, and cache writes stay on the
+preparation thread. Per-Track source validation and cancellation still apply
+before any profile is accepted.
 The pure generator compares body features and outro-to-intro transitions, retains
 metadata fallback, and supplies stable artist/album keys with native spacing rules.
 Device analysis identities are rechecked before staging and publication; cache
@@ -1551,7 +1653,9 @@ aid. Storage's explicit best-effort Host enumeration retains independent readabl
 entries while checking directory identity. Inspection progress follows completion
 order, and preparation reports reading, inspecting, converting, and verifying.
 Artwork extraction streams the enclosing media, and FFprobe diagnostics alone do
-not reject successful structured output. See ADR-0084.
+not reject successful structured output. Captured Media Inspection retries once
+with recognized container tag aliases if FFprobe stdout exceeds its limit. Stream
+and Chapter observations, the deadline, and output bounds still apply. See ADR-0084.
 FFmpeg runs strictly first; only an undecodable source packet earns a lenient
 second pass whose skipped packets become a Track warning. Converted output must
 match the source duration, copied audio (including stream-copy remuxes) must decode
@@ -1609,6 +1713,15 @@ decoded caches remain in memory under a Storage file-revision hint, and unchange
 catalogs are not rewritten. Embedded artwork availability is separate from absence;
 failed observations cannot request cover removal. See ADR-0099, ADR-0123, ADR-0133, and
 [Host tag coverage](host-media-tags.md).
+
+Per-Track EQ is owned by explicit Library edits. The pure `iPodDB.library` interface
+maps typed built-in IDs to canonical MHOD7 text, while the Library model retains
+raw text for lossless preservation. The Track editor and table share translated
+labels; unknown and mixed values remain untouched unless explicitly replaced.
+Host metadata comparison/merge and media replacement preserve the retained EQ.
+The existing v1 Sync digest format remains compatible, and EQ-only edits do not
+schedule embedded media-tag writes. See
+[ADR-0246](adr/0246-edit-track-eq-with-canonical-presets-and-preserve-it-during-sync.md).
 
 The Host Library Source projects scanned Tracks, Photos, and Playlists into the same
 immutable `iPodDB.library.LibrarySnapshot` records used by the iPod source. Absolute
@@ -1707,8 +1820,9 @@ recovery. A separate iPod Analysis Cache in Host storage retains completed analy
 for repeated pre-Review scans, including on read-only devices. It is bound to device
 and Volume identities, validates current file facts, checkpoints on cancellation,
 and contains no Sync Details. Host Photo records carry matching SHA-256 evidence in
-Host Media Scan Cache v16. Versions 9 through 15 migrate while retaining reusable
-Track and Photo records. Pre-v14 Playlist interpretations are discarded so even
+Host Media Scan Cache v17. Versions 9 through 16 migrate while retaining reusable
+Acoustic Fingerprints and Photo records. Track metadata is refreshed once to
+recover previously unread native ratings. Pre-v14 Playlist interpretations are discarded so even
 unchanged Playlists are reparsed once and previously excluded network references
 and valid POSIX names become available without editing the source. See ADR-0083 and
 ADR-0136. Older no-cover records
@@ -1802,6 +1916,12 @@ If either fingerprint is unavailable, changed Host file facts request replacemen
 Migration reuses existing fingerprint evidence without introducing a new baseline. Tags/artwork-only
 updates retain media locations and payloads; lyrics and optional Rockbox tags share
 one verified file rewrite, whose final size is reflected in iTunesDB.
+Native lyrics display capability or Rockbox Metadata Support enables automatic
+Sync lyrics work. Explicit Library lyrics edits remain independent of that
+capability and carry clearing intent even when the binary projection has no text.
+MHOD 10 is retained unidentified text, never a lyrics cache. Lyrics remain in
+media tags, with lazy reads for display; unrelated full-tag edits preserve them.
+SQLite Extras lyrics rows use verified media evidence. See ADR-0270.
 Classic-incompatible ID3v2.4 lyrics layouts automatically convert to ID3v2.3 in
 Storage-owned staging and pass full-text and native-layout verification again.
 Version-specific metadata may be lost on the iPod copy; Host sources and encoded
@@ -1826,11 +1946,27 @@ facts, and prepares media concurrently on the Host. Independent preparation
 failures retain existing device media while other selected changes may proceed.
 Incoming Tracks pass iPodDB's per-Track metadata validation before entering the
 shared Library Draft. Metadata-only Updates validate changed fields and current
-Host source facts independently. Invalid items retain their Host path, readable
+Host source facts independently. Sync validates classification with the same
+retained audio/video family choices as the metadata editor (ADR-0088), separately
+from ordinary editable fields. Compatible classification changes retain media;
+incompatible changes and invalid metadata still fail per item.
+Invalid items retain their Host path, readable
 Track context and validation reasons in the result; failed replacements retain
 their device media and successful Sync Details. Cancellation, disconnected
 Filesystem Sessions, shared Library validation and publication failures still
 follow the existing stop/recovery contract.
+The optional Calculate missing BPM setting consumes tempo from the existing
+Genius audio-analysis pass after media preparation. Both options share decoding,
+profiles, caching, cancellation, and skip control. BPM also works independently
+of native Genius support. The pass covers new and retained music in the final
+Library; only zero BPM is filled. Host BPM takes priority and existing iPod BPM
+survives an absent Host tag. Smart Playlists are evaluated after enrichment.
+The ordinary tag writer finalizes optional Rockbox tags for both incoming and
+retained files before database serialization. Verified tag-only rewrites retain
+their acoustic profiles under the published file identity. The normal Sync helper
+publication records final iPod metadata while preserving raw Host baselines and
+any unrelated unsynced device edits. Refresh Library reads established history
+without running another acoustic scan.
 An isolated Library Draft carries successful media, Photo, artwork, and Playlist
 changes into the existing issued Library Review and ordered Storage Transaction.
 The Library Sync Helper is updated only after verified publication. Device writes
@@ -1857,7 +1993,16 @@ Playlist IDs before helper publication. Unchanged accepted matches use the exist
 verified no-op Library path. Failed and skipped changes do not advance matches.
 See ADR-0159.
 
-During execution, the progress page exposes safe cancellation. Completion replaces
+During execution, the progress page exposes safe cancellation. Finite Sync work
+reports processed counts, totals, units, and the current item through `WriteProgress`,
+including source validation, metadata updates, artwork preparation, Podcast feed
+refreshes, media location allocation, Photo packing, and Host rating Back Sync.
+Handled skips count as processed; interrupted work is never reported as complete.
+Nested Podcast artwork activity retains its enclosing counts. Rapid sequential
+updates are throttled while preserving the first and final counts. Each phase has
+its own total; device flushing and other operations without a measurable total
+remain indeterminate. Draft and resource work belongs to the Library build step,
+including retries, without moving back to media preparation. Completion replaces
 the progress steps with a dedicated result screen showing the actual Sync outcome,
 saved change counts, and messages grouped as errors, warnings, and information.
 Warnings alone do not change a successful outcome. Technical details retain diagnostic
@@ -1979,6 +2124,16 @@ connection-checked Device Coordinator interface. Storage persists the Host queue
 and serializes its writers; lower boundaries have no network-service knowledge.
 Last.fm date adjustment is delivery state, persisted before submission separately
 from original playback evidence. See [Scrobbling](scrobbling.md), ADR-0101, and ADR-0102.
+
+Optional Rating Feedback shares that queue and workflow but has independent
+observations and receipts for each service/account. One default-off Scrobble Ratings
+setting controls Last.fm Love/Unlove and ListenBrainz Recording Feedback. Capture
+coalesces the latest committed music rating before Sync removals, even without new
+plays. Last.fm sends artist/title directly. For ListenBrainz, bounded read-only
+media access supplies embedded recording IDs; the service client resolves missing
+IDs. Resolved identities and acknowledgements are persisted separately from listens
+in queue version 4, retaining older queue history. The setting is independent of
+Host-file rating Back Sync. See ADR-0268 and ADR-0269.
 
 Contains the non-visual application layer.
 
@@ -2214,6 +2369,14 @@ thread.
 
 #### `app/podcasts`
 
+Private feed access uses one application-owned `PodcastAccess` shared with the
+Controller, Sync executor and artwork workers. Credentials are transient inputs or
+native Host vault entries keyed by canonical feed URL, never catalog fields. The
+shared HTTP adapter validates each redirect and permits Basic credentials only on
+the owning feed's exact HTTPS origin. Resource requests carry that feed context
+explicitly. Public requests work without a credential store; typed failures retain
+the existing failed-feed and failed-replacement safety rules. See ADR-0266.
+
 Contains the device-aware Podcast Catalog and its external adapters. It exposes one
 immutable Podcast Snapshot composed from explicit Podcast Subscriptions, refreshed
 RSS/Atom metadata, independent Listening History, and Podcast Tracks projected from
@@ -2307,7 +2470,10 @@ transaction preconditions, so changed source media cannot publish stale pixels.
 See ADR-0152 and ADR-0153.
 
 Episode slots limit automatic filling, not manual additions or retained membership.
-The range is 0–50. Zero disables that Subscription's automatic Sync feed refresh,
+The choices are 0–50 and All, persisted as `-1`. All fills every eligible Episode
+without a count limit and preserves ordering, automatic-clear exclusions, and
+clearing rules. The shared dialog also offers All for Host defaults.
+Zero disables that Subscription's automatic Sync feed refresh,
 filling, clearing, replacements, and retained-cover repair; explicit Episode
 additions and removals remain available. Observed Listening History still reconciles.
 Both fill modes clear by listened state or time on the iPod. Newest fills vacancies
@@ -2377,7 +2543,7 @@ concerns and do not enter the analysis backend. See ADR-0078.
 
 #### `app/playback`
 
-Contains the replaceable audio-output boundary. `PlaybackBackend` accepts transport
+Contains the replaceable media-output boundary. `PlaybackBackend` accepts transport
 commands and reports playing state, position, completion, and structured failure
 events. Every start and reported event carries a monotonic runtime Playback Attempt
 identity; `PlaybackController` discards events that do not belong to its active
@@ -2387,6 +2553,23 @@ The backend does not own Playback Queue, Playback History, or Player presentatio
 `QtPlaybackBackend` is the production adapter and privately owns `QMediaPlayer`,
 `QAudioOutput`, the `QIODevice` bridge required by Qt Multimedia, and the QObject
 relay that translates Qt signals into attempt-tagged backend events.
+
+The composition root also exposes the optional `PlaybackVideoOutput` presentation
+interface. A GUI-owned `QVideoWidget` attaches to the same backend only while its
+page is shown; hiding it detaches the output without changing transport or source.
+This narrow Qt presentation attachment stays outside `PlaybackBackend` and
+`PlaybackController`. The window selects video or audio Now Playing using the
+shared semantic `is_video_track` classification and follows mixed queues while a
+viewer is open. The video page uses ordinary controller intents and shows playback
+failures locally while the status bar is hidden. See ADR-0245.
+
+That presentation interface also exposes immutable embedded subtitle choices,
+the active stream index, change notifications and a selection intent. Qt's track
+metadata and decoder remain private to the adapter. `VideoPlayerPage` observes
+these choices through a blocked-signal combo refresh and sends explicit selections
+back to the adapter. Qt renders subtitle cues; sink changes transfer current text
+alongside the frame, and source disposal clears both. Selection belongs only to the
+current Playback Entry and is independent of Sync's Media Stream Selection.
 
 The backend starts a Track from a seekable Playback Source supplied by the
 Application Layer; it never receives an Active iPod, Filesystem Session, Mount
@@ -2630,6 +2813,14 @@ Album export places those folders beneath a uniquely named collection folder.
 Existing Host files and folders are never overwritten. The GUI receives semantic
 Photos and progress rather than device paths. See ADR-0053, ADR-0054, ADR-0055,
 ADR-0056, ADR-0057, ADR-0058, and ADR-0059.
+
+Playlist export can reference the mounted iPod, copy its Tracks beside the
+Playlist, or reference existing files in the configured Host Media Library
+folders. The Host option reads committed Sync Details for the requested Tracks
+from the Library Sync Helper and checks the recorded paths through Storage.
+It preserves the order and duplicates of matched occurrences. It publishes a
+Playlist even when every occurrence is skipped and reports the skipped count
+after publication.
 
 For example:
 
@@ -2979,6 +3170,40 @@ SettingsPage
 
 Pages should primarily compose reusable widgets and connect them to application models/services.
 
+`NowPlayingPage` is an alternate root presentation of the existing Playback
+Controller. A shell-level stack retains the normal Library or Sync workspace,
+including navigation, selections and Player position, while Now Playing fills the
+window's content area. Native window chrome remains. Closing it restores the shell
+and status bar; neither transition issues a transport command. The shared
+`PageFade` crossfades one outgoing client-area snapshot over 320 ms, including
+the status bar. Navigation and focus commit immediately, and interrupted fades
+continue from the current blend. The page shares
+the pending `PlaybackQueueView` and chapter-aware `SeekSlider` with the regular
+Player presentation. It observes current Track, playing state, position and exact
+Artwork Display Time through existing controller and provider interfaces.
+
+For a semantic video Track, the same shell stack selects `VideoPlayerPage` instead.
+It presents aspect-preserving native video with controller-owned transport, volume,
+Chapter navigation and error retry. Close and Escape restore the shell without
+interrupting playback. An open viewer follows audio/video transitions, and clearing
+the current Track closes it. Video transitions bypass the snapshot fade; see
+ADR-0245 for the optional presentation attachment and lifecycle.
+
+Its backdrop is a zoomed, heavily blurred copy of the current
+artwork, processed at a bounded 96-by-96 resolution only when the displayed image
+or theme changes. Saturation is boosted after blurring so the color fields remain
+vivid. The theme owns a uniform scrim that keeps primary and secondary
+text readable. `NowPlayingBackdrop` deforms this tiny raster with slow spatial
+waves at 30 fps; resizing only stretches the result. Artwork changes crossfade
+over 1.2 seconds from the last displayed frame, including interrupted transitions.
+The bounded timeline retains one target, one transition snapshot and the current
+frame, without decoding or blurring on animation frames. Hidden and minimized
+windows stop its timer; resuming preserves the motion phase. Hosts that disable
+widget animation show a static backdrop. Missing artwork fades to the theme canvas;
+provider invalidation discards the backdrop immediately. Theme changes also apply
+immediately so the scrim always matches the text. All image loading remains with
+the shared Artwork provider.
+
 `DeviceSummaryPage` projects the Active iPod's profile, committed Library Snapshot,
 captured firmware and product serial, and Volume capacity without device I/O.
 Firmware and serial fields prefer current hardware evidence and withhold equally
@@ -3056,6 +3281,14 @@ Reusable widgets should draw from the global theme/palette rather than hard-codi
 #### `GUI/presentation`
 
 Contains application-wide presentation infrastructure.
+
+`scrolling.install_scrolling` owns the shared wheel and middle-button input policy
+for existing and newly shown Qt scroll areas. The Album grid's bounded easing is
+shared across pages and dialogs. Item views render pixel motion; tables target one
+visible row per wheel notch, while trackpad input remains immediate. Widgets do not
+install separate wheel animation handlers. Other item views cap wheel lines at
+32 pixels so tall Podcast and Playback Queue rows do not inflate wheel travel. See
+[ADR-0244](adr/0244-share-smooth-wheel-and-middle-button-scrolling.md).
 
 ```text
 presentation/
@@ -3392,3 +3625,19 @@ That provides the strongest decoupling.
 18. **Only one user-selected Active iPod is loaded at a time.**
 
 This arrangement keeps device knowledge, database knowledge, storage safety, and application behavior distinct while still allowing the four modules to cooperate through narrow, explicit interfaces.
+
+## Rating reconciliation
+
+The Application Layer owns native rating interpretation, reviewed baseline
+comparison and conflict policy. The Sync Plan records the selected outcome once.
+The Library Draft applies the reviewed iPod target and Back Sync applies the
+reviewed Host target after verified device publication. Storage validates the
+source, then verifies that the staged replacement changes size or modification
+time before atomically publishing it. The checksummed
+`iPod_Control/iOpenPod/rating-sync.json` catalog stores rating baselines and
+pending Host writes by persistent Track identity and paired Host path. Sync
+records the pending target before device publication and checks the committed
+iPod rating and reviewed Host rating before writing back. The v7 Library Sync
+Helper remains readable by earlier installations. See
+[ADR-0258](adr/0258-carry-rating-decisions-through-sync.md) and
+[Host media tags](host-media-tags.md#rating-reads-and-back-sync).

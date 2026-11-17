@@ -55,6 +55,23 @@ def analyze(
     tracks = {t.track_id: t for t in draft.snapshot.tracks}
     replacements: set[int] = set()
     retagged: set[int] = set()
+    lyrics_updates: set[int] = set()
+    for track_id in draft.lyrics_updates:
+        if track_id in lyrics_updates or track_id not in tracks:
+            issues.append(
+                WriteIssue(
+                    "draft.invalid_lyrics_update",
+                    "Lyrics edits require one existing draft Track identity.",
+                    subject="track",
+                    record_id=track_id,
+                    field="lyrics_updates",
+                )
+            )
+        else:
+            changes.append(
+                LibraryChange("media", track_id, "lyrics", tracks[track_id].title)
+            )
+        lyrics_updates.add(track_id)
     if draft.regenerate_sqlite and not target.sqlite_database:
         issues.append(
             WriteIssue(
@@ -65,16 +82,18 @@ def analyze(
     for track_id in draft.retag_tracks:
         if (
             track_id in retagged
-            or track_id not in old_tracks
             or track_id not in tracks
-            or track_id in draft.replace_media
-            or old_tracks[track_id].metadata.location
-            != tracks[track_id].metadata.location
+            or (
+                track_id in old_tracks
+                and track_id not in draft.replace_media
+                and old_tracks[track_id].metadata.location
+                != tracks[track_id].metadata.location
+            )
         ):
             issues.append(
                 WriteIssue(
                     "draft.invalid_retag",
-                    "Tag rewrites require one retained Track at its existing location.",
+                    "Tag rewrites require one incoming Track or a retained Track at its existing location.",
                     subject="track",
                     record_id=track_id,
                     field="retag_tracks",
@@ -508,24 +527,33 @@ def analyze(
         required_lyrics=tuple(
             track.track_id
             for track in draft.snapshot.tracks
-            if (
-                track.metadata.lyrics
-                != (
-                    old_tracks[track.track_id].metadata.lyrics
-                    if track.track_id in old_tracks
-                    else ""
-                )
-                or (
-                    track.track_id in media_ids
-                    and (
-                        bool(track.metadata.lyrics)
-                        or (
-                            track.track_id in old_tracks
-                            and old_tracks[track.track_id].metadata.has_lyrics
+            if track.track_id in retagged
+            or track.track_id in lyrics_updates
+            or (
+                track.track_id in old_tracks
+                and track.track_id not in media_ids
+                and track.metadata.lyrics != old_tracks[track.track_id].metadata.lyrics
+            )
+            or (
+                target.supports_lyrics
+                and (
+                    track.metadata.lyrics
+                    != (
+                        old_tracks[track.track_id].metadata.lyrics
+                        if track.track_id in old_tracks
+                        else ""
+                    )
+                    or (
+                        track.track_id in media_ids
+                        and (
+                            bool(track.metadata.lyrics)
+                            or (
+                                track.track_id in old_tracks
+                                and old_tracks[track.track_id].metadata.has_lyrics
+                            )
                         )
                     )
                 )
-                or track.track_id in retagged
             )
         ),
     )

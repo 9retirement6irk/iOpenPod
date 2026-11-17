@@ -36,6 +36,15 @@ bundle includes its worker and shared `phase_sources.py`, `phase_parts.py` and
 real inference before activation. Acoustic analysis remains available on optional
 failure. See [ADR-0225](adr/0225-install-optional-phase-analysis-with-safe-fallbacks.md).
 
+Both executable specifications load `packaging/hooks/hook-whenever.py`. Whenever
+0.11 exposes its public API through lazy imports, so the hook includes its
+submodules, native extension/Python fallback, distribution metadata and `tzdata`
+resources. Windows Host-zone lookup also needs its `tzlocal` runtime dependency.
+An isolated Windows onefile smoke check exercised both providers, bundled IANA
+data with the OS timezone search path disabled, New York DST and Host-zone lookup.
+This does not replace the complete per-platform application/update-helper builds.
+See [the datetime guide](datetime-engineering.md#host-formats-precision-and-packaging).
+
 Every native release smoke test generates a Phase chart from authored audio and
 serializes it to the game's format, using the included acoustic analyzer. The
 worker's Python entry point and shared source modules are explicitly copied into
@@ -76,6 +85,8 @@ never invented by the build script.
 
 The copied Original iOpenPod icon is used in the application, executable, bundle,
 desktop entry, and Store tiles. See its [provenance](../src/iOpenPod/assets/icons/README.md).
+Windows MSIX packages also include unplated target-size icons so Windows can show
+the artwork without shrinking it onto a colored backplate.
 The available master is 256 pixels. ICNS includes larger converted representations;
 the original high-resolution artwork is still needed for final store art review.
 
@@ -162,7 +173,9 @@ See [ADR-0103](adr/0103-offer-native-media-tool-installation.md) and
 The frozen app preserves the user's PATH. Shared discovery also finds standard
 WinGet aliases and Homebrew prefixes, allowing setup without a restart. Media
 inspection requires FFprobe; incoming Track preparation checks FFmpeg/FFprobe and
-needed encoders before device changes. fpcalc supports optional acoustic matching.
+needed encoders before device changes. fpcalc supplies required acoustic matching.
+Every supported channel needs a working route for all three tools; see
+[ADR-0264](adr/0264-require-fpcalc-in-supported-installations.md).
 Startup checks tools and offers setup without requiring installation to browse.
 Some Synesthesia decoding also uses external FFmpeg. Store descriptions and setup
 help must disclose the affected features, external installation, and opt-in network
@@ -227,7 +240,7 @@ as required by [Store policy 10.2.4](https://learn.microsoft.com/en-us/windows/a
 Suggested opening text:
 
 > Media inspection and conversion require separately installed FFmpeg (including
-> FFprobe); Chromaprint's fpcalc enables optional acoustic matching. These tools
+> FFprobe); acoustic matching requires Chromaprint's fpcalc. These tools
 > are not bundled. The setup helper can install missing packages through WinGet
 > after you choose Install, or you can use your own installation on PATH.
 

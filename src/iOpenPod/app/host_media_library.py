@@ -39,6 +39,7 @@ from iOpenPod.app.host_playlists import (
 from iOpenPod.app.media.container_artwork import container_artwork
 from iOpenPod.app.media.content_type import classify_content_type
 from iOpenPod.app.media.fingerprint_codec import decode_fingerprint, encode_fingerprint
+from iOpenPod.app.media.image_pixels import rgb_image
 from iOpenPod.app.media.inspection import MediaInspectionError, MediaInspector
 from iOpenPod.app.media.models import MediaTag
 from iOpenPod.app.media.photo_image import photo_source_size, photo_viewing_image
@@ -80,7 +81,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_CACHE_VERSION = 16
+_CACHE_VERSION = 17
 _MAX_CACHE_ENTRIES = 250_000
 _MAX_ARTWORK_BYTES = 64 * 1024 * 1024
 _MAX_INSPECTION_WORKERS = 8
@@ -218,6 +219,7 @@ class HostArtworkKind(StrEnum):
 class HostMediaScanStage(StrEnum):
     DISCOVERING = "discovering"
     READING = "reading"
+    REFRESHING = "refreshing"
     EXTERNAL = "external"
     FINALIZING = "finalizing"
     COMPLETE = "complete"
@@ -285,6 +287,13 @@ class HostMediaSource:
     # A Connected Source item whose file is downloaded when Sync prepares it;
     # ``path`` is where it is (or will be) cached.
     remote: bool = False
+    metadata_complete: bool = field(default=True, kw_only=True)
+
+    def matches(self, observed: LocalHostFile) -> bool:
+        return (self.size_bytes, self.modified_ns) == (
+            observed.size_bytes,
+            observed.modified_ns,
+        )
 
     @property
     def playlist_id(self) -> int | None:
@@ -455,7 +464,7 @@ class HostMediaArtworkLoader:
                 (request.target_px, request.target_px),
                 Image.Resampling.LANCZOS,
             )
-            pixels = oriented.convert("RGB")
+            pixels = rgb_image(oriented)
             width, height = pixels.size
             rgb888 = pixels.tobytes()
         return ArtworkImage(
@@ -701,6 +710,7 @@ class _CachedTrackRecord(_CachedFileRecord):
             self.size_bytes,
             self.modified_ns,
             self.acoustic_fingerprint or None,
+            metadata_complete=self.metadata_complete,
         )
 
     def matches(
@@ -1358,59 +1368,51 @@ class HostMediaScanner:
         paths: frozenset[HostPath],
         *,
         checkpoint: CancellationCheck,
+        progress: ProgressCallback | None = None,
     ) -> HostMediaLibrary:
         """Reread Host tags when current iPod details disagree with cached tags."""
 
         if not paths:
             return library
+        checkpoint()
         records = {
             _path_identity(record.path.path): record
             for record in library.cached_records
         }
         cached_records, folder_artwork = self._load_cache()
-        refreshed_paths: set[str] = set()
+        refresh_artwork = dict(folder_artwork)
+        for source in library.artwork_sources:
+            if source.kind is HostArtworkKind.FOLDER:
+                refresh_artwork.setdefault(
+                    _path_identity(source.path.path.parent),
+                    _ArtworkReference(
+                        HostArtworkKind.FOLDER,
+                        source.path,
+                        source.size_bytes,
+                        source.modified_ns,
+                        source.content_sha256,
+                    ),
+                )
+        selected: dict[str, _CachedTrackRecord] = {}
         for path in sorted(paths, key=lambda item: _path_identity(item.path)):
             checkpoint()
             identity = _path_identity(path.path)
             record = records.get(identity)
             if not isinstance(record, _CachedTrackRecord):
                 raise HostMediaScanError("The Host Track is no longer in the scan.")
-            folder = folder_artwork.get(_path_identity(path.path.parent))
-            if folder is None:
-                folder = next(
-                    (
-                        _ArtworkReference(
-                            HostArtworkKind.FOLDER,
-                            source.path,
-                            source.size_bytes,
-                            source.modified_ns,
-                            source.content_sha256,
-                        )
-                        for source in library.artwork_sources
-                        if source.kind is HostArtworkKind.FOLDER
-                        and _path_identity(source.path.path.parent)
-                        == _path_identity(path.path.parent)
-                    ),
-                    None,
-                )
-            observation = _Observation(
-                record.path, record.kind, record.size_bytes, record.modified_ns
-            )
-            try:
-                refreshed = _inspect_track(observation, folder, checkpoint=checkpoint)
-            except (OSError, StorageError, ValueError, mutagen.MutagenError) as error:
-                raise HostMediaScanError(
-                    "The Host Track could not be reread. Run Sync again."
-                ) from error
-            if refreshed.warning:
-                raise HostMediaScanError(
-                    "The Host Track details could not be verified. Run Sync again."
-                )
-            records[identity] = replace(
-                refreshed,
-                acoustic_fingerprint=record.acoustic_fingerprint,
-            )
-            refreshed_paths.add(identity)
+            selected[identity] = record
+        refreshed = _refresh_track_records(
+            tuple(selected.values()),
+            folder_artwork=refresh_artwork,
+            max_workers=self._max_workers,
+            checkpoint=checkpoint,
+            progress=progress,
+        )
+        checkpoint()
+        refreshed_paths = {_path_identity(record.path.path) for record in refreshed}
+        records.update(
+            (_path_identity(record.path.path), record) for record in refreshed
+        )
         updated = _build_library(
             tuple(records.values()),
             library.issues,
@@ -1437,8 +1439,10 @@ class HostMediaScanner:
                 )
             ),
         )
+        checkpoint()
         cached_records.update(records)
         self._store_cache(cached_records.values(), folder_artwork.values())
+        checkpoint()
         return updated
 
     def _scan_fingerprinter(self) -> _AcousticFingerprinter:
@@ -2368,6 +2372,97 @@ def _track_with_folder_artwork(
     )
 
 
+def _refresh_track_records(
+    records: tuple[_CachedTrackRecord, ...],
+    *,
+    folder_artwork: dict[str, _ArtworkReference],
+    max_workers: int,
+    checkpoint: CancellationCheck,
+    progress: ProgressCallback | None,
+) -> tuple[_CachedTrackRecord, ...]:
+    """Reread bounded independent Tracks; publish progress on the owning thread."""
+
+    stopped = Event()
+    refreshed: list[_CachedTrackRecord] = []
+    total = len(records)
+    last_progress = -math.inf
+
+    def refresh_checkpoint() -> None:
+        checkpoint()
+        if stopped.is_set():
+            raise HostMediaScanCancelledError("Host Track refresh stopped")
+
+    def inspect(record: _CachedTrackRecord) -> _CachedTrackRecord:
+        refresh_checkpoint()
+        observation = _Observation(
+            record.path, record.kind, record.size_bytes, record.modified_ns
+        )
+        folder = folder_artwork.get(_path_identity(record.path.path.parent))
+        try:
+            result = _inspect_track(observation, folder, checkpoint=refresh_checkpoint)
+        except (OSError, StorageError, ValueError, mutagen.MutagenError) as error:
+            raise HostMediaScanError(
+                "The Host Track could not be reread. Run Sync again."
+            ) from error
+        refresh_checkpoint()
+        if result.warning:
+            raise HostMediaScanError(
+                "The Host Track details could not be verified. Run Sync again."
+            )
+        return replace(result, acoustic_fingerprint=record.acoustic_fingerprint)
+
+    checkpoint()
+    _emit(
+        progress,
+        HostMediaScanStage.REFRESHING,
+        0,
+        total,
+        source_text("Checking Host Track details."),
+    )
+    with ThreadPoolExecutor(
+        max_workers=max_workers, thread_name_prefix="host-track-refresh"
+    ) as executor:
+        pending: set[Future[_CachedTrackRecord]] = set()
+        index = 0
+        try:
+            while index < total or pending:
+                checkpoint()
+                while index < total and len(pending) < max_workers:
+                    checkpoint()
+                    pending.add(executor.submit(inspect, records[index]))
+                    index += 1
+                finished, _ = wait(pending, timeout=0.1, return_when=FIRST_COMPLETED)
+                checkpoint()
+                for future in finished:
+                    checkpoint()
+                    pending.remove(future)
+                    record = future.result()
+                    refreshed.append(record)
+                    now = perf_counter()
+                    if (
+                        len(refreshed) == total
+                        or now - last_progress >= _READING_PROGRESS_INTERVAL
+                    ):
+                        last_progress = now
+                        _emit(
+                            progress,
+                            HostMediaScanStage.REFRESHING,
+                            len(refreshed),
+                            total,
+                            source_text(
+                                "Read file {index} of {total}…",
+                                index=f"{len(refreshed):,}",
+                                total=f"{total:,}",
+                            ),
+                            path=record.path,
+                        )
+        finally:
+            stopped.set()
+            for future in pending:
+                future.cancel()
+    return tuple(sorted(refreshed, key=lambda record: _path_identity(record.path.path)))
+
+
 def _inspect_selected_files(
     observations: tuple[_Observation, ...],
     cached: dict[str, _CachedRecord],
@@ -3216,7 +3311,7 @@ def _decode_cache_contents(
     version = _integer(document.get("version"), "version")
     if version == 9:
         expected = {"version", "entries", "catalog_sha256"}
-    elif version in (10, 11, 12, 13, 14, 15, _CACHE_VERSION):
+    elif version in (10, 11, 12, 13, 14, 15, 16, _CACHE_VERSION):
         expected = {
             "version",
             "entries",
@@ -3433,6 +3528,10 @@ def _record_from_document(value: object, *, version: int) -> _CachedRecord:
             # Reobserve old coverless records once rather than reuse that claim.
             embedded_artwork_available = bool(artwork_kind_value)
             metadata_complete = metadata_complete and embedded_artwork_available
+        if version <= 16:
+            # Earlier parsers omitted native ratings while marking Tracks complete.
+            # Reinspect each unchanged Track once; retain its Acoustic Fingerprint.
+            metadata_complete = False
         artwork_path_value = _text(metadata["artwork_path"], "artwork_path")
         artwork_digest_value = _text(
             metadata["artwork_content_sha256"],

@@ -1,6 +1,7 @@
 # ADR-0904: Optional Lyrics in the iPod Database
 
-- Status: Accepted
+- Status: Superseded by upstream ADR-0270 (iOpenPod 2.1.4), which stops writing lyric
+  text to the database on every iPod. The setting was removed in v2.1.4-1.
 - Date: 2026-11-11
 - Scope: this fork
 

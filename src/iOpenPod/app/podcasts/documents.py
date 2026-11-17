@@ -6,6 +6,7 @@ import json
 from typing import TYPE_CHECKING, cast
 
 from iOpenPod.app.podcasts.models import (
+    ALL_EPISODE_SLOTS,
     ListeningRecord,
     PodcastClearAge,
     PodcastClearMethod,
@@ -104,7 +105,7 @@ def decode_subscriptions(payload: bytes) -> tuple[PodcastSubscription, ...]:
                     website_url=_text(row, "website_url"),
                     show_type=PodcastShowType(_text(row, "show_type")),
                     language=_text(row, "language"),
-                    last_refreshed=_integer(row, "last_refreshed"),
+                    last_refreshed=_date(row, "last_refreshed"),
                     sync_settings=(
                         decode_sync_settings(row.get("sync_settings"))
                         if root.get("version") in (2, _SUBSCRIPTIONS_VERSION)
@@ -168,9 +169,12 @@ def decode_history(payload: bytes) -> tuple[ListeningRecord, ...]:
     for index, value in enumerate(rows):
         row = _mapping(value, f"records[{index}]")
         version_two = root.get("version") == _HISTORY_VERSION
-        if version_two and frozenset(row) != _HISTORY_FIELDS:
+        if version_two and frozenset(row) - {
+            "last_played",
+            "published_at",
+        } != _HISTORY_FIELDS - {"last_played", "published_at"}:
             raise PodcastDocumentError(
-                f"records[{index}] must contain exactly the version 2 history fields"
+                f"records[{index}] must contain the version 2 history fields (dates are optional)"
             )
         override = row.get("listened_override")
         if override is not None and not isinstance(override, bool):
@@ -187,8 +191,8 @@ def decode_history(payload: bytes) -> tuple[ListeningRecord, ...]:
                     title=_text(row, "title"),
                     listened_override=override,
                     observed_play_count=_integer(row, "observed_play_count"),
-                    last_played=_integer(row, "last_played"),
-                    published_at=_integer(row, "published_at") if version_two else 0,
+                    last_played=_date(row, "last_played"),
+                    published_at=_date(row, "published_at") if version_two else 0,
                     episode_number=(
                         _optional_integer(row, "episode_number")
                         if version_two
@@ -227,7 +231,7 @@ def decode_sync_settings(value: object) -> PodcastSyncSettings:
     if not isinstance(listened, bool):
         raise PodcastDocumentError("clear_when_listened must be true or false")
     return PodcastSyncSettings(
-        episode_slots=_integer(row, "episode_slots"),
+        episode_slots=_integer(row, "episode_slots", minimum=ALL_EPISODE_SLOTS),
         fill_mode=PodcastFillMode(_text(row, "fill_mode", required=True)),
         clear_when_listened=listened,
         clear_older_than=PodcastClearAge(_text(row, "clear_older_than", required=True)),
@@ -285,10 +289,16 @@ def _text(row: Mapping[str, object], name: str, *, required: bool = False) -> st
     return result
 
 
-def _integer(row: Mapping[str, object], name: str) -> int:
+def _date(row: Mapping[str, object], name: str) -> int:
+    """Signed Unix dates are valid; unusable calendar metadata is simply absent."""
     value = row.get(name, 0)
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise PodcastDocumentError(f"{name} must be a non-negative integer")
+    return value if type(value) is int else 0
+
+
+def _integer(row: Mapping[str, object], name: str, *, minimum: int = 0) -> int:
+    value = row.get(name, 0)
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        raise PodcastDocumentError(f"{name} must be an integer at least {minimum}")
     return value
 
 

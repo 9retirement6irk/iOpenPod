@@ -4,13 +4,18 @@ from __future__ import annotations
 
 import hashlib
 import json
-from concurrent.futures import ThreadPoolExecutor
+from collections import deque
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from contextlib import contextmanager, nullcontext
 from copy import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from importlib import import_module
 from pathlib import PurePosixPath
 from threading import Event, Lock
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Protocol
+
+from threadpoolctl import threadpool_limits
 
 from iOpenPod.app.genius_analysis_cache import GeniusProfileCache
 from iOpenPod.app.genius_audio import (
@@ -34,22 +39,43 @@ from storage.host_input import LocalHostFile
 from storage.media_processing import (
     MediaToolError,
     MediaToolFinder,
+    available_compute_threads,
     find_media_tool,
     run_media_tool,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable, Generator, Mapping
 
     from iOpenPod.app.media.importing import LibraryMediaSource
-    from iPodDB.library import LibrarySnapshot, Track
+    from iPodDB.library import LibrarySnapshot, PreparedLyrics, Track
     from storage import FileFingerprint, FilesystemSession
 
 
 GENIUS_SAMPLE_RATE_HZ = 22_050
 MAX_GENIUS_AUDIO_SECONDS = 15 * 60
 _MAX_PCM_BYTES = GENIUS_SAMPLE_RATE_HZ * MAX_GENIUS_AUDIO_SECONDS * 4
-_MAX_ANALYSIS_WORKERS = 2
+# Two device Tracks may be in flight, but only one reads at a time: concurrent
+# reads slowed both hard-drive and flash iPods (ADR-0274). Staged Host captures
+# are local files and may use every worker.
+_MAX_DEVICE_ANALYSIS_WORKERS = 2
+_DEVICE_READ_POLL_SECONDS = 0.1
+_MAX_ANALYSIS_WORKERS = 6
+
+
+def _default_analysis_workers() -> int:
+    """Use about one worker per physical core, within ADR-0271's memory bound."""
+    return max(
+        _MAX_DEVICE_ANALYSIS_WORKERS,
+        min(_MAX_ANALYSIS_WORKERS, available_compute_threads() // 2),
+    )
+
+
+# Each profile's matrices are small. Measured BLAS threading slowed profiling even
+# for one worker, and concurrent workers oversubscribed the CPU (ADR-0272).
+_MATHS_THREADS_PER_WORKER = 1
+
+
 # Explicit single-file demuxers prevent a disguised playlist from following
 # external references. MOV external data references remain disabled by default.
 _INPUT_FORMATS = {
@@ -248,6 +274,24 @@ class GeniusAnalysisResult:
     dependencies: tuple[GeniusAnalysisDependency, ...] = ()
     prepared_profiles: tuple[GeniusPreparedProfile, ...] = ()
 
+    def with_tagged_media(
+        self, tagged: tuple[PreparedLyrics, ...]
+    ) -> GeniusAnalysisResult:
+        """Carry profiles through captured tag-only rewrites of analyzed audio.
+
+        The ordinary tag writer supplies the final content evidence. Association
+        still waits for Storage to verify those exact bytes during publication.
+        """
+        prepared = {item.path: item for item in self.prepared_profiles}
+        for item in tagged:
+            profile = self.profiles.get(item.track_id)
+            if profile is not None:
+                path = DevicePath(item.file.relative_path)
+                prepared[path] = GeniusPreparedProfile(
+                    path, item.file.size, item.file.sha256, profile
+                )
+        return replace(self, prepared_profiles=tuple(prepared.values()))
+
     def validate_sources(
         self, session: FilesystemSession, *, checkpoint: Callable[[], None]
     ) -> None:
@@ -283,8 +327,58 @@ class _AnalyzedTrack:
     profile: GeniusAudioProfile
 
 
+class _AdmissionQueue:
+    """Library-ordered waiting analysis with a separate bound for device Tracks.
+
+    Host and device sources wait in separate Library-ordered queues. The earliest
+    admissible head is admitted next, so a device Track waiting for admission
+    does not hold back later staged Host captures.
+    """
+
+    def __init__(self, pending: list[tuple[Track, _Source]]) -> None:
+        self._device: deque[tuple[int, Track, _Source]] = deque()
+        self._host: deque[tuple[int, Track, _Source]] = deque()
+        for index, (track, source) in enumerate(pending):
+            queue = self._device if isinstance(source.path, DevicePath) else self._host
+            queue.append((index, track, source))
+        self._device_running = 0
+
+    def __bool__(self) -> bool:
+        return bool(self._device or self._host)
+
+    def admit(self) -> tuple[Track, _Source, bool] | None:
+        heads = [
+            queue
+            for queue, open_ in (
+                (self._device, self._device_running < _MAX_DEVICE_ANALYSIS_WORKERS),
+                (self._host, True),
+            )
+            if queue and open_
+        ]
+        if not heads:
+            return None
+        queue = min(heads, key=lambda waiting: waiting[0][0])
+        _, track, source = queue.popleft()
+        on_device = queue is self._device
+        self._device_running += on_device
+        return track, source, on_device
+
+    def release(self, *, on_device: bool) -> None:
+        self._device_running -= on_device
+
+    def clear(self) -> None:
+        self._device.clear()
+        self._host.clear()
+
+
 class GeniusAnalysisService:
-    """Profile at most two music sources concurrently and retain successful work."""
+    """Profile music sources concurrently and retain successful work.
+
+    At most ``workers`` sources are analyzed at once. At most two are device
+    Tracks, and only one of those reads at a time while the other is profiled.
+    Admission follows Library order; outcomes are recorded as they complete, so
+    one slow Track never idles the remaining workers.
+    """
 
     def __init__(
         self,
@@ -292,11 +386,17 @@ class GeniusAnalysisService:
         decoder: GeniusPCMDecoder | None = None,
         *,
         profiler: GeniusProfiler | None = None,
+        workers: int | None = None,
     ) -> None:
+        if workers is not None and not (
+            _MAX_DEVICE_ANALYSIS_WORKERS <= workers <= _MAX_ANALYSIS_WORKERS
+        ):
+            raise ValueError("Genius analysis workers must be between 2 and 6")
         self._cache = GeniusProfileCache(cache_file)
         self._cache_lock = Lock()
         self._decoder = decoder or FFmpegGeniusPCMDecoder()
         self._profiler = profiler or profile_genius_pcm
+        self._workers = workers or _default_analysis_workers()
 
     def analyze(
         self,
@@ -386,46 +486,82 @@ class GeniusAnalysisService:
                     pending.append((track, resolved))
                 else:
                     outcomes[track.track_id] = resolved
-            with ThreadPoolExecutor(max_workers=_MAX_ANALYSIS_WORKERS) as workers:
-                for first in range(0, len(pending), _MAX_ANALYSIS_WORKERS):
-                    checkpoint()
-                    if should_skip():
-                        break
-                    batch = pending[first : first + _MAX_ANALYSIS_WORKERS]
-                    if progress is not None:
-                        try:
-                            progress(
-                                GeniusAnalysisProgress(
-                                    first,
-                                    len(pending),
-                                    batch[0][0].track_id,
-                                    batch[0][0].title,
-                                    active=tuple(
-                                        GeniusAnalysisActivity(
-                                            track.track_id, track.title
-                                        )
-                                        for track, _ in batch
-                                    ),
-                                ),
-                            )
-                        except BaseException:
-                            stopped.set()
-                            raise
-                    futures = tuple(
-                        workers.submit(
-                            self._analyze_track,
-                            track,
-                            source,
-                            session,
-                            decoder,
-                            worker_checkpoint,
+            waiting = _AdmissionQueue(pending)
+            device_read = Lock()
+            # Insertion order is admission order, which progress reports as active.
+            running: dict[
+                Future[_AnalyzedTrack | GeniusAnalysisIssue], tuple[Track, bool]
+            ] = {}
+            completed = 0
+
+            def report(track: Track | None, starting: tuple[Track, ...] = ()) -> None:
+                active = (*(item for item, _ in running.values()), *starting)
+                current = track or active[0]
+                if progress is not None:
+                    progress(
+                        GeniusAnalysisProgress(
+                            completed,
+                            len(pending),
+                            current.track_id,
+                            current.title,
+                            tuple(
+                                GeniusAnalysisActivity(item.track_id, item.title)
+                                for item in active
+                            ),
                         )
-                        for track, source in batch
                     )
-                    for index, ((track, _), future) in enumerate(
-                        zip(batch, futures, strict=True), first
-                    ):
-                        try:
+
+            if pending and not should_skip():
+                # SciPy can load a separate BLAS library on the first profile.
+                # Discover it before limiting pools, while keeping startup lazy.
+                import_module("scipy.linalg")
+
+            # The limit is process-wide; restore it only after every worker stops.
+            with (
+                threadpool_limits(
+                    limits=_MATHS_THREADS_PER_WORKER,
+                    user_api="blas",
+                ),
+                ThreadPoolExecutor(max_workers=self._workers) as workers,
+            ):
+                try:
+                    while waiting or running:
+                        checkpoint()
+                        admitted: list[tuple[Track, _Source, bool]] = []
+                        while (
+                            len(running) + len(admitted) < self._workers
+                            and not should_skip()
+                        ):
+                            admission = waiting.admit()
+                            if admission is None:
+                                break
+                            admitted.append(admission)
+                        if admitted:
+                            # Report before starting, so a skip requested in
+                            # response stops these Tracks before they are read.
+                            report(None, tuple(track for track, _, _ in admitted))
+                        for track, source, on_device in admitted:
+                            if should_skip():
+                                waiting.release(on_device=on_device)
+                                continue
+                            future = workers.submit(
+                                self._analyze_track,
+                                track,
+                                source,
+                                session,
+                                decoder,
+                                worker_checkpoint,
+                                device_read,
+                            )
+                            running[future] = (track, on_device)
+                        if should_skip():
+                            waiting.clear()
+                        if not running:
+                            break
+                        done, _ = wait(running, return_when=FIRST_COMPLETED)
+                        for future in [item for item in running if item in done]:
+                            track, on_device = running.pop(future)
+                            waiting.release(on_device=on_device)
                             try:
                                 outcome = future.result()
                             except _AnalysisSkippedError:
@@ -438,26 +574,11 @@ class GeniusAnalysisService:
                                         outcome.source.key, outcome.profile
                                     )
                                 save()
-                            if progress is not None:
-                                progress(
-                                    GeniusAnalysisProgress(
-                                        index + 1,
-                                        len(pending),
-                                        track.track_id,
-                                        track.title,
-                                        tuple(
-                                            GeniusAnalysisActivity(
-                                                remaining.track_id, remaining.title
-                                            )
-                                            for remaining, _ in batch[
-                                                index - first + 1 :
-                                            ]
-                                        ),
-                                    )
-                                )
-                        except BaseException:
-                            stopped.set()
-                            raise
+                            completed += 1
+                            report(track)
+                except BaseException:
+                    stopped.set()
+                    raise
         finally:
             # Successful earlier work survives a failed source. Cancellation is
             # still propagated; checkpointed cache writes never mask it.
@@ -572,6 +693,7 @@ class GeniusAnalysisService:
         session: FilesystemSession,
         decoder: GeniusPCMDecoder,
         checkpoint: Callable[[], None],
+        device_read: Lock,
     ) -> _AnalyzedTrack | GeniusAnalysisIssue:
         try:
             try:
@@ -581,12 +703,17 @@ class GeniusAnalysisService:
                     raise GeniusAudioDecodeError(
                         "Track exceeds the 15-minute acoustic analysis limit"
                     )
-                pcm = decoder.decode(
-                    source.path,
-                    input_suffix=PurePosixPath(track.metadata.location).suffix,
-                    session=session,
-                    checkpoint=checkpoint,
-                )
+                with (
+                    _holding(device_read, checkpoint)
+                    if isinstance(source.path, DevicePath)
+                    else nullcontext()
+                ):
+                    pcm = decoder.decode(
+                        source.path,
+                        input_suffix=PurePosixPath(track.metadata.location).suffix,
+                        session=session,
+                        checkpoint=checkpoint,
+                    )
                 if len(pcm) > _MAX_PCM_BYTES:
                     raise GeniusAudioDecodeError("Decoded audio exceeds its byte limit")
                 profile = self._profiler(
@@ -609,6 +736,17 @@ class GeniusAnalysisService:
             return GeniusAnalysisIssue(
                 track.track_id, "genius.audio_unavailable", str(error)
             )
+
+
+@contextmanager
+def _holding(lock: Lock, checkpoint: Callable[[], None]) -> Generator[None]:
+    """Hold the device read slot; waiting for it stays cancellable."""
+    while not lock.acquire(timeout=_DEVICE_READ_POLL_SECONDS):
+        checkpoint()
+    try:
+        yield
+    finally:
+        lock.release()
 
 
 class PreparationStoppedError(RuntimeError):

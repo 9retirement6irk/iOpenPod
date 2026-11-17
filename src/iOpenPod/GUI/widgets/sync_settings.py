@@ -8,19 +8,21 @@ from PySide6.QtWidgets import QLabel, QMessageBox, QVBoxLayout, QWidget
 
 from iOpenPod.app.core.settings.definitions import (
     ANALYZE_FOR_GENIUS,
+    BACK_SYNC_RATINGS,
+    COMPUTE_MISSING_BPM,
     COMPUTE_SOUND_CHECK,
     FIT_THUMBNAILS,
     LOSSY_ENCODER,
     LOSSY_QUALITY,
     NORMALIZE_SAMPLE_RATE,
     NORMALIZE_TAGS_AFTER_SYNC,
+    RATING_CONFLICT_POLICY,
     RETRANSCODE_LOSSY,
     ROCKBOX_METADATA_SUPPORT,
     ROTATE_TALL_PHOTOS,
     SMART_QUALITY_BY_CONTENT_TYPE,
     SPOKEN_WORD_BITRATE,
     SPOKEN_WORD_MONO,
-    STORE_LYRICS,
     TRANSCODE_LOSSLESS_TO_LOSSY,
     TRANSCODE_PCM_TO_ALAC,
     SettingDefinition,
@@ -44,7 +46,10 @@ from iOpenPod.app.podcasts.settings import (
     read_default_podcast_sync_settings,
     save_default_podcast_sync_settings,
 )
-from iOpenPod.app.scrobbling.settings import SCROBBLE_DURING_SYNC
+from iOpenPod.app.scrobbling.settings import (
+    SCROBBLE_DURING_SYNC,
+    SCROBBLE_RATINGS,
+)
 from iOpenPod.GUI.dialogs.podcast_sync_settings import PodcastSyncSettingsDialog
 from iOpenPod.GUI.presentation.theme.tokens import LAYOUT
 from iOpenPod.GUI.widgets.app_combo_box import AppComboBox
@@ -107,6 +112,11 @@ class SyncSettings(QWidget):
             scope, COMPUTE_SOUND_CHECK, "computeSoundCheck", self
         )
         self._genius = _Choice(scope, ANALYZE_FOR_GENIUS, "analyzeForGenius", self)
+        self._ratings = _Choice(scope, BACK_SYNC_RATINGS, "backSyncRatings", self)
+        self._rating_policy = _Choice(
+            scope, RATING_CONFLICT_POLICY, "ratingConflictPolicy", self
+        )
+        self._bpm = _Choice(scope, COMPUTE_MISSING_BPM, "computeMissingBpm", self)
         self._normalize = _Choice(
             scope, NORMALIZE_TAGS_AFTER_SYNC, "normalizeTagsAfterSync", self
         )
@@ -115,16 +125,20 @@ class SyncSettings(QWidget):
         self._rockbox = _Choice(
             scope, ROCKBOX_METADATA_SUPPORT, "rockboxMetadataSupport", self
         )
-        self._lyrics = _Choice(scope, STORE_LYRICS, "storeLyrics", self)
         self._scrobble = _Choice(
             scope, SCROBBLE_DURING_SYNC, "scrobbleDuringSync", self
         )
+        self._scrobble_ratings = _Choice(
+            scope, SCROBBLE_RATINGS, "scrobbleRatings", self
+        )
         self._rows = (
             self._scrobble,
+            self._scrobble_ratings,
             self._genius,
+            self._bpm,
+            self._ratings,
             self._sound_check,
             self._normalize,
-            self._lyrics,
             self._rotate,
             self._fit,
             self._rockbox,
@@ -133,6 +147,7 @@ class SyncSettings(QWidget):
         group.setMaximumWidth(960)
         for row in self._rows:
             group.add_row(row)
+        group.add_row(self._rating_policy)
         group.add_row(self._podcast_row)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -170,6 +185,42 @@ class SyncSettings(QWidget):
                 "Genius data where possible."
             ),
         )
+        self._scrobble_ratings.set_copy(
+            self.tr("Scrobble Ratings"),
+            self.tr(
+                "When scrobbling, send 4-5 stars as Love to connected accounts. "
+                "Send 1-2 stars as Unlove to Last.fm and Hate to ListenBrainz. "
+                "Three stars and unrated Tracks leave feedback unchanged. "
+                "Off by default; independent of Host file rating sync."
+            ),
+        )
+        self._ratings.set_copy(
+            self.tr("Sync star ratings to Host files"),
+            self.tr(
+                "Write changed ratings to paired Host files after verified Sync. Off by default."
+            ),
+        )
+        self._rating_policy.configure(
+            (
+                (self.tr("Host wins"), "host"),
+                (self.tr("iPod wins"), "ipod"),
+                (self.tr("Average"), "average"),
+            )
+        )
+        self._rating_policy.set_copy(
+            self.tr("When both ratings change"),
+            self.tr(
+                "Choose which rating to use when the Host and iPod ratings both changed."
+            ),
+        )
+        self._bpm.set_copy(
+            self.tr("Calculate missing BPM"),
+            self.tr(
+                "Fill missing BPM for new music and music already on the iPod during Sync. "
+                "Existing BPM values and Host files stay unchanged. "
+                "Works with Analyze for Genius off."
+            ),
+        )
         self._sound_check.set_copy(
             self.tr("Compute Sound Check"),
             self.tr(
@@ -183,16 +234,6 @@ class SyncSettings(QWidget):
             self.tr(
                 "Apply iPod-specific metadata cleanup to the committed iPod Library. "
                 "Host files stay unchanged."
-            ),
-        )
-        self._lyrics.set_copy(
-            self.tr("Store Lyrics in the iPod Library"),
-            self.tr(
-                "Copy each song's lyrics into the iPod's Library database. Lyrics "
-                "make the database several times larger, and an iPod with little "
-                "memory can show an empty Library when it grows too large. Off "
-                "leaves lyrics out for songs added or updated from now on; those "
-                "songs show no lyrics on the iPod."
             ),
         )
         self._rotate.set_copy(

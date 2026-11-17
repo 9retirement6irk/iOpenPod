@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from contextlib import suppress
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, cast
 
 from PySide6.QtCore import (
@@ -35,6 +34,7 @@ from PySide6.QtWidgets import (
     QStyleOptionViewItem,
     QWidget,
 )
+from whenever import Instant
 
 from iOpenPod.app.models.artwork_seed import stable_artwork_seed
 from iOpenPod.app.models.podcast_list_models import PodcastListRole
@@ -160,6 +160,7 @@ class PodcastShowDelegate(QStyledItemDelegate):
                 subscription.artwork_url,
                 _SHOW_ARTWORK,
                 option.widget.devicePixelRatioF(),
+                feed_url=subscription.feed_url,
             )
             if pixmap is None and self._device_artwork_provider is not None:
                 pixmap = self._device_artwork_provider.pixmap(
@@ -468,7 +469,12 @@ class PodcastEpisodeDelegate(QStyledItemDelegate):
         ratio = painter.device().devicePixelRatioF()
         size = round(rect.width())
         pixmap = (
-            self._artwork_provider.pixmap(episode.artwork_url, size, ratio)
+            self._artwork_provider.pixmap(
+                episode.artwork_url,
+                size,
+                ratio,
+                feed_url=str(index.data(PodcastListRole.FEED_URL) or ""),
+            )
             if self._artwork_provider is not None
             else None
         )
@@ -487,6 +493,7 @@ class PodcastEpisodeDelegate(QStyledItemDelegate):
                 str(index.data(PodcastListRole.SUBSCRIPTION_ARTWORK_URL) or ""),
                 size,
                 ratio,
+                feed_url=str(index.data(PodcastListRole.FEED_URL) or ""),
             )
         if pixmap is None:
             paint_artwork_placeholder(
@@ -769,7 +776,8 @@ def episode_meta_text(
         parts.append(type_label)
     if episode.published_at:
         with suppress(OSError, OverflowError, ValueError):
-            published = datetime.fromtimestamp(episode.published_at, UTC)
+            published = Instant.from_timestamp(episode.published_at).to_fixed_offset()
+            # QDate adapts already-resolved UTC fields for Qt's locale formatter.
             parts.append(
                 QLocale().toString(
                     QDate(published.year, published.month, published.day),

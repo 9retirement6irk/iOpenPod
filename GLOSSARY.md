@@ -25,7 +25,13 @@ normal lowercase conventions while retaining the same domain term.
 | **Volume** | A filesystem-bearing logical storage unit exposed by a Physical Device. | partition when no partition is known, drive |
 | **Volume Identity** | Stable evidence used to distinguish one Volume from another. | Mount Point, drive letter |
 | **Mount Point** | The temporary Host path at which a Volume is accessible. | Device Identity, Device Path |
-| **Device Time Context** | Captured timezone rules and provenance used to translate native iPod dates to and from Unix instants for one Library source; distinct from the retained database header offset. | Host timezone, current UTC offset |
+| **Device Time Context** | Captured IANA key or effective fixed offset, with provenance, used for best-effort translation between native iPod dates and Unix instants for one Library source; retains the independent database header offset and uses deterministic estimates when evidence is insufficient. The key selects available Host rules, not a frozen tzdb or firmware DST table. | Host timezone, current UTC offset |
+| **Raw Hardware Clock** | The running RTC calendar read by the firmware's hardware provider before software correction. Its initialization and UTC/local basis remain unqualified for the four latest Classic targets. | UTC clock, Firmware Calendar |
+| **Saved Clock Correction** | The day/seconds displacement captured from qualified Classic Preferences and used by firmware to restore its software correction. Queued Host clock handling can refresh it, but a saved-file capture can lag that processing and persistence. It does not establish a geographical UTC offset or historical event order. | timezone, DST shift |
+| **Firmware Calendar** | The iPod firmware's adjusted local calendar used by its clock display and date consumers; its relationship to the Raw Hardware Clock does not establish an exact UTC instant. | UTC clock, Host time |
+| **Saved DST State** | A captured firmware daylight-saving value for a qualified profile; it does not by itself establish automatic-adjustment mode or historical offsets. | DST rules, timezone |
+| **Firmware DST Rules** | Ordered annual transition selectors for a qualified firmware profile, optionally supplied by a saved override file; they do not contain historical timezone changes. | IANA timezone, Saved DST State |
+| **Classic Calendar Target** | One qualified Classic updater-family and RetailOS-release pair whose saved clock and date behavior has been inspected; the latest targets are 24/1.1.2, 33/2.0.1, 35/2.0.4 and 38/2.0.5. It is separate from a retail model number or Device Profile generation. | SKU, storage capacity, transport revision |
 | **Device Path** | A validated relative path inside an authorized device filesystem root. | Host path, absolute path, file path |
 | **Filesystem Session** | Authorized access to one connected Volume for one Connection Generation. | mount, handle, device connection |
 | **Connection Generation** | The unique lifetime of one attachment of a Physical Device. | session, connection ID |
@@ -59,7 +65,8 @@ normal lowercase conventions while retaining the same domain term.
 
 | Term | Definition | Aliases to avoid |
 | --- | --- | --- |
-| **iPod Preferences** | The firmware-owned binary `iPod_Control/Device/Preferences` artifact, represented losslessly by iPodDB with known fields scoped to an evidenced layout. | iTunesPrefs, application settings, Device Profile |
+| **iPod Preferences** | The firmware-owned binary `iPod_Control/Device/Preferences` artifact, represented losslessly by iPodDB with known fields scoped to an evidenced layout. Its saved bytes can differ from the firmware's retained live settings; verified file publication does not itself establish live adoption. | iTunesPrefs, application settings, Device Profile |
+| **iPodSettings.xml** | The separate firmware-owned named settings store at `iPod_Control/Device/iPodSettings.xml`, used by the studied Nano 5/6/7 UI. Its registered section/key values and XML framing require their own firmware qualification; the neighboring binary Preferences blob does not establish their meaning or live adoption. | iTunesPrefs, binary Preferences, application settings |
 | **iTunesPrefs** | The binary `iPod_Control/iTunes/iTunesPrefs` artifact containing iTunes attachment, library-link, Sync, and media settings. Its companion `iTunesPrefs.plist` is a separate artifact. | iPod Preferences, application settings |
 | **Game Authorization Store** | The device-bound `iPod_Control/iTunes/IC-Info.sidb` artifact containing account sessions and addressable key records. Updating it is separate from installing game executables. | game library, iTunesDB, game files |
 | **Host Media Library** | The media collection on the Host that may be compared with an iPod Library. | PC library, source folder, local library |
@@ -152,13 +159,24 @@ normal lowercase conventions while retaining the same domain term.
 
 | Term | Definition | Aliases to avoid |
 | --- | --- | --- |
+| **Extras** | Device applications presented through Calendar, Alarms and Tones pages, with native support distinguished from qualified iOpenPod file editing. | SQLite Extras database |
+| **Alarm Tone** | A named monophonic sequence of frequency/duration notes and rests, stored as a native tone file on Classic or Nano 3–5 and selected by name for a Clock Alarm. A Host preview approximates its pitches and timing. | Music Track, Countdown Timer sound, audio excerpt |
+| **Calendar** | A named collection of Calendar Entries, or an explicitly unnamed collection. Its saved `X-WR-CALNAME` is distinct from entry titles and file paths; multiple source files can contribute to the same exact-name collection. | Calendar Entry, filename |
+| **Calendar Entry** | One imported or authored VEVENT or VTODO component with retained source date forms; it is not an expanded recurrence occurrence. | Track date, UTC timestamp |
+| **Calendar Occurrence** | One projected start/end pair belonging to a source Calendar Entry and returned for a queried civil day. It is a display result, not a separately writable event; series edits retain the source entry's identity. | Calendar Entry, detached event |
+| **Calendar Reminder** | A VALARM attached to a Calendar Entry, with its own relative or absolute trigger and document-local timezone context. | Clock Alarm, Sleep Timer |
+| **Clock Alarm** | An on-device Alarm application entry or saved Clock alarm setting, distinct from Calendar reminders and the hardware wake scheduler. | Calendar Reminder, Sleep Timer |
+| **Clock City** | A native region/ordinal identity in the Nano 1-compatible or Video Clock catalog. Each saved city instance owns one daily Clock Alarm and a manual daylight-saving flag; duplicate city instances are allowed. | Host timezone, IANA zone |
+| **Clock Alarm Projection** | Firmware-derived state for the next alarm, distinct from its persistent Clock Alarm entries. Latest Video firmware saves this projection in iPod Preferences while loading per-city alarms from `iPod_Control/Device/clock`; changing the projection does not edit a selected saved alarm. | Clock Alarm, timezone |
+| **Sleep Timer** | The device's playback shutdown timer, distinct from a saved Clock Alarm or a Host playback countdown. Native support does not imply mounted-file control. | Clock Alarm, Host timer |
+| **Countdown Timer** | The on-device elapsed timer on touch-screen Nano models. Its ending action can play a sound or sleep the iPod. iOpenPod does not inspect, edit or control it. | Clock Alarm, live timer status, Host countdown |
 | **Sync** | The user-directed, primarily Host-to-iPod workflow that reconciles a Host Media Library with an iPod Library and may include supported iPod-to-Host updates. | copy, import, transaction |
 | **Sync Plan** | An immutable proposal of additions, removals, updates, and conversions for one Sync. | diff, changes, queue |
 | **Sync Review** | The user-facing examination and selection of operations in a Sync Plan before execution. | confirmation, preview, plan |
 | **Playback Entry** | One runtime identity for a Track occurrence selected from the Playback Queue or Playback History. Duplicate occurrences of the same Track have distinct Playback Entries. | Track ID, Queue row, Playback Attempt |
 | **Playback Queue** | The runtime-only ordered occurrences of Tracks that are waiting to start. Each occurrence has its own session identity, so duplicate Tracks can be reordered or removed independently. The current Track is not part of the Playback Queue. | playlist, Sync queue, current Track |
 | **Playback History** | The runtime-only, newest-first record of every Track start in the current application session. Traversing an existing entry does not record it again. | listening log, persistent history, recently added |
-| **Playback Backend** | A replaceable Application Layer adapter that decodes media, drives audio output, and reports transport events without owning Queue, History, or Player behavior. The current implementation adapts Qt Multimedia. | player widget, playback UI, Playback Service |
+| **Playback Backend** | A replaceable Application Layer adapter that decodes media, drives audio and optional video output, and reports transport events without owning Queue, History, or Player behavior. The current implementation adapts Qt Multimedia. | player widget, playback UI, Playback Service |
 | **Playback Source** | A seekable, read-only view of a requested Track's encoded bytes. For an iPod Track, it is bound to the Active iPod's Filesystem Session and source identity and exposes neither a Mount Point nor an absolute Host path. | file path, media URL, byte copy |
 | **Musical Evidence** | One typed time-varying measurement or discrete event inferred from a complete audio file, including its reliability, validity, calibrated meaning, timing, and provenance. It contains no rendering response or force policy. | FFT bin, visualizer control, shader setting |
 | **Source Analysis** | An ephemeral acoustic family or learned instrument Source represented by source-local Musical Evidence, confidence, and provenance. A separated waveform is intermediate evidence and is not persisted. | stem file, Track, channel |
@@ -246,6 +264,8 @@ normal lowercase conventions while retaining the same domain term.
 | --- | --- | --- |
 | **Scrobble** | One music play submitted to a connected listening service account with Track metadata and a UTC Unix start timestamp. iPod starts are estimated from retained playback evidence; Last.fm submission dates outside its backdating window are adjusted under ADR-0102. | play count, Playback Entry |
 | **Scrobble Queue** | The durable Host record of pending account deliveries, original playback estimates, optional Last.fm submission dates, and capture cursors, scoped to Volume Identity and persistent Track identity. It survives Track removal and stores each service/account's delivery state independently. | Listening History, Playback History, Unscrobbled Plays counter |
+| **Rating Feedback** | An account-scoped change derived from committed iPod star ratings: Love or Unlove on Last.fm, or Recording Feedback on ListenBrainz. The default-off Scrobble Ratings setting controls both services. Observations and pending deliveries have independent receipts in the Scrobble Queue; they do not represent plays or Host-file rating writes. | Scrobble, play count, Back Sync |
+| **Recording Feedback** | A ListenBrainz account's Love or Hate assignment to a MusicBrainz recording. This service-specific form of Rating Feedback maps 4-5 iPod stars to Love and 1-2 stars to Hate. Last.fm Unlove instead removes a loved status and does not express Hate. | Scrobble, Last.fm loved status |
 
 ## Application updates
 

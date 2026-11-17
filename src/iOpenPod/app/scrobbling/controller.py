@@ -15,7 +15,12 @@ from .credentials import SystemCredentialStore
 from .models import Credentials, ScrobbleError, ScrobbleResult, Service
 from .queue import ScrobbleQueue
 from .service import ScrobbleService
-from .settings import PLEX_SYNC, account_setting, configured_accounts
+from .settings import (
+    PLEX_SYNC,
+    SCROBBLE_RATINGS,
+    account_setting,
+    configured_accounts,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -43,7 +48,7 @@ class _AccountChange:
 
 class _Signals(QObject):
     completed = Signal(object, str)
-    progress = Signal(str)
+    progress = Signal(object)
 
 
 class _Work(QRunnable):
@@ -70,6 +75,7 @@ class _Work(QRunnable):
 class ScrobbleController(QObject):
     changed = Signal()
     message = Signal(str)
+    progress = Signal(object)
     authorizationRequested = Signal(str)
     finished = Signal(object)
 
@@ -138,7 +144,7 @@ class ScrobbleController(QObject):
             self._completed, Qt.ConnectionType.QueuedConnection
         )
         job.signals.progress.connect(
-            self.message.emit, Qt.ConnectionType.QueuedConnection
+            self.progress.emit, Qt.ConnectionType.QueuedConnection
         )
         self.changed.emit()
         self._pool.start(job)
@@ -280,11 +286,16 @@ class ScrobbleController(QObject):
             return False
         self._reserved = True
         self._cancelled.clear()
+        ratings = self._settings.get(SCROBBLE_RATINGS)
 
         def submit() -> ScrobbleResult:
             assert self._job is not None
             return self._service.run(
-                active, accounts, self._cancelled, self._job.signals.progress.emit
+                active,
+                accounts,
+                self._cancelled,
+                self._job.signals.progress.emit,
+                ratings=ratings,
             )
 
         self._start(submit)
@@ -367,5 +378,6 @@ def create_scrobbling(
         coordinator,
         ScrobbleQueue(Storage().host_config_file("iOpenPod", "scrobbles-v2.json")),
         credentials,
+        media=coordinator,
     )
     return service, ScrobbleController(service, credentials, settings, devices, parent)

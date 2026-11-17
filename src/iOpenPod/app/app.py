@@ -7,11 +7,12 @@ import sys
 from collections.abc import Callable
 from types import FrameType
 
-from PySide6.QtCore import QCoreApplication, QSocketNotifier, QTimer
+from PySide6.QtCore import QCoreApplication, QSocketNotifier, Qt, QTimer
 from PySide6.QtWidgets import QApplication
 
 from iOpenPod.app.app_links import AppLinks, register_scheme
 from iOpenPod.app.context import AppContext
+from iOpenPod.app.core.dates import refresh_host_timezone
 from iOpenPod.app.core.settings.definitions import ONBOARDING_COMPLETE
 from iOpenPod.app.core.settings.service import SettingsService
 from iOpenPod.app.playback.system_media import (
@@ -27,9 +28,7 @@ from iOpenPod.GUI.main_window import MainWindow
 from iOpenPod.GUI.presentation.application_icon import application_icon
 from iOpenPod.GUI.presentation.display import configure_display
 from iOpenPod.GUI.presentation.i18n.manager import I18nManager
-from iOpenPod.GUI.presentation.middle_mouse_scrolling import (
-    install_middle_mouse_scrolling,
-)
+from iOpenPod.GUI.presentation.scrolling import install_scrolling
 from storage.host_staging import cleanup_stale_staging
 
 logger = logging.getLogger(__name__)
@@ -48,7 +47,8 @@ def start_ui(link: str | None = None) -> int:
     _set_windows_app_user_model_id()
     configure_display()
     application = QApplication(sys.argv)
-    install_middle_mouse_scrolling(application)
+    _install_host_timezone_refresh(application)
+    install_scrolling(application)
     QCoreApplication.setApplicationName("iOpenPod")
     QCoreApplication.setOrganizationName("iOpenPod")
     from iOpenPod.app.core.version import get_version
@@ -108,6 +108,17 @@ def start_ui(link: str | None = None) -> int:
             shutdown()
         finally:
             restore_interrupt_handler()
+
+
+def _install_host_timezone_refresh(application: QApplication) -> None:
+    """Refresh Host calendar rules at startup and return from system settings."""
+    refresh_host_timezone()
+    application.applicationStateChanged.connect(_refresh_host_timezone_on_activation)
+
+
+def _refresh_host_timezone_on_activation(state: Qt.ApplicationState) -> None:
+    if state == Qt.ApplicationState.ApplicationActive:
+        refresh_host_timezone()
 
 
 def _start_interactive_session(

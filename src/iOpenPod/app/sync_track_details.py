@@ -1,4 +1,4 @@
-"""Stable Host-authored Track fields used by Sync comparison and provenance."""
+"""Host tag comparison and lossless, compatible retained Track provenance."""
 
 from __future__ import annotations
 
@@ -7,8 +7,17 @@ import json
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
+from iOpenPod.app.track_conversion import media_type_choices
+from iPodDB.library import MediaType, metadata_edit_issues
+
 if TYPE_CHECKING:
-    from iPodDB.library import Track
+    from device_registry import DeviceProfile
+    from iPodDB.library import Track, WriteIssue
+
+
+def sync_lyrics_enabled(profile: DeviceProfile, *, rockbox_metadata: bool) -> bool:
+    """Native display and optional Rockbox tagging can each require Sync lyrics."""
+    return profile.capabilities.audio.supports_lyrics or rockbox_metadata
 
 
 TRACK_TAG_FIELDS = (
@@ -68,19 +77,35 @@ METADATA_TAG_FIELDS = (
 )
 
 
-def track_tag_values(track: Track) -> tuple[object, ...]:
-    """The semantic projection for Sync comparison and committed tag digests."""
+def track_tag_values(
+    track: Track, *, include_lyrics: bool = True
+) -> tuple[object, ...]:
+    """Compare Host-owned tags; EQ is edited only in the iPod Library."""
+    excluded = {"equalizer"} if include_lyrics else {"equalizer", "lyrics"}
     return (
         *(getattr(track, name) for name in TRACK_TAG_FIELDS),
-        *(getattr(track.metadata, name) for name in METADATA_TAG_FIELDS),
+        *(
+            getattr(track.metadata, name)
+            for name in METADATA_TAG_FIELDS
+            if name not in excluded
+        ),
     )
 
 
-def apply_track_tags(target: Track, source: Track) -> Track:
+def apply_track_tags(
+    target: Track, source: Track, *, include_lyrics: bool = True
+) -> Track:
     """Apply Host tags while retaining identity, media facts and playback state."""
     # Scanned chapters are not removal intent. Keep their existing comparison and
     # digest representation, but only captured media preparation or explicit
     # Library edits may replace the retained Track's chapter evidence.
+    # EQ has no Host tag mapping or clear intent; only explicit Library edits
+    # author its value, including choosing Use iPod setting.
+    excluded = (
+        ("chapters", "equalizer")
+        if include_lyrics
+        else ("chapters", "equalizer", "lyrics")
+    )
     return replace(
         target,
         **{name: getattr(source, name) for name in TRACK_TAG_FIELDS},
@@ -89,16 +114,38 @@ def apply_track_tags(target: Track, source: Track) -> Track:
             **{
                 name: getattr(source.metadata, name)
                 for name in METADATA_TAG_FIELDS
-                if name != "chapters"
+                if name not in excluded
             },
         ),
     )
 
 
+def track_tag_edit_issues(before: Track, after: Track) -> tuple[WriteIssue, ...]:
+    """Validate Sync tags and compatible retained-media classification together."""
+    classification = after.media_types
+    if (
+        type(classification) is tuple
+        and len(classification) == 1
+        and type(classification[0]) is MediaType
+        and classification[0] in media_type_choices(before)
+    ):
+        # Classification belongs to the Application Layer (ADR-0088), not the
+        # ordinary metadata editor. Approve only a compatible classification;
+        # validate every other changed field against the actual retained Track.
+        before = replace(before, media_types=classification)
+    return metadata_edit_issues(before, after)
+
+
 def track_tag_sha256(track: Track) -> str:
     """Fingerprint the semantic iPod Track fields recorded at verified Sync."""
 
-    values = track_tag_values(track)
+    # Keep the persisted v1 digest byte-for-byte compatible, including retained
+    # EQ. This fingerprints committed iPod state, unlike the Host-owned comparison
+    # above. Removing a field here would invalidate existing Sync baselines.
+    values = (
+        *(getattr(track, name) for name in TRACK_TAG_FIELDS),
+        *(getattr(track.metadata, name) for name in METADATA_TAG_FIELDS),
+    )
     chapters = tuple(
         (chapter.title, chapter.start_ms) for chapter in track.metadata.chapters
     )
@@ -111,4 +158,9 @@ def track_tag_sha256(track: Track) -> str:
     return hashlib.sha256(b"iopenpod.sync.track-tags.v1\0" + payload).hexdigest()
 
 
-__all__ = ["apply_track_tags", "track_tag_sha256", "track_tag_values"]
+__all__ = [
+    "apply_track_tags",
+    "track_tag_edit_issues",
+    "track_tag_sha256",
+    "track_tag_values",
+]

@@ -2,10 +2,10 @@
 
 The Application Layer's `media.tags` adapter interprets native Mutagen values and
 FFprobe metadata for Host Media Scan, music import, and Sync enrichment. Scanning
-is read-only. Normalized fields survive Host Media Scan Cache v14; versions 9
-through 13 migrate while reusing unchanged covered media. Pre-v12 no-cover records
-are reinspected once because they did not distinguish absent artwork from an
-unreadable embedded image. Tags describe Library classification, not codec
+is read-only. Normalized fields survive Host Media Scan Cache v17. Older Track
+metadata is reinspected once to recover previously unread native ratings.
+Cached Acoustic Fingerprints, Photos, and folder artwork remain reusable when
+their file facts match. Tags describe Library classification, not codec
 compatibility. See [ADR-0133](adr/0133-recover-evidenced-artwork-without-clearing-unavailable-covers.md).
 Pre-v14 Playlist records are reparsed once to restore network filesystem
 references and valid POSIX names, including album folders ending in a period;
@@ -26,7 +26,7 @@ see [ADR-0083](adr/0083-tolerate-host-native-media-variants.md) and
 | Podcast category, feed URL, GUID, keywords | ID3 `TCAT`, `WFED`, `TKWD`; MP4 `catg`, `purl`, `egid`, `keyw`; explicit named GUID fields |
 | Unsynchronized lyrics and presence | ID3 `USLT`, MP4 `©lyr`, `LYRICS`, `UNSYNCEDLYRICS`, `UNSYNCED LYRICS`, ASF `WM/Lyrics`, FFprobe language-qualified lyrics |
 | Content advisory | MP4 `rtng`, `ITUNESADVISORY`, `CONTENTRATING`; separate from star ratings |
-| Rating | ID3 POPM, using the Original iOpenPod's five-star thresholds |
+| Rating | ID3 POPM thresholds; MP4 freeform `RATING`; Vorbis/APE `RATING`; ASF `WM/SharedUserRating` |
 | Normalization gain | Track ReplayGain; valid ten-word `iTunNORM` fallback |
 | Gapless Album, purchase account, purchaser name | MP4 `pgap`, `apID`, `ownr`, and editor aliases |
 
@@ -124,3 +124,24 @@ Tests cover native MP3, WAVE, AIFF, FLAC, and MP4 fixtures; APE/ASF wrappers;
 video-only MP4 and Matroska; cache reload/invalidation; malformed fields; and real
 MP3/FLAC Sync publication. The initial MP3 reproducer failed with `PCST=1` appearing
 as Music, matching [Original iOpenPod issue 222](https://github.com/TheRealSavi/iOpenPod/issues/222).
+
+## Rating reads and Back Sync
+
+Numeric native ratings accept 1–5 stars and 0–100 percentages. Values above 100
+use the original POPM thresholds. Positive values round to at least one whole
+star and clamp at five; nonpositive values become zero. Nonnumeric and nonfinite
+values are ignored. ID3 POPM keeps its existing mapping.
+MP4 content advisory remains separate from star ratings.
+
+Settings > Sync > Sync star ratings to Host files is off by default. With it on,
+selected paired Tracks reconcile changed ratings against separate saved Host and
+iPod baselines. Concurrent differing changes use Host wins (default), iPod wins,
+or Average. A reviewed Sync first records any missing baselines for an established
+pair without changing its ratings. Failed Host writes can retry a recorded target
+once the iPod has committed it and the Host rating still matches the reviewed
+value. Incomplete Host metadata stays ineligible for reconciliation. Deliberate
+clears propagate as zero. Fractional iPod ratings round to whole stars in Host
+tags while the iPod retains its precise value. Supported writes are MP3, MP4, FLAC, Ogg Vorbis and Opus;
+other native formats remain readable. Back Sync leaves multiply linked files
+intact. Exported ID3/MP4 copies receive their current
+Library rating independently of Host Back Sync.

@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-import time
 from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from whenever import Instant
+
 from iOpenPod.app.podcasts.identity import normalize_feed_url, track_podcast_identity
 from iOpenPod.app.podcasts.models import (
+    ALL_EPISODE_SLOTS,
     PodcastClearMethod,
     PodcastEpisode,
     PodcastFillMode,
@@ -68,9 +70,7 @@ def plan_podcast_sync(
         return PodcastSyncPlan(
             issues=(_issue("read_only", "Podcast state is read-only."),)
         )
-    timestamp = int(time.time()) if now is None else now
-    if timestamp < 0:
-        raise ValueError("Podcast Sync time must not be negative")
+    timestamp = Instant.now().timestamp() if now is None else now
     subscriptions = {
         item.subscription_id: item for item in request.snapshot.subscriptions
     }
@@ -314,12 +314,15 @@ def _managed_plan(
                 else _publication_order(episode) > floor
             )
         ]
-    vacancies = max(0, settings.episode_slots - len(current))
+    unlimited = settings.episode_slots == ALL_EPISODE_SLOTS
+    vacancies = (
+        len(candidates) if unlimited else max(0, settings.episode_slots - len(current))
+    )
     # Manual over-capacity libraries may swap one-for-one, but cannot grow from
     # automatic filling. Remove can drain excess; reducing the target never does.
     replacement_limit = (
         len(clearing)
-        if replacing
+        if replacing or unlimited
         else max(0, settings.episode_slots - len(current) + len(clearing)) - vacancies
     )
     pairs = (

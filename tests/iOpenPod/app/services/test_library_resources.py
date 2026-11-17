@@ -10,6 +10,7 @@ from threading import Event
 import pytest
 from tests.iPodDB.library.test_media_lifecycle import prepared_media
 from tests.iPodDB.library.test_write_artwork import BLUE, TARGET, with_shared_artwork
+from whenever import Instant, patch_current_time
 
 from iOpenPod.app.library_write import (
     LibraryPreparationRequest,
@@ -63,7 +64,12 @@ class Device:
         return active
 
     def prepare(
-        self, snapshot: LibrarySnapshot, *, cover: bool = False, delete: bool = False
+        self,
+        snapshot: LibrarySnapshot,
+        *,
+        cover: bool = False,
+        delete: bool = False,
+        lyrics_updates: tuple[int, ...] = (),
     ) -> LibraryReview:
         return self.coordinator.prepare_library(
             LibraryPreparationRequest(
@@ -73,6 +79,7 @@ class Device:
                 1,
                 artwork=(BLUE,) if cover else (),
                 delete_omissions=delete,
+                lyrics_updates=lyrics_updates,
             ),
             lambda _: None,
             Event(),
@@ -226,10 +233,9 @@ def device(tmp_path: Path) -> Iterator[Device]:
 
 
 def test_podcast_playlist_dates_use_one_captured_application_time(
-    device: Device, monkeypatch: pytest.MonkeyPatch
+    device: Device,
 ) -> None:
     written_at = 1_800_000_000
-    monkeypatch.setattr(library_resources, "time", lambda: written_at)
     desired = replace(
         device.active.library,
         tracks=tuple(
@@ -237,7 +243,8 @@ def test_podcast_playlist_dates_use_one_captured_application_time(
             for track in device.active.library.tracks
         ),
     )
-    review = device.prepare(desired)
+    with patch_current_time(Instant.from_timestamp(written_at), keep_ticking=False):
+        review = device.prepare(desired)
     assert review.result.prepared is not None, review.result.issues
     assert review.resources is not None
     assert review.resources.playlist_timestamp == written_at
@@ -895,8 +902,12 @@ def test_unchanged_sync_review_rechecks_source_and_captured_dependencies(
     )
     path.write_bytes(b"external change after review")
     saved = device.save(review)
-    assert saved.active is None
-    assert saved.issues[0].code == "save.source_unavailable"
+    if changed_database:
+        assert saved.active is None
+        assert saved.issues[0].code == "save.source_unavailable"
+    else:
+        assert saved.active is not None, saved.issues
+        assert not saved.issues
     assert path.read_bytes() == b"external change after review"
     assert not saved.recovery_path
 

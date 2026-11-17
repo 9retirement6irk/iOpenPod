@@ -62,6 +62,7 @@ class LibraryPreparationRequest:
     )
     media: tuple[LibraryMediaSource, ...] = field(default=(), kw_only=True)
     replace_media: tuple[int, ...] = field(default=(), kw_only=True)
+    lyrics_updates: tuple[int, ...] = field(default=(), kw_only=True)
     rockbox_media: tuple[RockboxMediaUpdate, ...] = field(default=(), kw_only=True)
     rockbox_metadata: bool = field(default=False, kw_only=True)
     photos: tuple[PreparedPhoto, ...] = field(default=(), kw_only=True)
@@ -71,6 +72,7 @@ class LibraryPreparationRequest:
     # Sync builds native relationships for every eligible music Track. Ordinary
     # metadata saves preserve existing Genius state instead of regenerating it.
     regenerate_genius: bool = field(default=False, kw_only=True)
+    compute_missing_bpm: bool = field(default=False, kw_only=True)
     # Runtime control belongs to this Sync; it never changes persisted settings.
     genius_analysis_skip: threading.Event | None = field(
         default=None, compare=False, repr=False, kw_only=True

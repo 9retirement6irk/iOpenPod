@@ -45,6 +45,7 @@ from iPodDB.library._native_values import (
     volume_adjustment_to_native,
 )
 from iPodDB.library._projection import unknown_media_bits
+from iPodDB.library._sidecar_projection import PlaybackDateUpdate
 from iPodDB.library._track_header_expansion import (
     creation_header_length,
     extension_values,
@@ -336,6 +337,7 @@ def edit_track(
     database_version: int | None = None,
     required_fields: Mapping[str, ChunkFieldValue] | None = None,
     timed_artwork: TimedArtworkAsset | None = None,
+    playback_dates: PlaybackDateUpdate | None = None,
 ) -> ParsedChunk[MhitHeader]:
     if chunk is None:
         length = creation_header_length(database_version)
@@ -384,6 +386,11 @@ def edit_track(
             values[native] = unix_to_mac(
                 value, timezone_offset, utc=attr == "release_date"
             )
+    if playback_dates is not None:
+        for date_field in ("last_played", "last_skipped"):
+            raw = getattr(playback_dates, date_field)
+            if raw is not None:
+                values[date_field] = raw
     if old is None or new.media_types != old.media_types:
         values["media_type"] = encode_media_types(
             new.media_types,
@@ -478,8 +485,8 @@ def edit_track(
                     field="metadata." + attr,
                 )
             )
-    if meta.lyrics != prior.lyrics:
-        values["lyrics_flag"] = int(bool(meta.lyrics))
+    if lyrics is not None or meta.lyrics != prior.lyrics:
+        values["lyrics_flag"] = int(meta.has_lyrics)
     indicators = bytearray(header.sort_mhod_indicators)
     if (
         _SORT_INDICATORS.offset

@@ -22,6 +22,7 @@ from iOpenPod.app.library_export import (
 
 if TYPE_CHECKING:
     from iOpenPod.app.device_controller import DeviceController
+    from iOpenPod.app.host_media_folders import HostMediaFolder
     from iOpenPod.app.services.device_coordinator import DeviceCoordinator
     from iPodDB.library import Photo, Track
     from storage import HostPath
@@ -46,8 +47,10 @@ class _ExportWork(QRunnable):
         playlist_name: str | None = None,
         file_type: PlaylistFileType = PlaylistFileType.M3U8,
         mode: PlaylistExportMode = PlaylistExportMode.COPY_TRACKS,
+        host_folders: tuple[HostMediaFolder, ...] = (),
         photos: tuple[Photo, ...] = (),
         photo_album_name: str | None = None,
+        lyrics_updates: frozenset[int] = frozenset(),
     ) -> None:
         super().__init__()
         self.token = token
@@ -55,9 +58,11 @@ class _ExportWork(QRunnable):
         self.photo_exporter = photo_exporter
         self.directory = directory
         self.tracks = tracks
+        self.lyrics_updates = lyrics_updates
         self.playlist_name = playlist_name
         self.file_type = file_type
         self.mode = mode
+        self.host_folders = host_folders
         self.photos = photos
         self.photo_album_name = photo_album_name
         self.cancel_requested = Event()
@@ -95,6 +100,8 @@ class _ExportWork(QRunnable):
                     self.directory,
                     self.file_type,
                     self.mode,
+                    host_folders=self.host_folders,
+                    lyrics_updates=self.lyrics_updates,
                     checkpoint=checkpoint,
                     progress=progress,
                 )
@@ -102,6 +109,7 @@ class _ExportWork(QRunnable):
                 result = self.exporter.export_tracks(
                     self.tracks,
                     self.directory,
+                    lyrics_updates=self.lyrics_updates,
                     checkpoint=checkpoint,
                     progress=progress,
                 )
@@ -147,7 +155,13 @@ class LibraryExportController(QObject):
             not self._closed and not self.busy and self._devices.active_ipod is not None
         )
 
-    def start_tracks(self, tracks: tuple[Track, ...], directory: HostPath) -> bool:
+    def start_tracks(
+        self,
+        tracks: tuple[Track, ...],
+        directory: HostPath,
+        *,
+        lyrics_updates: frozenset[int] = frozenset(),
+    ) -> bool:
         return self._start(
             _ExportWork(
                 0,
@@ -155,6 +169,7 @@ class LibraryExportController(QObject):
                 self._photo_exporter,
                 directory,
                 tracks,
+                lyrics_updates=lyrics_updates,
             )
         )
 
@@ -165,6 +180,9 @@ class LibraryExportController(QObject):
         directory: HostPath,
         file_type: PlaylistFileType,
         mode: PlaylistExportMode,
+        *,
+        host_folders: tuple[HostMediaFolder, ...] = (),
+        lyrics_updates: frozenset[int] = frozenset(),
     ) -> bool:
         return self._start(
             _ExportWork(
@@ -176,6 +194,8 @@ class LibraryExportController(QObject):
                 playlist_name=name,
                 file_type=file_type,
                 mode=mode,
+                host_folders=host_folders,
+                lyrics_updates=lyrics_updates,
             )
         )
 

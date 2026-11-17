@@ -30,6 +30,28 @@ from iPodDB.library import ContentAdvisory
 
 
 @pytest.mark.parametrize(
+    "publication,expected",
+    [("Wed, 31 Dec 1969 23:59:59 GMT", -1), ("not a date", 0), ("", 0)],
+)
+def test_feed_dates_preserve_signed_seconds_and_tolerate_unknown_metadata(
+    monkeypatch: pytest.MonkeyPatch, publication: str, expected: int
+) -> None:
+    payload = f"""<rss version="2.0"><channel><title>Show</title><item>
+    <guid>episode</guid><title>Episode</title><pubDate>{publication}</pubDate>
+    <enclosure url="https://cdn.example.test/episode.mp3" type="audio/mpeg" />
+    </item></channel></rss>""".encode()
+
+    def request_bytes(url: str, **kwargs: object) -> tuple[bytes, str]:
+        return payload, url
+
+    monkeypatch.setattr(feed_client, "request_podcast_bytes", request_bytes)
+    episode = (
+        FeedparserPodcastClient().fetch("https://publisher.example/feed").episodes[0]
+    )
+    assert episode.published_at == expected
+
+
+@pytest.mark.parametrize(
     "feed_value,episode_value,expected",
     (
         ("true", "", ContentAdvisory.EXPLICIT),
@@ -121,6 +143,7 @@ def test_directory_retains_text_and_feed_url_without_promotional_artwork(
         limit: int,
         timeout_seconds: int,
         accept: str,
+        **_kwargs: object,
     ) -> tuple[bytes, str]:
         del limit, timeout_seconds
         assert url.startswith("https://itunes.apple.com/search?")
@@ -176,6 +199,7 @@ def test_feedparser_client_normalizes_typed_podcast_metadata(
         limit: int,
         timeout_seconds: int,
         accept: str,
+        **_kwargs: object,
     ) -> tuple[bytes, str]:
         del url, limit, timeout_seconds, accept
         return payload, "https://example.test/feed"
@@ -197,11 +221,19 @@ def test_feedparser_client_normalizes_typed_podcast_metadata(
     assert episode.enclosure_url == "https://cdn.example.test/one.mp3"
 
 
+@pytest.mark.parametrize("palette", (False, True))
+@pytest.mark.filterwarnings("error:Palette images with Transparency:UserWarning")
 def test_artwork_loader_returns_bounded_square_rgb_pixels(
     monkeypatch: pytest.MonkeyPatch,
+    palette: bool,
 ) -> None:
     payload = BytesIO()
-    Image.new("RGBA", (240, 120), (22, 88, 144, 180)).save(payload, format="PNG")
+    source = Image.new("RGBA", (240, 120), (22, 88, 144, 180))
+    if palette:
+        source = Image.new("P", source.size)
+        source.putpalette([22, 88, 144])
+        source.info["transparency"] = bytes([180])
+    source.save(payload, format="PNG")
 
     def request_bytes(
         url: str,
@@ -210,6 +242,7 @@ def test_artwork_loader_returns_bounded_square_rgb_pixels(
         timeout_seconds: int,
         accept: str,
         checkpoint: Callable[[], None] | None = None,
+        **_kwargs: object,
     ) -> tuple[bytes, str]:
         del url, limit, timeout_seconds, accept, checkpoint
         return payload.getvalue(), "https://cdn.example.test/cover.png"
@@ -225,6 +258,7 @@ def test_artwork_loader_returns_bounded_square_rgb_pixels(
     assert image.width == 96
     assert image.height == 96
     assert len(image.rgb888) == 96 * 96 * 3
+    assert image.rgb888[:3] == bytes([22, 88, 144])
 
 
 def test_chapter_images_keep_their_full_aspect_ratio(
@@ -253,11 +287,9 @@ class _TrickleResponse:
         self.content = BytesIO(content)
         self.after_read = after_read
         self.headers: dict[str, str] = {}
+        self.url = "https://example.test/cover.png"
         self.consumed = 0
         self.elapsed = 0.0
-
-    def geturl(self) -> str:
-        return "https://example.test/cover.png"
 
     def monotonic(self) -> float:
         return self.elapsed
@@ -289,8 +321,10 @@ class _TrickleResponse:
 class _OpenResponse:
     response: _TrickleResponse
 
-    def __call__(self, request: Request, *, timeout: int) -> _TrickleResponse:
-        assert request.full_url == self.response.geturl()
+    def __call__(
+        self, request: Request, *, timeout: int, **_kwargs: object
+    ) -> _TrickleResponse:
+        assert request.full_url == self.response.url
         assert timeout > 0
         return self.response
 
@@ -306,7 +340,7 @@ def test_sync_cover_cancellation_interrupts_response_before_it_is_complete(
 ) -> None:
     cancelled = Event()
     response = _TrickleResponse(_cover_bytes(), cancelled.set)
-    monkeypatch.setattr(feed_client, "urlopen", _OpenResponse(response))
+    monkeypatch.setattr(feed_client, "open_podcast_request", _OpenResponse(response))
 
     def checkpoint() -> None:
         if cancelled.is_set():
@@ -320,7 +354,7 @@ def test_sync_cover_cancellation_interrupts_response_before_it_is_complete(
                     "https://example.test/feed",
                     "Show",
                     SubscriptionSource.USER,
-                    artwork_url=response.geturl(),
+                    artwork_url=response.url,
                 ),
             ),
             128,
@@ -336,14 +370,14 @@ def test_trickling_cover_response_stops_at_overall_deadline(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     response = _TrickleResponse(_cover_bytes())
-    monkeypatch.setattr(feed_client, "urlopen", _OpenResponse(response))
+    monkeypatch.setattr(feed_client, "open_podcast_request", _OpenResponse(response))
     monkeypatch.setattr(
         "iOpenPod.app.podcasts.feed_client.time.monotonic", response.monotonic
     )
 
     with pytest.raises(PodcastFeedError, match="deadline"):
         HttpPodcastArtworkLoader().load_artwork(
-            PodcastArtworkRequest(response.geturl(), 128)
+            PodcastArtworkRequest(response.url, 128)
         )
 
     assert 0 < response.consumed < len(_cover_bytes())
@@ -354,12 +388,12 @@ def test_cover_response_limit_applies_without_content_length(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     response = _TrickleResponse(b"a" * 100)
-    monkeypatch.setattr(feed_client, "urlopen", _OpenResponse(response))
+    monkeypatch.setattr(feed_client, "open_podcast_request", _OpenResponse(response))
     monkeypatch.setattr(feed_client, "_ARTWORK_LIMIT", 16)
 
     with pytest.raises(PodcastFeedError, match="larger"):
         HttpPodcastArtworkLoader().load_artwork(
-            PodcastArtworkRequest(response.geturl(), 128)
+            PodcastArtworkRequest(response.url, 128)
         )
 
     assert response.consumed == 17

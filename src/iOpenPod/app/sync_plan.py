@@ -12,6 +12,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from iOpenPod.app.back_sync import review_rating
 from iOpenPod.app.host_media_library import (
     HostMediaFileKind,
 )
@@ -20,6 +21,7 @@ from iOpenPod.app.sync_track_details import track_tag_sha256, track_tag_values
 from iPodDB.library import MediaType, PhotoRepresentationKind
 
 if TYPE_CHECKING:
+    from iOpenPod.app.back_sync import RatingDecision
     from iOpenPod.app.host_media_library import HostMediaLibrary
     from iOpenPod.app.library_sync_helper import (
         IPodImageFingerprint,
@@ -56,6 +58,7 @@ class SyncPlanBasis(StrEnum):
     HOST_FACTS_CHANGED = "host_facts_changed"
     HOST_FACTS_MATCH = "host_facts_match"
     TRACK_DETAILS_CHANGED = "track_details_changed"
+    RATING_BACK_SYNC = "rating_back_sync"
     AUDIO_PAYLOAD_CHANGED = "audio_payload_changed"
     MEDIA_SOURCE_CHANGED = "media_source_changed"
     TRACK_DETAILS_MATCH = "track_details_match"
@@ -88,8 +91,14 @@ class SyncPlanItem:
     stream_selection: MediaStreamSelection | None = None
     applied_stream_selection_sha256: str | None = None
     stream_selection_changed: bool = False
+    rating: RatingDecision | None = None
 
     def __post_init__(self) -> None:
+        if self.rating is not None and (
+            self.action is not SyncPlanAction.UPDATE
+            or self.media_kind is not SyncPlanMediaKind.TRACK
+        ):
+            raise ValueError("Rating decisions require a paired Track Update")
         if self.stream_selection is not None and (
             self.media_kind is not SyncPlanMediaKind.TRACK
             or self.action
@@ -148,7 +157,9 @@ class SyncPlan:
     """One immutable, review-only account of a completed scan comparison."""
 
     items: tuple[SyncPlanItem, ...]
+    rating_conflict_policy: str | None = field(default=None, kw_only=True)
     file_tag_policy: str | None = field(default=None, kw_only=True)
+    include_lyrics: bool = field(default=True, kw_only=True)
     duplicate_groups: tuple[SyncDuplicateGroup, ...] = field(default=(), kw_only=True)
     duplicate_resolutions: tuple[SyncDuplicateResolution, ...] = field(
         default=(), kw_only=True
@@ -188,6 +199,7 @@ class _Candidate:
     track: Track | None = None
     artwork_sha256: str | None = None
     track_details_refreshed: bool = False
+    metadata_complete: bool = True
     artwork_available: bool = True
     has_video: bool | None = None
     # An iPod Track deliberately not fingerprinted for a Connected-only Sync.
@@ -302,6 +314,8 @@ class SyncDuplicateGroup:
         resolution: SyncDuplicateResolution,
         *,
         file_tag_policy: str | None,
+        rating_conflict_policy: str | None = None,
+        include_lyrics: bool = True,
     ) -> tuple[SyncPlanItem, ...]:
         """Validate choices and derive items from this group's captured evidence."""
 
@@ -325,7 +339,15 @@ class SyncDuplicateGroup:
                 raise ValueError(
                     "The duplicate association has no matching scan evidence"
                 )
-            items.append(_explicit_paired_item(host, ipod, file_tag_policy))
+            items.append(
+                _explicit_paired_item(
+                    host,
+                    ipod,
+                    file_tag_policy,
+                    rating_conflict_policy,
+                    include_lyrics=include_lyrics,
+                )
+            )
             paired_hosts.add(path)
             paired_ipods.add(pair.ipod_id)
         added = {host_path_identity(path) for path in resolution.added_host_paths}
@@ -356,6 +378,8 @@ def prepare_sync_plan(
     ipod_library: LibrarySnapshot,
     *,
     file_tag_policy: str | None = None,
+    rating_conflict_policy: str | None = None,
+    include_lyrics: bool = True,
 ) -> SyncPlan:
     """Correlate completed Host and iPod scans without mutating either source.
 
@@ -365,6 +389,8 @@ def prepare_sync_plan(
     destructive action.
     """
 
+    if not ipod.ratings_available:
+        rating_conflict_policy = None
     host_candidates = _host_candidates(host)
     ipod_candidates = _ipod_candidates(ipod, ipod_library)
     host_remaining = set(range(len(host_candidates)))
@@ -408,7 +434,11 @@ def prepare_sync_plan(
 
     items = [
         _paired_item(
-            host_candidates[host_index], ipod_candidates[ipod_index], file_tag_policy
+            host_candidates[host_index],
+            ipod_candidates[ipod_index],
+            file_tag_policy,
+            rating_conflict_policy=rating_conflict_policy,
+            include_lyrics=include_lyrics,
         )
         for host_index, ipod_index in pairs
     ]
@@ -427,7 +457,9 @@ def prepare_sync_plan(
     items.extend(attention)
     return SyncPlan(
         tuple(sorted(items, key=_item_sort_key)),
+        rating_conflict_policy=rating_conflict_policy,
         file_tag_policy=file_tag_policy,
+        include_lyrics=include_lyrics,
         duplicate_groups=_duplicate_groups(
             host_candidates, ipod_candidates, pairs, attention, ipod_library
         ),
@@ -506,7 +538,9 @@ def select_sync_plan(
 
     return SyncPlan(
         tuple(sorted(items, key=_item_sort_key)),
+        rating_conflict_policy=comparison.rating_conflict_policy,
         file_tag_policy=comparison.file_tag_policy,
+        include_lyrics=comparison.include_lyrics,
         duplicate_groups=comparison.duplicate_groups,
         duplicate_resolutions=comparison.duplicate_resolutions,
     )
@@ -523,6 +557,12 @@ def with_stream_selection(
     }:
         raise ValueError("Stream choices require a safely selected Host Track")
     changed = selection_digest(selection) != item.applied_stream_selection_sha256
+    if (
+        not changed
+        and item.stream_selection == selection
+        and not item.stream_selection_changed
+    ):
+        return item
     replacement = changed and item.action is not SyncPlanAction.ADD
     if (
         not replacement
@@ -584,7 +624,12 @@ def resolve_sync_duplicates(
             for pair in group.established_pairs
         )
         replacements.extend(
-            group.resolved_items(resolution, file_tag_policy=comparison.file_tag_policy)
+            group.resolved_items(
+                resolution,
+                file_tag_policy=comparison.file_tag_policy,
+                rating_conflict_policy=comparison.rating_conflict_policy,
+                include_lyrics=comparison.include_lyrics,
+            )
         )
     items: list[SyncPlanItem] = []
     for item in comparison.items:
@@ -605,7 +650,9 @@ def resolve_sync_duplicates(
     items.extend(replacements)
     return SyncPlan(
         tuple(sorted(items, key=_item_sort_key)),
+        rating_conflict_policy=comparison.rating_conflict_policy,
         file_tag_policy=comparison.file_tag_policy,
+        include_lyrics=comparison.include_lyrics,
         duplicate_groups=comparison.duplicate_groups,
         duplicate_resolutions=resolutions,
     )
@@ -625,15 +672,27 @@ def _can_pair_duplicate(host: _Candidate, ipod: _Candidate) -> bool:
 
 
 def _explicit_paired_item(
-    host: _Candidate, ipod: _Candidate, file_tag_policy: str | None
+    host: _Candidate,
+    ipod: _Candidate,
+    file_tag_policy: str | None,
+    rating_conflict_policy: str | None,
+    *,
+    include_lyrics: bool = True,
 ) -> SyncPlanItem:
-    item = _paired_item(host, ipod, file_tag_policy)
+    item = _paired_item(
+        host,
+        ipod,
+        file_tag_policy,
+        rating_conflict_policy=rating_conflict_policy,
+        include_lyrics=include_lyrics,
+    )
     if item.action is SyncPlanAction.ATTENTION:
         raise ValueError("Conflicting source facts need a fresh scan before pairing")
     metadata_changed = (
         host.track is not None
         and ipod.track is not None
-        and track_tag_values(host.track) != track_tag_values(ipod.track)
+        and track_tag_values(host.track, include_lyrics=include_lyrics)
+        != track_tag_values(ipod.track, include_lyrics=include_lyrics)
     )
     return replace(
         item,
@@ -1012,7 +1071,12 @@ def _pair_unique_groups[Key](
 
 
 def _paired_item(
-    host: _Candidate, ipod: _Candidate, file_tag_policy: str | None
+    host: _Candidate,
+    ipod: _Candidate,
+    file_tag_policy: str | None,
+    *,
+    rating_conflict_policy: str | None = None,
+    include_lyrics: bool = True,
 ) -> SyncPlanItem:
     sync = ipod.sync
     if sync is None:
@@ -1073,31 +1137,58 @@ def _paired_item(
         metadata_changed = False
         if host.track is not None and ipod.track is not None:
             if sync.host_tag_sha256 is not None and sync.ipod_tag_sha256 is not None:
+                host_tags_changed = track_tag_sha256(host.track) != sync.host_tag_sha256
                 metadata_changed = (
-                    track_tag_sha256(host.track) != sync.host_tag_sha256
+                    host_tags_changed
                     or track_tag_sha256(ipod.track) != sync.ipod_tag_sha256
-                ) and track_tag_values(host.track) != track_tag_values(ipod.track)
-            elif size_changed or modified_changed or host.track_details_refreshed:
-                metadata_changed = track_tag_values(host.track) != track_tag_values(
-                    ipod.track
+                ) and track_tag_values(
+                    host.track, include_lyrics=include_lyrics
+                ) != track_tag_values(ipod.track, include_lyrics=include_lyrics)
+                # Native lyrics flags and Rockbox's file-tag policy can carry
+                # lyrics that the binary projection does not load. A changed
+                # Host baseline must be able to clear those file tags.
+                metadata_changed |= (
+                    include_lyrics
+                    and host_tags_changed
+                    and (ipod.track.metadata.has_lyrics or file_tag_policy is not None)
                 )
+            elif size_changed or modified_changed or host.track_details_refreshed:
+                metadata_changed = track_tag_values(
+                    host.track, include_lyrics=include_lyrics
+                ) != track_tag_values(ipod.track, include_lyrics=include_lyrics)
             elif sync.ipod_tag_sha256 is not None:
-                metadata_changed = track_tag_sha256(ipod.track) != sync.ipod_tag_sha256
+                metadata_changed = track_tag_sha256(
+                    ipod.track
+                ) != sync.ipod_tag_sha256 and track_tag_values(
+                    host.track, include_lyrics=include_lyrics
+                ) != track_tag_values(ipod.track, include_lyrics=include_lyrics)
             elif sync.ipod_baseline_pending:
                 # A migrated helper has Sync provenance but no post-commit iPod
                 # tag baseline. Compare the two current semantic projections
                 # rather than accepting the current iPod value as that baseline.
-                metadata_changed = track_tag_values(host.track) != track_tag_values(
-                    ipod.track
-                )
+                metadata_changed = track_tag_values(
+                    host.track, include_lyrics=include_lyrics
+                ) != track_tag_values(ipod.track, include_lyrics=include_lyrics)
         artwork_changed = _artwork_changed(
             host, ipod, facts_changed=size_changed or modified_changed
         )
         file_tags_changed = (
             file_tag_policy is not None and sync.file_tag_policy != file_tag_policy
         )
+        rating = (
+            review_rating(
+                host.track.rating, ipod.track.rating, sync, rating_conflict_policy
+            )
+            if rating_conflict_policy is not None
+            and same_prior_path
+            and host.metadata_complete
+            and host.track is not None
+            and ipod.track is not None
+            else None
+        )
         if (
-            audio_payload_changed
+            rating is not None
+            or audio_payload_changed
             or metadata_changed
             or artwork_changed
             or file_tags_changed
@@ -1110,6 +1201,8 @@ def _paired_item(
                     else SyncPlanBasis.AUDIO_PAYLOAD_CHANGED
                     if audio_payload_changed
                     else SyncPlanBasis.TRACK_DETAILS_CHANGED
+                    if metadata_changed or artwork_changed or file_tags_changed
+                    else SyncPlanBasis.RATING_BACK_SYNC
                 ),
                 host,
                 ipod,
@@ -1119,6 +1212,7 @@ def _paired_item(
                 artwork_changed=artwork_changed,
                 audio_payload_changed=audio_payload_changed,
                 file_tags_changed=file_tags_changed,
+                rating=rating,
             )
         return _item(
             SyncPlanAction.UNCHANGED,
@@ -1195,6 +1289,7 @@ def _item(
     artwork_changed: bool = False,
     audio_payload_changed: bool = False,
     file_tags_changed: bool = False,
+    rating: RatingDecision | None = None,
 ) -> SyncPlanItem:
     return SyncPlanItem(
         action=action,
@@ -1211,6 +1306,7 @@ def _item(
         artwork_changed=artwork_changed,
         audio_payload_changed=audio_payload_changed,
         file_tags_changed=file_tags_changed,
+        rating=rating,
         applied_stream_selection_sha256=(
             ipod.sync.stream_selection_sha256 if ipod.sync is not None else None
         ),
@@ -1310,6 +1406,7 @@ def _host_candidates(library: HostMediaLibrary) -> tuple[_Candidate, ...]:
                     modified_ns=source.modified_ns,
                     track=track,
                     has_video=source.kind is HostMediaFileKind.VIDEO,
+                    metadata_complete=source.metadata_complete,
                     track_details_refreshed=host_path_identity(path) in rechecked_paths,
                     artwork_available=identity not in unavailable_artwork_paths,
                     artwork_sha256=(

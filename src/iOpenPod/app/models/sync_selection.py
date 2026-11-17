@@ -33,11 +33,16 @@ if TYPE_CHECKING:
     from iOpenPod.app.sync_plan import SyncDuplicateGroup
 
 
+_MAX_INCREMENTAL_TRACK_UPDATES = 64
+
+
 class SyncSelection(QObject):
     """Own desired iPod membership without mutating a Library Snapshot or plan."""
 
     hostSelectionChanged = Signal()
     playlistsChanged = Signal()
+    # Tuple of affected Track IDs, or None when a full refresh is cheaper.
+    trackSelectionChanged = Signal(object)
     removalSelectionChanged = Signal()
     reviewSelectionChanged = Signal()
     changed = Signal()
@@ -55,6 +60,7 @@ class SyncSelection(QObject):
         self._duplicate_resolutions: tuple[SyncDuplicateResolution, ...] = ()
         self._resolved_comparison: SyncPlan | None = None
         self._track_paths: dict[int, str] = {}
+        self._track_ids_by_path: dict[str, list[int]] = {}
         self._stream_selections: dict[str, MediaStreamSelection] = {}
         self._photo_paths: dict[int, str] = {}
         self._initial_selected_host_paths: frozenset[str] = frozenset()
@@ -63,8 +69,6 @@ class SyncSelection(QObject):
         self._selected_ipod_removals: set[tuple[SyncPlanMediaKind, int]] = set()
         self._excluded_review_items: set[SyncPlanItem] = set()
         self._review_plan: SyncPlan | None = None
-        # The reviewed plan with unchecked actions left out; several views ask for
-        # it after every change, so it is built once per change.
         self._selected_plan: SyncPlan | None = None
         self._review_items: frozenset[SyncPlanItem] = frozenset()
         # Host Playlists that can be synced, and the ones chosen to go on the iPod.
@@ -181,9 +185,9 @@ class SyncSelection(QObject):
         self._duplicate_resolutions = resolutions
         self._resolved_comparison = resolved
         self._on_ipod_host_paths = _matched_host_paths(resolved)
-        self._review_plan = None
-        self._selected_plan = None
+        self._invalidate_review_plan()
         self._excluded_review_items = exclusions
+        self.trackSelectionChanged.emit(None)
         self.hostSelectionChanged.emit()
         self.removalSelectionChanged.emit()
         self.reviewSelectionChanged.emit()
@@ -223,9 +227,9 @@ class SyncSelection(QObject):
         if wanted == self._selected_host_paths:
             return False
         self._selected_host_paths = wanted
-        self._review_plan = None
-        self._selected_plan = None
-        self._excluded_review_items.intersection_update(self.review_plan.items)
+        self._invalidate_review_plan()
+        self._prune_review_exclusions()
+        self.trackSelectionChanged.emit(None)
         self.hostSelectionChanged.emit()
         self.changed.emit()
         return True
@@ -269,9 +273,9 @@ class SyncSelection(QObject):
             self._stream_selections.pop(path, None)
         else:
             self._stream_selections[path] = selection
-        self._review_plan = None
-        self._selected_plan = None
-        self._excluded_review_items.intersection_update(self.review_plan.items)
+        self._invalidate_review_plan()
+        self._prune_review_exclusions()
+        self._notify_track_paths((path,))
         self.reviewSelectionChanged.emit()
         self.changed.emit()
 
@@ -292,6 +296,8 @@ class SyncSelection(QObject):
     def pending_duplicate_groups(self) -> tuple[SyncDuplicateGroup, ...]:
         """Return the duplicate groups blocking the user's selected Host intent."""
 
+        if not self._comparison.duplicate_groups:
+            return ()
         paths = self.unresolved_selected_host_paths
         return tuple(
             group
@@ -344,14 +350,16 @@ class SyncSelection(QObject):
         return self._review_plan
 
     def _with_stream_selection(self, item: SyncPlanItem) -> SyncPlanItem:
-        selection = self._stream_selections.get(
-            host_path_identity(item.host_path or "")
-        )
         if item.media_kind is SyncPlanMediaKind.TRACK and item.action in {
             SyncPlanAction.ADD,
             SyncPlanAction.UPDATE,
             SyncPlanAction.UNCHANGED,
         }:
+            selection = (
+                self._stream_selections.get(host_path_identity(item.host_path))
+                if self._stream_selections and item.host_path is not None
+                else None
+            )
             return with_stream_selection(item, selection)
         return item
 
@@ -424,6 +432,9 @@ class SyncSelection(QObject):
             for track in library.snapshot.tracks
             if track.metadata.location
         }
+        self._track_ids_by_path.clear()
+        for track_id, track_path in self._track_paths.items():
+            self._track_ids_by_path.setdefault(track_path, []).append(track_id)
         self._photo_paths = {}
         if library.snapshot.photos is not None:
             for photo in library.snapshot.photos.photos:
@@ -452,9 +463,8 @@ class SyncSelection(QObject):
         self._selected_host_paths = set(self._initial_selected_host_paths)
         self._selected_ipod_removals.clear()
         self._excluded_review_items.clear()
-        self._review_plan = None
-        self._selected_plan = None
-        self._review_items = frozenset()
+        self._invalidate_review_plan()
+        self.trackSelectionChanged.emit(None)
         self.hostSelectionChanged.emit()
         self.playlistsChanged.emit()
         self.removalSelectionChanged.emit()
@@ -563,17 +573,17 @@ class SyncSelection(QObject):
         self._duplicate_resolutions = ()
         self._resolved_comparison = None
         self._track_paths.clear()
+        self._track_ids_by_path.clear()
         self._photo_paths.clear()
         self._initial_selected_host_paths = frozenset()
         self._on_ipod_host_paths = frozenset()
         self._selected_host_paths.clear()
         self._selected_ipod_removals.clear()
         self._excluded_review_items.clear()
-        self._review_plan = None
-        self._selected_plan = None
-        self._review_items = frozenset()
+        self._invalidate_review_plan()
         self._playlists.clear()
         self._chosen_playlists.clear()
+        self.trackSelectionChanged.emit(None)
         self.hostSelectionChanged.emit()
         self.playlistsChanged.emit()
         self.removalSelectionChanged.emit()
@@ -628,12 +638,11 @@ class SyncSelection(QObject):
 
         if not self.can_revert_host_media_selection:
             return False
+        changed_paths = self._selected_host_paths.symmetric_difference(
+            self._initial_selected_host_paths
+        )
         self._selected_host_paths = set(self._initial_selected_host_paths)
-        self._review_plan = None
-        self._selected_plan = None
-        self._excluded_review_items.intersection_update(self.review_plan.items)
-        self.hostSelectionChanged.emit()
-        self.changed.emit()
+        self._host_membership_changed(changed_paths)
         return True
 
     def removal_check_state(self, item: SyncPlanItem) -> Qt.CheckState | None:
@@ -669,19 +678,47 @@ class SyncSelection(QObject):
 
     def _set_paths(self, paths: Iterable[str | None], checked: bool) -> bool:
         retained = {path for path in paths if path is not None}
-        before = len(self._selected_host_paths)
-        if checked:
-            self._selected_host_paths.update(retained)
-        else:
-            self._selected_host_paths.difference_update(retained)
-        if before == len(self._selected_host_paths):
+        changed_paths = (
+            retained - self._selected_host_paths
+            if checked
+            else retained & self._selected_host_paths
+        )
+        if not changed_paths:
             return False
-        self._review_plan = None
-        self._selected_plan = None
-        self._excluded_review_items.intersection_update(self.review_plan.items)
+        if checked:
+            self._selected_host_paths.update(changed_paths)
+        else:
+            self._selected_host_paths.difference_update(changed_paths)
+        self._host_membership_changed(changed_paths)
+        return True
+
+    def _host_membership_changed(self, paths: set[str]) -> None:
+        self._invalidate_review_plan()
+        self._prune_review_exclusions()
+        self._notify_track_paths(paths)
         self.hostSelectionChanged.emit()
         self.changed.emit()
-        return True
+
+    def _notify_track_paths(self, paths: Iterable[str]) -> None:
+        track_ids = tuple(
+            track_id
+            for path in paths
+            for track_id in self._track_ids_by_path.get(path, ())
+        )
+        if track_ids:
+            # Large, scattered changes are cheaper to republish in one batch.
+            self.trackSelectionChanged.emit(
+                track_ids if len(track_ids) <= _MAX_INCREMENTAL_TRACK_UPDATES else None
+            )
+
+    def _invalidate_review_plan(self) -> None:
+        self._review_plan = None
+        self._selected_plan = None
+        self._review_items = frozenset()
+
+    def _prune_review_exclusions(self) -> None:
+        if self._excluded_review_items:
+            self._excluded_review_items.intersection_update(self.review_plan.items)
 
 
 def _matched_host_paths(plan: SyncPlan) -> frozenset[str]:

@@ -28,6 +28,18 @@ from device_registry import (
 )
 from iOpenPod.app.backups import BackupIdentityClaimKind
 from iOpenPod.app.display_text import SourceText
+from iOpenPod.app.host_media_folders import HostMediaFolder
+from iOpenPod.app.library_export import (
+    LibraryExporter,
+    PlaylistExportMode,
+    PlaylistFileType,
+)
+from iOpenPod.app.library_sync_helper import (
+    LIBRARY_SYNC_HELPER_PATH,
+    SyncDetails,
+    SyncedTrack,
+    publish_sync_helper,
+)
 from iOpenPod.app.library_write import LibraryPreparationRequest
 from iOpenPod.app.models.artwork import ArtworkRequest
 from iOpenPod.app.models.device import DeviceCandidateIssueCode, DeviceReadiness
@@ -1603,6 +1615,59 @@ def test_nano5_without_retained_hash72_material_blocks_before_mutation(
     coordinator.close()
 
 
+@pytest.mark.parametrize("model", ["MA002", "MA450"])
+@pytest.mark.parametrize("scheme", [1, 2, 3, 4, 65535])
+def test_video_selection_uses_model_checksum_despite_source_scheme(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, model: str, scheme: int
+) -> None:
+    platform = VirtualStoragePlatform()
+    root = _ipod_volume(tmp_path / model, model_number=model)
+    directory = root / "iPod_Control" / "iTunes"
+    database = directory / "iTunesDB"
+    document = parse_iTunesDB(_database_with_track(track_header_size=0x184))
+    original = write_iTunesDB(
+        replace(document, header=replace(document.header, hashing_scheme=scheme))
+    )
+    database.write_bytes(original)
+    history = counts()
+    playlist = otg((0, 0))
+    (directory / "Play Counts").write_bytes(history)
+    (directory / "OTGPlaylistInfo").write_bytes(playlist)
+    platform.add_volume(root)
+    coordinator = DeviceCoordinator(Storage(platform))
+    try:
+        active = coordinator.select_device(
+            coordinator.discover_devices().candidates[0].id
+        )
+        assert active.library.tracks[0].play_count == 3
+        assert active.library.playlists[-1].track_ids == (
+            active.library.tracks[0].track_id,
+            active.library.tracks[0].track_id,
+        )
+        assert parse_iTunesDB(database.read_bytes()).header.hashing_scheme == 0
+        assert IPodLibrary.parse(database.read_bytes()).snapshot == active.library
+        for name, payload in (("Play Counts", history), ("OTGPlaylistInfo", playlist)):
+            assert not (directory / name).exists()
+            assert (directory / (name + ".bak")).read_bytes() == payload
+        assert "hashing scheme" in caplog.text
+        edited = replace(
+            active.library,
+            tracks=(replace(active.library.tracks[0], title="Updated"),),
+        )
+        review = coordinator.prepare_library(
+            LibraryPreparationRequest(edited, active, 1, 1), lambda _: None, Event()
+        )
+        assert review.result.prepared is not None, review.result.issues
+        saved = coordinator.save_library(review, active, lambda _: None, Event())
+        assert saved.active is not None, saved.issues
+        reloaded = coordinator.select_device(active.candidate.id)
+        assert reloaded.library.tracks[0].title == "Updated"
+        assert reloaded.library.tracks[0].play_count == 3
+        assert reloaded.library.playlists == active.library.playlists
+    finally:
+        coordinator.close()
+
+
 @pytest.mark.parametrize("metadata", [None, b""])
 def test_nano5_selection_commits_playback_without_postprocess_metadata(
     tmp_path: Path,
@@ -2755,6 +2820,74 @@ def test_track_export_references_and_copies_through_the_active_session(
     assert destination.read_bytes() == b"audio payload"
     assert result.bytes_copied == len(b"audio payload")
     coordinator.close()
+
+
+def test_host_playlist_export_reads_committed_sync_details_from_the_active_ipod(
+    tmp_path: Path,
+) -> None:
+    platform = VirtualStoragePlatform()
+    root = _ipod_volume(tmp_path / "classic", model_number="MB565")
+    platform.add_volume(root, label="Classic")
+    coordinator = DeviceCoordinator(Storage(platform))
+    candidate = coordinator.discover_devices().candidates[0]
+    active = coordinator.select_device(candidate.id)
+    track = active.library.tracks[0]
+    source = tmp_path / "Music" / "Original.flac"
+    source.parent.mkdir()
+    source.write_bytes(b"original audio")
+    details = SyncDetails(
+        "2026-09-27T12:00:00+00:00",
+        str(source),
+        source.stat().st_size,
+        source.stat().st_mtime_ns,
+        "flac",
+        "m4a",
+        True,
+    )
+    helper = root / str(LIBRARY_SYNC_HELPER_PATH)
+    exporter = LibraryExporter(coordinator)
+    folders = (HostMediaFolder(HostPath(source.parent)),)
+    try:
+        with coordinator.sync_session(active, access=AccessMode.READ_WRITE) as session:
+            publish_sync_helper(
+                session,
+                active.library,
+                None,
+                (SyncedTrack(DevicePath(track.metadata.location), "", details),),
+                library_sha256=active.database_fingerprint.sha256,
+            )
+        original_helper = helper.read_bytes()
+        result = exporter.export_playlist(
+            "Road Trip",
+            (track, track),
+            HostPath(tmp_path),
+            PlaylistFileType.M3U8,
+            PlaylistExportMode.HOST_REFERENCES,
+            host_folders=folders,
+        )
+        assert result.skipped_occurrences == 0
+        assert result.playlist_file is not None
+        assert (
+            Path(result.playlist_file).read_text(encoding="utf-8").count(str(source))
+            == 2
+        )
+        assert helper.read_bytes() == original_helper
+
+        (root / str(DevicePath(track.metadata.location))).unlink()
+        result = exporter.export_playlist(
+            "Road Trip",
+            (track,),
+            HostPath(tmp_path),
+            PlaylistFileType.M3U8,
+            PlaylistExportMode.HOST_REFERENCES,
+            host_folders=folders,
+        )
+        assert result.skipped_occurrences == 1
+        assert result.playlist_file is not None
+        assert Path(result.playlist_file).read_text(encoding="utf-8") == "#EXTM3U\n"
+        assert helper.read_bytes() == original_helper
+    finally:
+        coordinator.close()
 
 
 def test_playback_source_rejects_media_that_changes_after_opening(

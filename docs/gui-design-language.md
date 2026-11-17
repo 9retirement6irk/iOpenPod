@@ -28,7 +28,8 @@ constants. The Player is the narrow exception: its stylesheet renderer may deriv
 subtle lighter and darker variants from the active semantic theme to distinguish
 playback chrome. Optional Colorful Mode reuses the Original project's image-to-color
 behavior through one typed presentation helper, but limits dynamic color to
-collection-card fills and the active Track-list context bar.
+collection-card fills and the active Track-list context bar. Now Playing has its
+own explicitly artwork-led presentation, independent of Colorful Mode.
 
 ## Visual Intent
 
@@ -42,6 +43,18 @@ may add low-contrast vertical gradients to its band, now-playing surface,
 slider tracks, and round handles. The optional Round Track-list title bar also uses
 opaque shading to make its native splitter handle feel rounded and grabbable.
 Those effects remain theme-derived; they must not introduce an independent palette.
+Now Playing fills the app's content area with a magnified, highly blurred copy of
+the currently displayed artwork. It preserves the image's spatial color fields
+with slow, fluid deformation and a 1.2-second crossfade on artwork changes.
+Motion preserves the cover's color fields rather than constructing a gradient.
+Hidden or minimized windows suspend it; the Host's disabled widget-animation
+preference keeps the backdrop static and page changes immediate. Opening and
+closing crossfade the entire content area over 320 ms. Saturation is strongly
+boosted after blurring; a theme-owned uniform scrim keeps primary and secondary
+text at 4.5:1 contrast. Unavailable artwork falls back
+to `window`. The larger foreground cover uses a soft neutral shadow. This treatment
+is limited to Now Playing; controls, typography, focus and Queue selection retain
+the normal semantic theme. The native window frame remains visible.
 Use the active theme's accent for focus, links, and primary actions rather than as a
 large saturated background treatment. Colorful Mode is an explicit user preference:
 it adds quiet
@@ -520,12 +533,43 @@ Text expansion is expected. Layouts must survive longer translations, right-to-l
 direction, larger Host fonts, and 200% display scaling without clipped labels or
 fixed text widths.
 
+Date fields use App Date Edit over Qt's native date editor. Its chevron is painted
+by the same helper as App Combo Box, with matching indicator space, focus, disabled
+and expanded states. The popup keeps native day hit testing, keyboard navigation,
+date ranges and localized input, while using an opaque rounded surface, themed
+month selector, editable year and previous/next actions. Selected days use accent
+fill, Today has a quiet outline, and weekends retain the ordinary text roles.
+Unavailable dates and navigation respect each field's range. Choosing a day or
+Today accepts it; Escape restores the date from when the popup opened. Escape in
+the nested month menu closes only that menu. Alarm, Calendar, recurrence, exception
+and reminder date fields all use this shared control.
+
+Track and Photo metadata timestamps pair App Date Edit with a themed time input
+in a compact group at the leading edge, sized to their contents. Set date stays
+directly below the field label; Clear sits beside the controls and Reset beside
+the label. Mixed-value guidance sits below the action. The time input follows the
+shared 12-hour AM/PM format and exposes seconds. Unset and mixed values have explicit
+Set date and Clear date actions;
+Reset restores the original state. Unchanged dates retain the exact saved
+instant, including repeated daylight-saving hours. Only edited civil fields are
+interpreted in the Host zone, using the existing metadata input policy.
+
+All editable time fields use App Time Edit: the same rounded surface, focus and
+disabled treatments, 12-hour AM/PM display and no spinner arrows. Calendar event,
+To Do, reminder and recurrence times retain seconds; Alarm inputs retain their
+minute-level display. Locale or language changes do not switch inputs back to a
+24-hour clock. Native typing and keyboard section adjustment remain available.
+The new-entry Calendar destination dialog uses App Combo Box and shared action
+buttons, including the themed dropdown indicator and popup.
+
 ## Settings examples
 
-Settings tabs align with the setting groups and share their responsive width.
-Below 1,720 logical pixels of Settings page width, the column fills the available
-viewport inside the standard page margins. At that width and above, it returns to
-960 logical pixels and reserves the remaining space for an example image.
+Settings tabs sit directly below the Page Header and span the full page width.
+Below 1,720 logical pixels of Settings page width, the settings column fills its
+viewport inside the standard page margins. At that width and above, the column is
+960 logical pixels wide and the remaining space is reserved for an example image.
+Settings tabs size to their labels and share any spare width, so tabs may differ
+in width. Scroll buttons appear when the page is too narrow for every label.
 
 Hovering an illustrated Setting row shows its example; an open dropdown retains priority until
 it closes. Rows without a meaningful visual example leave the space blank.
@@ -561,6 +605,47 @@ underlying background in every theme. The center stays fully opaque, and each
 image is feathered before crossfading so interrupted blends retain their edges.
 It never runs workflows or reads editable field contents to make an example.
 See the [capture notes](../src/iOpenPod/assets/settings/README.md).
+
+## Calendar, Alarms and Tones
+
+Extras uses the shared Page Header, semantic Action Buttons, Search Field, and
+App Combo Box. Calendar pairs a native keyboard-navigable month grid with a day
+agenda; narrow panes stack the two. Painted cell previews mark saved date ranges,
+including exclusive all-day ends. Imported timezone identifiers stay attached to
+their civil dates, and supported repeat rules project occurrences while unsupported
+patterns retain their saved dates. All saved entries keeps undated or unreadable
+entries reachable. Search spans dates; clearing it restores the selected day. New events start on that day. To Dos
+offer an explicit completion action that preserves their other fields.
+
+Day selection crossfades the outgoing and incoming highlights over 200 ms with
+InOutCubic easing. The Calendar/To Dos selector uses the same sliding treatment
+and timing as the Settings Host/iPod selector. The content below it swipes over
+280 ms: To Dos enters from the left as Calendar exits right; Calendar enters from
+the right as To Dos exits left. Navigation commits immediately. Rapid changes
+retarget from the visible highlight or content frame. Content snapshots consume
+pointer input while moving, with the selector still available for reversal; they
+are released on completion, resize, hide, theme changes or device updates. The
+Host's disabled widget-animation preference makes all three transitions immediate.
+
+Alarms and Tones share a rounded collection surface, capped at 960 logical pixels
+and aligned near the top of the workspace. Short lists size to their saved rows;
+longer lists scroll within the available height, with at most six rows preferred.
+The attached action bar remains reachable in short windows. Depth comes from the
+canvas, content and alternate action-bar surfaces, with one quiet outer border.
+Empty and loading states keep the same panel width and show one concise message.
+Informative device and error messages remain outside the list.
+
+Alarm rows emphasize localized times, with names and repeat settings beneath them.
+Rounded selections and compact enable-state labels use semantic palette roles.
+Tone rows lead with the name, place the type underneath and align duration at the
+right. Listen and the native custom-tone capacity stay together in the action bar.
+All three pages paint list rows through delegates, without persistent per-row widgets;
+hidden metadata remains available in tooltips and accessible row descriptions.
+Selection reveals contextual editing; device changes dismiss stale editors.
+Alarms has no internal tabs; New alarm lives in its Page Header. Sleep Timer and
+Nano 6/7 Countdown Timer controls are absent. Alarm enable states, sound choices
+and creation follow their qualified device operations. All colors, fonts and
+interaction states derive from the existing theme, including Light and Dark appearances.
 
 ## Ownership
 
