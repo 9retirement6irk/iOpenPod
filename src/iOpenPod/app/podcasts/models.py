@@ -7,6 +7,8 @@ from enum import StrEnum
 
 from iPodDB.library import ContentAdvisory
 
+ALL_EPISODE_SLOTS = -1
+
 
 class SubscriptionSource(StrEnum):
     """How a subscription first became part of this iPod's catalog."""
@@ -80,7 +82,11 @@ class PodcastClearAge(StrEnum):
 
     @property
     def seconds(self) -> int | None:
-        """Elapsed time on the iPod, independent of publication time."""
+        """Elapsed time on the iPod, independent of publication time.
+
+        Days are 24-hour durations; month choices are 30/60/90 days, not local
+        calendar arithmetic or firmware DST recurrence selectors.
+        """
         days = {
             PodcastClearAge.IMMEDIATE: 0,
             PodcastClearAge.DAY: 1,
@@ -102,7 +108,7 @@ class PodcastClearMethod(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class PodcastSyncSettings:
-    """Per-show retention policy; zero slots disable automatic Podcast Sync."""
+    """Per-show retention policy; -1 means All, zero disables automatic Sync."""
 
     episode_slots: int = 3
     fill_mode: PodcastFillMode = PodcastFillMode.NEWEST
@@ -113,8 +119,13 @@ class PodcastSyncSettings:
     def __post_init__(self) -> None:
         if type(self.episode_slots) is not int:
             raise ValueError("Podcast episode slots must be an integer")
-        if not 0 <= self.episode_slots <= 50:
-            raise ValueError("Podcast episode slots must be between 0 and 50")
+        if (
+            self.episode_slots != ALL_EPISODE_SLOTS
+            and not 0 <= self.episode_slots <= 50
+        ):
+            raise ValueError(
+                "Podcast episode slots must be All (-1) or between 0 and 50"
+            )
         if type(self.fill_mode) is not PodcastFillMode:
             raise ValueError("Podcast fill mode must be a supported value")
         if type(self.clear_when_listened) is not bool:
@@ -167,11 +178,9 @@ class PodcastEpisode:
         if not self.episode_id.strip():
             raise ValueError("A Podcast Episode ID must not be empty")
         for name, value in (
-            ("published_at", self.published_at),
             ("duration_seconds", self.duration_seconds),
             ("size_bytes", self.size_bytes),
             ("play_count", self.play_count),
-            ("last_played", self.last_played),
         ):
             if value < 0:
                 raise ValueError(f"Podcast Episode {name} must not be negative")
@@ -210,8 +219,6 @@ class PodcastSubscription:
             raise ValueError("A Podcast Subscription ID must not be empty")
         if not self.title.strip():
             raise ValueError("A Podcast Subscription title must not be empty")
-        if self.last_refreshed < 0:
-            raise ValueError("A Podcast refresh time must not be negative")
         if self.artwork_id < 0:
             raise ValueError("A Podcast Artwork ID must not be negative")
         episode_ids = tuple(episode.episode_id for episode in self.episodes)
@@ -246,10 +253,8 @@ class ListeningRecord:
     def __post_init__(self) -> None:
         if not self.subscription_id.strip() or not self.episode_id.strip():
             raise ValueError("Listening records require subscription and episode IDs")
-        if self.observed_play_count < 0 or self.last_played < 0:
+        if self.observed_play_count < 0:
             raise ValueError("Listening history values must not be negative")
-        if type(self.published_at) is not int or self.published_at < 0:
-            raise ValueError("Podcast publication time must be a non-negative integer")
         if self.episode_number is not None and (
             type(self.episode_number) is not int or self.episode_number < 0
         ):
@@ -314,6 +319,7 @@ class PodcastArtworkRequest:
     source_url: str
     target_px: int
     preserve_aspect: bool = False
+    feed_url: str = ""
 
     def __post_init__(self) -> None:
         if not self.source_url.strip():

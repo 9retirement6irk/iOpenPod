@@ -68,8 +68,6 @@ class SelectionGroupingProxyModel(QAbstractProxyModel):
         self._expanded: dict[SelectionGroup, bool] = dict.fromkeys(_GROUP_ORDER, True)
         self._rows: tuple[_PresentedRow, ...] = ()
         self._proxy_rows_by_source_row: dict[int, int] = {}
-        self._live = True
-        self._stale = False
         self.setSourceModel(source)
         source.modelReset.connect(self._source_changed)
         source.layoutChanged.connect(self._source_changed)
@@ -78,25 +76,6 @@ class SelectionGroupingProxyModel(QAbstractProxyModel):
         source.rowsMoved.connect(self._source_changed)
         source.dataChanged.connect(self._source_data_changed)
         self._rebuild_rows()
-
-    def set_live(self, live: bool) -> None:
-        """Stop regrouping on selection changes while the page is hidden.
-
-        Row insertions, removals and resets are always followed; only check-state
-        changes wait, and they are caught up when the page is shown again.
-        """
-
-        if live == self._live:
-            return
-        self._live = live
-        if live and self._stale:
-            self._source_changed()
-
-    def _source_data_changed(self, *_args: object) -> None:
-        if self._live:
-            self._source_changed()
-        else:
-            self._stale = True
 
     @property
     def grouping_enabled(self) -> bool:
@@ -285,24 +264,39 @@ class SelectionGroupingProxyModel(QAbstractProxyModel):
     ) -> object:
         return self.sourceModel().headerData(section, orientation, role)
 
+    def _source_data_changed(
+        self,
+        top_left: _Index,
+        bottom_right: _Index,
+        roles: list[int] | None = None,
+    ) -> None:
+        if not self._grouping_enabled:
+            mapped_top = self.mapFromSource(top_left)
+            mapped_bottom = self.mapFromSource(bottom_right)
+            if mapped_top.isValid() and mapped_bottom.isValid():
+                self.dataChanged.emit(mapped_top, mapped_bottom, roles or [])
+            return
+        self._source_changed()
+
     def _source_changed(self, *_args: object) -> None:
-        self._stale = False
         self.beginResetModel()
         self._rebuild_rows()
         self.endResetModel()
 
     def _rebuild_rows(self) -> None:
         source = self.sourceModel()
-        buckets: dict[SelectionGroup, list[int]] = {group: [] for group in _GROUP_ORDER}
-        for source_row in range(source.rowCount()):
-            index = source.index(source_row, 0)
-            group = _group_for_check_state(
-                source.data(index, Qt.ItemDataRole.CheckStateRole)
-            )
-            buckets[group].append(source_row)
-
         rows: list[_PresentedRow] = []
         if self._grouping_enabled:
+            buckets: dict[SelectionGroup, list[int]] = {
+                group: [] for group in _GROUP_ORDER
+            }
+            for source_row in range(source.rowCount()):
+                index = source.index(source_row, 0)
+                group = _group_for_check_state(
+                    source.data(index, Qt.ItemDataRole.CheckStateRole)
+                )
+                buckets[group].append(source_row)
+
             for group in _GROUP_ORDER:
                 source_rows = buckets[group]
                 if not source_rows:

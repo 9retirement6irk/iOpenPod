@@ -11,17 +11,23 @@ from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal, Slot
 
 from iOpenPod.app.core.settings.definitions import (
     ANALYZE_FOR_GENIUS,
+    BACK_SYNC_RATINGS,
+    COMPUTE_MISSING_BPM,
     COMPUTE_SOUND_CHECK,
     FIT_THUMBNAILS,
     NORMALIZE_TAGS_AFTER_SYNC,
+    RATING_CONFLICT_POLICY,
     ROCKBOX_METADATA_SUPPORT,
     ROTATE_TALL_PHOTOS,
-    STORE_LYRICS,
 )
 from iOpenPod.app.core.settings.transcoding import read_transcoder_settings
 from iOpenPod.app.display_text import exception_text, source_text
 from iOpenPod.app.models.device import DeviceCandidateIssueCode
-from iOpenPod.app.scrobbling.settings import SCROBBLE_DURING_SYNC, configured_accounts
+from iOpenPod.app.scrobbling.settings import (
+    SCROBBLE_DURING_SYNC,
+    SCROBBLE_RATINGS,
+    configured_accounts,
+)
 from iOpenPod.app.services.device_coordinator import (
     SyncCleanupCompletedError,
     SyncRecoveryDeclinedError,
@@ -395,6 +401,14 @@ class SyncController(QObject):
                 "The Active iPod or Library changed. Scan again before Sync."
             )
             return False
+        policy = (
+            self._settings.get(RATING_CONFLICT_POLICY)
+            if ipod.ratings_available and self._settings.get(BACK_SYNC_RATINGS)
+            else None
+        )
+        if host.sources and plan.rating_conflict_policy != policy:
+            self.last_error = "Rating Sync settings changed. Scan again before Sync."
+            return False
         if (
             podcasts is None
             and not plan.change_count
@@ -424,14 +438,15 @@ class SyncController(QObject):
                 self._workspace.revision,
                 settings=read_transcoder_settings(self._settings),
                 options=SyncOptions(
+                    compute_missing_bpm=self._settings.get(COMPUTE_MISSING_BPM),
                     scrobble=self._settings.get(SCROBBLE_DURING_SYNC),
+                    scrobble_ratings=self._settings.get(SCROBBLE_RATINGS),
                     analyze_for_genius=self._settings.get(ANALYZE_FOR_GENIUS),
                     compute_sound_check=self._settings.get(COMPUTE_SOUND_CHECK),
                     normalize_tags=self._settings.get(NORMALIZE_TAGS_AFTER_SYNC),
                     rotate_tall_photos=self._settings.get(ROTATE_TALL_PHOTOS),
                     fit_thumbnails=self._settings.get(FIT_THUMBNAILS),
                     rockbox_metadata=self._settings.get(ROCKBOX_METADATA_SUPPORT),
-                    store_lyrics=self._settings.get(STORE_LYRICS),
                 ),
                 reconcile_playlists=reconcile_playlists,
                 playlist_choices=playlist_choices,

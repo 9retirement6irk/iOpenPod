@@ -8,11 +8,14 @@ import pytest
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtTest import QTest
 from tests.iOpenPod.app.podcasts.podcast_test_support import active_ipod as _active_ipod
+from tests.iOpenPod.app.podcasts.test_credentials import LOGIN, URL, MemoryCredentials
 from tests.iOpenPod.GUI.application_shell_test_support import APPLICATION
+from whenever import Instant, TimePatch, patch_current_time
 
 from iOpenPod.app.core.settings.service import SettingsService
 from iOpenPod.app.core.settings.stores import DeviceSettingsStore, GlobalSettingsStore
 from iOpenPod.app.podcasts.controller import PodcastController
+from iOpenPod.app.podcasts.credentials import PodcastAccess, PodcastCredentials
 from iOpenPod.app.podcasts.feed_client import PodcastFeedError
 from iOpenPod.app.podcasts.models import (
     PodcastEpisode,
@@ -26,12 +29,20 @@ from iOpenPod.app.podcasts.settings import save_default_podcast_sync_settings
 from iOpenPod.app.podcasts.store import LoadedPodcastState, PodcastStateRevision
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
 
     from iOpenPod.app.device_controller import DeviceController
     from iOpenPod.app.models.device import ActiveIPod
     from iOpenPod.app.podcasts.sync import PodcastSyncRequest
     from iOpenPod.app.services.device_coordinator import DeviceCoordinator
+
+
+@pytest.fixture
+def podcast_clock() -> Iterator[TimePatch]:
+    with patch_current_time(
+        Instant.from_timestamp(1_800_000_000), keep_ticking=False
+    ) as clock:
+        yield clock
 
 
 class _Devices(QObject):
@@ -101,9 +112,13 @@ class _Feeds:
         self.subscription = subscription
         self.requests: list[str] = []
         self.error: PodcastFeedError | None = None
+        self.logins: list[object] = []
 
-    def fetch(self, feed_url: str) -> PodcastSubscription:
+    def fetch(
+        self, feed_url: str, *, credentials: object = None
+    ) -> PodcastSubscription:
         self.requests.append(feed_url)
+        self.logins.append(credentials)
         if self.error is not None:
             raise self.error
         return self.subscription
@@ -144,6 +159,87 @@ def _wait_until(condition: Callable[[], bool]) -> None:
         APPLICATION.processEvents()
         QTest.qWait(10)
     assert condition()
+
+
+def test_login_is_verified_before_saving_and_never_enters_device_documents() -> None:
+    show = PodcastSubscription("show", URL, "Private", SubscriptionSource.USER)
+    feeds = _Feeds(show)
+    coordinator = _Coordinator(
+        LoadedPodcastState(PodcastSnapshot(writable=True), PodcastStateRevision())
+    )
+    devices, store = _Devices(), MemoryCredentials()
+    access = PodcastAccess(store)
+    controller = PodcastController(
+        cast("DeviceCoordinator", coordinator),
+        cast("DeviceController", devices),
+        feeds=feeds,
+        access=access,
+    )
+    try:
+        controller.active_ipod_changed(_active_ipod())
+        _wait_until(lambda: controller.can_edit)
+        feeds.error = PodcastFeedError("Login rejected")
+        controller.subscribe(URL, credentials=LOGIN, remember=True)
+        _wait_until(lambda: not controller.busy)
+        assert not store.values and not coordinator.saved
+        feeds.error = None
+        controller.subscribe(
+            "https://tony%40example.test:p%40ss%3A%25word+@publisher.test/feed",
+            remember=True,
+        )
+        _wait_until(lambda: controller.can_edit)
+        assert feeds.requests == [URL, URL]
+        assert feeds.logins == [LOGIN, LOGIN]
+        assert store.values == {URL: LOGIN}
+        assert coordinator.saved[-1].snapshot.subscriptions[0].feed_url == URL
+        assert LOGIN.username not in repr(coordinator.saved)
+        assert LOGIN.password not in repr(coordinator.saved)
+        saved = replace(show, sync_settings=PodcastSyncSettings(episode_slots=9))
+        coordinator.loaded = replace(
+            coordinator.loaded,
+            snapshot=replace(coordinator.loaded.snapshot, subscriptions=(saved,)),
+        )
+        controller.reload()
+        _wait_until(lambda: controller.can_edit)
+        replacement = PodcastCredentials("replacement", "new-password")
+        controller.set_login("show", replacement, remember=True)
+        _wait_until(lambda: controller.can_edit)
+        assert store.values == {URL: replacement}
+        assert controller.snapshot.subscriptions[0].sync_settings == saved.sync_settings
+        controller.forget_login("show")
+        _wait_until(lambda: controller.can_edit)
+        assert not store.values
+        assert controller.snapshot.subscriptions
+    finally:
+        controller.shutdown()
+
+
+def test_vault_save_failure_keeps_subscription_unpublished() -> None:
+    show = PodcastSubscription("show", URL, "Private", SubscriptionSource.USER)
+    coordinator = _Coordinator(
+        LoadedPodcastState(PodcastSnapshot(writable=True), PodcastStateRevision())
+    )
+    devices, store = _Devices(), MemoryCredentials()
+    store.unavailable = True
+    controller = PodcastController(
+        cast("DeviceCoordinator", coordinator),
+        cast("DeviceController", devices),
+        feeds=_Feeds(show),
+        access=PodcastAccess(store),
+    )
+    try:
+        controller.active_ipod_changed(_active_ipod())
+        _wait_until(lambda: controller.can_edit)
+        controller.subscribe(URL, credentials=LOGIN, remember=True)
+        _wait_until(lambda: controller.can_edit)
+        assert not coordinator.saved
+        assert not controller.snapshot.subscriptions
+        controller.subscribe(URL, credentials=LOGIN, remember=False)
+        _wait_until(lambda: controller.can_edit)
+        assert controller.snapshot.subscriptions
+        assert controller.access.load(URL) == LOGIN
+    finally:
+        controller.shutdown()
 
 
 def test_new_subscriptions_copy_current_defaults_and_keep_saved_policy() -> None:
@@ -203,13 +299,13 @@ def test_new_subscriptions_copy_current_defaults_and_keep_saved_policy() -> None
     ),
 )
 def test_refresh_respects_saved_timestamp_and_manual_override(
-    monkeypatch: pytest.MonkeyPatch,
+    podcast_clock: TimePatch,
     age_seconds: int | None,
     only_if_stale: bool,
     expected: bool,
 ) -> None:
     now = 1_800_000_000
-    monkeypatch.setattr("iOpenPod.app.podcasts.controller.time", lambda: now)
+    podcast_clock.move_to(Instant.from_timestamp(now))
     saved = PodcastSubscription(
         "feed-1",
         "https://example.test/feed",
@@ -241,10 +337,10 @@ def test_refresh_respects_saved_timestamp_and_manual_override(
 
 
 def test_successful_manual_refresh_restarts_the_navigation_interval(
-    monkeypatch: pytest.MonkeyPatch,
+    podcast_clock: TimePatch,
 ) -> None:
     clock = [1_800_000_000]
-    monkeypatch.setattr("iOpenPod.app.podcasts.controller.time", lambda: clock[0])
+    podcast_clock.move_to(Instant.from_timestamp(clock[0]))
     saved = PodcastSubscription(
         "feed-1", "https://example.test/feed", "Show", SubscriptionSource.USER
     )
@@ -262,6 +358,7 @@ def test_successful_manual_refresh_restarts_the_navigation_interval(
         controller.refresh(saved.subscription_id, only_if_stale=True)
         _wait_until(lambda: controller.can_edit)
         clock[0] += 899
+        podcast_clock.move_to(Instant.from_timestamp(clock[0]))
         controller.refresh(saved.subscription_id, only_if_stale=True)
         assert feeds.requests == [saved.feed_url]
 
@@ -269,10 +366,12 @@ def test_successful_manual_refresh_restarts_the_navigation_interval(
         controller.refresh(saved.subscription_id)
         _wait_until(lambda: controller.can_edit)
         clock[0] += 1
+        podcast_clock.move_to(Instant.from_timestamp(clock[0]))
         controller.refresh(saved.subscription_id, only_if_stale=True)
         assert feeds.requests == [saved.feed_url] * 2
 
         clock[0] += 899
+        podcast_clock.move_to(Instant.from_timestamp(clock[0]))
         feeds.subscription = replace(saved, last_refreshed=clock[0])
         controller.refresh(saved.subscription_id, only_if_stale=True)
         _wait_until(lambda: controller.can_edit)
@@ -282,10 +381,10 @@ def test_successful_manual_refresh_restarts_the_navigation_interval(
 
 
 def test_all_podcasts_refreshes_only_stale_feeds(
-    monkeypatch: pytest.MonkeyPatch,
+    podcast_clock: TimePatch,
 ) -> None:
     now = 1_800_000_000
-    monkeypatch.setattr("iOpenPod.app.podcasts.controller.time", lambda: now)
+    podcast_clock.move_to(Instant.from_timestamp(now))
     stale = PodcastSubscription(
         "stale",
         "https://example.test/stale",
@@ -327,10 +426,10 @@ def test_all_podcasts_refreshes_only_stale_feeds(
 
 
 def test_failed_refresh_does_not_postpone_the_next_navigation_attempt(
-    monkeypatch: pytest.MonkeyPatch,
+    podcast_clock: TimePatch,
 ) -> None:
     now = 1_800_000_000
-    monkeypatch.setattr("iOpenPod.app.podcasts.controller.time", lambda: now)
+    podcast_clock.move_to(Instant.from_timestamp(now))
     saved = PodcastSubscription(
         "feed-1",
         "https://example.test/feed",

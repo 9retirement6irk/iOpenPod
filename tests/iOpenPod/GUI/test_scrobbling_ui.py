@@ -1,30 +1,81 @@
 """Manual scrobbling entry point, persisted option, and real sign-in UI signals."""
 
+from dataclasses import replace
 from pathlib import Path
 
+import pytest
 from PySide6.QtTest import QSignalSpy
-from PySide6.QtWidgets import QDialog, QLineEdit, QPlainTextEdit, QPushButton, QWidget
+from PySide6.QtWidgets import (
+    QDialog,
+    QLabel,
+    QLineEdit,
+    QPlainTextEdit,
+    QPushButton,
+    QWidget,
+)
+from tests.iOpenPod.app.services.test_library_resources import build_device
 from tests.iOpenPod.app.test_library_write_controller import wait_for
+from tests.iOpenPod.app.test_listenbrainz_feedback import MBID, FeedbackTransport
 from tests.iOpenPod.app.test_scrobbling import MemoryCredentials
 from tests.iOpenPod.app.test_scrobbling_clients import TransportStub
 from tests.iOpenPod.GUI.application_shell_test_support import APPLICATION, build_context
 
+from iOpenPod.app.core.settings.definitions import BACK_SYNC_RATINGS
 from iOpenPod.app.scrobbling.clients import LastFmClient, ListenBrainzClient
 from iOpenPod.app.scrobbling.controller import ScrobbleController
-from iOpenPod.app.scrobbling.models import ScrobbleResult, Service
+from iOpenPod.app.scrobbling.models import ScrobbleProgress, ScrobbleResult, Service
 from iOpenPod.app.scrobbling.queue import ScrobbleQueue
 from iOpenPod.app.scrobbling.service import ScrobbleService
 from iOpenPod.app.scrobbling.settings import (
     LASTFM_USERNAME,
     LISTENBRAINZ_USERNAME,
     SCROBBLE_DURING_SYNC,
+    SCROBBLE_RATINGS,
 )
 from iOpenPod.GUI.main_window import MainWindow
 from iOpenPod.GUI.widgets.app_combo_box import AppComboBox
 from iOpenPod.GUI.widgets.scrobbling_settings import ScrobblingSettings
+from iOpenPod.GUI.widgets.settings_editor import SettingsEditor
 from iOpenPod.GUI.widgets.sidebar import Sidebar
 from iOpenPod.GUI.widgets.sync_settings import SyncSettings
 from storage import AtomicHostFile
+
+
+def test_manual_status_retains_typed_counts_and_cancel_action() -> None:
+    context = build_context()
+    window = MainWindow(context, auto_discover=False)
+    controller = window.findChild(ScrobbleController)
+    assert controller is not None
+    try:
+        controller.progress.emit(
+            ScrobbleProgress("capture", "Capturing iPod star ratings…")
+        )
+        status = context.status.current_status
+        assert status is not None and status.progress is not None
+        assert status.progress.total == 0
+        controller.progress.emit(
+            ScrobbleProgress(
+                "lastfm.ratings",
+                "Sending Last.fm ratings…",
+                22,
+                168,
+                "Artist — Song",
+                "ratings",
+            )
+        )
+        status = context.status.current_status
+        assert status is not None and status.progress is not None
+        assert (status.progress.current, status.progress.total) == (22, 168)
+        assert status.progress.detail == "Artist — Song"
+        assert status.action is not None and status.action.key == "cancel"
+        controller._completed(ScrobbleResult(feedback_accepted=168), "")  # pyright: ignore[reportPrivateUsage]
+        status = context.status.current_status
+        assert status is not None and status.progress is None
+        assert status.action is not None and status.action.key == "details"
+    finally:
+        window.close()
+        context.shutdown()
+        APPLICATION.processEvents()
 
 
 def test_manual_report_uses_a_short_status_and_scrollable_details() -> None:
@@ -88,6 +139,114 @@ def test_maintenance_button_is_an_action_and_sync_option_persists() -> None:
     finally:
         parent.close()
         context.shutdown()
+
+
+def test_scrobble_rating_setting_is_opt_in_independent_and_device_overridable() -> None:
+    context = build_context()
+    parent = QWidget()
+    editor = SettingsEditor(context.settings, parent)
+    try:
+        settings = context.settings
+        widget = SyncSettings(settings, parent, editor=editor)
+        combo = widget.findChild(AppComboBox, "scrobbleRatings")
+        assert combo is not None and combo.currentData() is False
+        assert (
+            sum(
+                label.text() == "Scrobble Ratings"
+                for label in widget.findChildren(QLabel)
+            )
+            == 1
+        )
+        assert widget.findChild(AppComboBox, "listenbrainzRatings") is None
+        assert widget.findChild(AppComboBox, "lastfmRatings") is None
+        settings.set_global(SCROBBLE_DURING_SYNC, False)
+        combo.setCurrentIndex(combo.findData(True))
+        assert settings.get(SCROBBLE_RATINGS)
+        assert not settings.get(BACK_SYNC_RATINGS)
+        assert not settings.get(SCROBBLE_DURING_SYNC)
+        changes = QSignalSpy(settings.settingChanged)
+        widget.retranslate_ui()
+        assert changes.count() == 0
+        settings.load_device("one", {SCROBBLE_RATINGS.key: False})
+        assert not settings.get(SCROBBLE_RATINGS)
+        editor.set_device(True)
+        assert combo.currentData() is False
+        editor.set_device(False)
+        assert combo.currentData() is True
+        rebuilt = SyncSettings(settings, parent)
+        saved = rebuilt.findChild(AppComboBox, "scrobbleRatings")
+        assert saved is not None and saved.currentData() is True
+    finally:
+        parent.close()
+        context.shutdown()
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_manual_scrobbling_uses_rating_setting_even_when_sync_scrobbling_is_off(
+    tmp_path: Path, enabled: bool
+) -> None:
+    device = build_device(tmp_path)
+    context = build_context(device_coordinator=device.coordinator)
+    library = device.active.library
+    device.save(
+        device.prepare(
+            replace(
+                library,
+                tracks=tuple(
+                    replace(song, rating=100, artist="Artist", title="Song")
+                    for song in library.tracks
+                ),
+            )
+        )
+    )
+    context.device_controller.finish_library_save(device.active)
+    context.settings.set_global(LISTENBRAINZ_USERNAME, "alice")
+    context.settings.set_global(LASTFM_USERNAME, "alice")
+    context.settings.set_global(SCROBBLE_RATINGS, enabled)
+    context.settings.set_global(SCROBBLE_DURING_SYNC, False)
+    transport = FeedbackTransport()
+    lastfm_transport = FeedbackTransport()
+    for _ in library.tracks:
+        transport.responses.extend([{"recording_mbid": MBID}, {"status": "ok"}])
+        lastfm_transport.responses.append({"status": "ok"})
+    credentials = MemoryCredentials()
+    service = ScrobbleService(
+        device.coordinator,
+        ScrobbleQueue(AtomicHostFile(tmp_path / "queue.json")),
+        credentials,
+        clients=lambda service: (
+            LastFmClient(lastfm_transport)
+            if service is Service.LASTFM
+            else ListenBrainzClient(transport)
+        ),
+    )
+    controller = ScrobbleController(
+        service, credentials, context.settings, context.device_controller
+    )
+    progress = QSignalSpy(controller.progress)
+    try:
+        assert controller.scrobble_now()
+        # A worker uses the captured choice, independent of later settings edits.
+        context.settings.set_global(SCROBBLE_RATINGS, not enabled)
+        wait_for(lambda: not controller.busy)
+        assert controller.last_result is not None
+        assert controller.last_result.feedback_accepted == (
+            2 * len(library.tracks) if enabled else 0
+        )
+        assert bool(transport.calls) == enabled
+        assert bool(lastfm_transport.calls) == enabled
+        events = [progress.at(index)[0] for index in range(progress.count())]
+        assert all(isinstance(event, ScrobbleProgress) for event in events)
+        if enabled:
+            for name in ("lastfm", "listenbrainz"):
+                ratings = [
+                    event for event in events if event.phase == f"{name}.ratings"
+                ]
+                assert ratings[-1].completed == ratings[-1].total == len(library.tracks)
+    finally:
+        controller.shutdown()
+        context.shutdown()
+        device.coordinator.close()
 
 
 def test_service_sign_in_credentials_are_masked_validated_and_disconnected(

@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QListView,
+    QMessageBox,
     QProgressDialog,
     QPushButton,
     QSplitter,
@@ -38,6 +39,7 @@ from tests.iOpenPod.GUI.application_shell_test_support import (
     tracks as _tracks,
 )
 
+from iOpenPod.app import developer_flags
 from iOpenPod.app.backups import BackupProgress, BackupStage
 from iOpenPod.app.chaptered_conversion_controller import ChapteredConversionController
 from iOpenPod.app.context import AppContext
@@ -60,6 +62,7 @@ from iOpenPod.app.core.settings.definitions import (
     PlayerPosition,
 )
 from iOpenPod.app.core.status import StatusAction, StatusProgress
+from iOpenPod.app.library_export import ExportResult
 from iOpenPod.app.library_write import WriteProgress
 from iOpenPod.app.library_write_controller import PreparationState
 from iOpenPod.app.models.collection_list_model import (
@@ -106,6 +109,36 @@ from iOpenPod.GUI.widgets.track_actions import TrackActions
 from iOpenPod.GUI.widgets.track_list_header import LibrarySplitter
 from iOpenPod.GUI.widgets.track_table import TrackTable
 from iPodDB.library import LibrarySnapshot, MediaType, Playlist, Track
+from storage import HostPath
+
+
+@pytest.mark.parametrize(("count", "noun"), [(1, "track"), (3, "tracks")])
+def test_playlist_export_completion_warns_about_skipped_tracks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, count: int, noun: str
+) -> None:
+    context = _context()
+    window = MainWindow(context, auto_discover=False)
+    warnings: list[tuple[str, str]] = []
+
+    def warn(_parent: QWidget, title: str, detail: str) -> None:
+        warnings.append((title, detail))
+
+    monkeypatch.setattr(QMessageBox, "warning", warn)
+    try:
+        window._export_finished(  # pyright: ignore[reportPrivateUsage]
+            ExportResult(HostPath(tmp_path / "Road Trip.m3u8"), (), count)
+        )
+
+        assert warnings == [
+            (
+                "Export Complete",
+                f"Created Road Trip.m3u8\n\nSkipped {count} playlist {noun} "
+                "that could not be found on this host.",
+            )
+        ]
+    finally:
+        window.close()
+        context.shutdown()
 
 
 @pytest.mark.parametrize("pending_update", ["player_rating", "playlist_scroll"])
@@ -487,7 +520,11 @@ def test_chaptered_conversion_uses_the_status_bar_for_progress_and_results(
         context.shutdown()
 
 
-def test_shell_contains_persistent_player_sidebar_and_all_routes() -> None:
+@pytest.mark.parametrize("extras_enabled", (False, True))
+def test_shell_contains_persistent_player_sidebar_and_all_routes(
+    extras_enabled: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(developer_flags, "ENABLE_EXTRAS_PAGES", extras_enabled)
     context = _context()
     context.settings.set_global(
         IPOD_LIBRARY_VIEW_MODE, IPodLibraryViewMode.SPLIT_TABLE.value
@@ -508,8 +545,10 @@ def test_shell_contains_persistent_player_sidebar_and_all_routes() -> None:
         assert player is not None
         assert player.height() == LAYOUT.player_idle_height
         assert pages is not None
-        # Normalize Tags is a maintenance dialog, not an empty navigation page.
-        assert pages.count() == len(PageId) - 1
+        # Normalize Tags is a dialog and Alarms remains a development page.
+        assert pages.count() == len(PageId) - 1 - (0 if extras_enabled else 1)
+        assert window.findChild(QWidget, "calendarPage") is not None
+        assert (window.findChild(QWidget, "alarmsPage") is not None) is extras_enabled
         assert splitter is not None
         assert splitter.count() == 2
         assert splitter.handleWidth() == LAYOUT.track_list_handle_height
@@ -601,7 +640,7 @@ def test_player_position_setting_moves_the_existing_player() -> None:
     try:
         window.show()
         APPLICATION.processEvents()
-        shell = window.centralWidget()
+        shell = window.findChild(QWidget, "appShell")
         player = window.findChild(PlayerBar)
         position_combo = window.findChild(AppComboBox, "playerPositionCombo")
         assert shell is not None
@@ -639,7 +678,7 @@ def test_saved_bottom_player_position_is_applied_during_composition() -> None:
     window = MainWindow(context, auto_discover=False)
 
     try:
-        shell = window.centralWidget()
+        shell = window.findChild(QWidget, "appShell")
         player = window.findChild(PlayerBar)
         assert shell is not None
         shell_layout = shell.layout()
@@ -961,7 +1000,7 @@ def test_library_views_use_virtualized_model_view_primitives() -> None:
             table.horizontalHeader().sectionResizeMode(1)
             is QHeaderView.ResizeMode.Interactive
         )
-        assert table.verticalScrollMode() is table.ScrollMode.ScrollPerItem
+        assert table.verticalScrollMode() is table.ScrollMode.ScrollPerPixel
         assert table.selectionBehavior() is table.SelectionBehavior.SelectRows
         index_widget: QWidget | None = table.indexWidget(table_model.index(0, 0))
         assert index_widget is None

@@ -434,6 +434,7 @@ class SyncWorkspace(QWidget):
         self.browser: HostLibraryBrowser | None = None
         self._supported_pages = self.library_page_ids
         self._visible_pages: frozenset[PageId] = frozenset()
+        self._current_library_page: PageId | None = None
         self._stream_profile: DeviceProfile | None = None
         self._stream_dialog: MediaStreamsDialog | None = None
         self._connected_pages: dict[PageId, QWidget] = {}
@@ -510,7 +511,7 @@ class SyncWorkspace(QWidget):
         selection_page_layout.addWidget(selection_body, 1)
         selection_page_layout.addWidget(selection_footer)
 
-        self._review = SyncPlanPage(self)
+        self._review = SyncPlanPage(self, theme_manager=theme_manager)
         self.execution = SyncExecutionPage(self)
         self._execution_available = False
         self._podcast_count = 0
@@ -737,16 +738,14 @@ class SyncWorkspace(QWidget):
             or bool(active_ipod.library.tracks)
         )
         self._scan_issues.load((*library.issues, *ipod_media.issues))
+        self._storage_projection = None
+        self.selection.reset(library, comparison)
         self._storage_projection = SyncStorageProjection(
             library, ipod_media, active_ipod.candidate, active_ipod.profile
         )
         self._storage_bar.set_device(active_ipod)
         browser = self._ensure_browser()
-        # Loading resets every list; pause all pages so only the one shown below
-        # filters and sorts the new library.
-        browser.set_live_page(None)
         browser.load(library)
-        self.selection.reset(library, comparison)
         # Playlists synced before stay synced; others are ticked in Select Media.
         self.selection.choose_playlists(
             association.host_playlist_id
@@ -756,6 +755,7 @@ class SyncWorkspace(QWidget):
             reset = getattr(page, "reset", None)
             if callable(reset):
                 reset()  # read the servers again on the next visit
+        self._refresh_storage_estimate()
         self._refresh_stream_error()
         self._stream_error_label.setVisible(bool(self.selection.preference_error))
         self._refresh_library_navigation()
@@ -776,12 +776,11 @@ class SyncWorkspace(QWidget):
         self._library_stack.setVisible(bool(self._visible_pages))
         if browser is None:
             return
-        current = self._library_stack.currentWidget()
-        for page_id, page in browser.page_widgets.items():
-            if page_id in self._visible_pages and page is current:
-                self._show_library_page(page_id.value)
-                return
-        for page_id in browser.page_widgets:
+        current = self._current_library_page
+        if current is not None and current in self._visible_pages:
+            self._show_library_page(current.value)
+            return
+        for page_id in browser.page_ids:
             if page_id in self._visible_pages:
                 self._show_library_page(page_id.value)
                 return
@@ -956,6 +955,7 @@ class SyncWorkspace(QWidget):
         if stage is not SyncStage.SCANNING:
             self.stop_scan()
         self._stage = stage
+        self._review.set_deferred(stage is not SyncStage.REVIEW)
         self._refresh_stage_labels()
         self._refresh_review_summary()
         self._storage_bar.setVisible(
@@ -983,8 +983,6 @@ class SyncWorkspace(QWidget):
         connected = self._connected_pages.get(page_id)
         if connected is not None:
             self._library_stack.setCurrentWidget(connected)
-            if self.browser is not None:
-                self.browser.set_live_page(None)
             self._library_navigation.set_current_page(page_id)
             return
         browser = self.browser
@@ -992,11 +990,11 @@ class SyncWorkspace(QWidget):
             return
         if page_id not in self._visible_pages:
             return
-        page = browser.page_widgets.get(page_id)
-        if page is None:
-            return
+        page = browser.page(page_id)
+        if self._library_stack.indexOf(page) == -1:
+            self._library_stack.addWidget(page)
         self._library_stack.setCurrentWidget(page)
-        browser.set_live_page(page)
+        self._current_library_page = page_id
         self._library_navigation.set_current_page(page_id)
         if page_id is not PageId.PLAYLISTS:
             browser.playlist_page.select_playlist(None)
@@ -1025,8 +1023,6 @@ class SyncWorkspace(QWidget):
             self.selection,
             choose_streams=self._choose_streams,
         )
-        for page in browser.pages:
-            self._library_stack.addWidget(page)
         browser.playlist_page.playlistSelected.connect(self._playlist_page_selected)
         self.browser = browser
         return browser
@@ -1105,6 +1101,9 @@ class SyncWorkspace(QWidget):
             self._refresh_storage_estimate()
 
     def _refresh_review_summary(self) -> None:
+        if self._stage is not SyncStage.REVIEW:
+            self._execute.setEnabled(False)
+            return
         playlist_count = (
             sum(row.actionable for row in self._playlist_preview)
             if self.reconcile_playlists
@@ -1152,7 +1151,6 @@ class SyncWorkspace(QWidget):
         self._execute.setEnabled(
             self._execution_available
             and not self.selection.preference_error
-            and self._stage is SyncStage.REVIEW
             and (selected_work or self._library_refresh_available)
         )
         summary = (

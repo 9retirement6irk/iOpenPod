@@ -145,8 +145,9 @@ The three persistent stores serve different purposes:
 | Library Sync Helper | `iPod_Control/iOpenPod/library-sync-helper.json`; reusable analysis and proven Sync history | Valid format/checksum and matching item identity, Device Path, size, filesystem-aware modification time | Library contents or authority to mutate the device |
 
 Checksums detect damaged cache documents; they do not make cached source facts
-authoritative. Host cache v16 reads supported older v9-v15 records, preserving
-healthy reusable work. Incomplete Photos and failed Playlist reads are retried
+authoritative. Host cache v17 reads supported older v9-v16 records. A one-time
+metadata refresh recovers previously unread ratings while reusing Acoustic
+Fingerprints for unchanged files. Incomplete Photos and failed Playlist reads are retried
 without invalidating healthy neighbors. Successfully parsed Playlists with ordinary
 parser warnings can be reused; older ambiguous records are reparsed once.
 
@@ -230,6 +231,16 @@ The application compares the two libraries using available identity evidence. Wh
 iPod tags differ from their committed baseline but Host file facts appear
 unchanged, it refreshes the affected Host metadata before presenting the plan.
 Changing or disconnecting the Active iPod invalidates that handoff.
+
+This targeted refresh uses the Host scanner's existing limit of up to eight
+inspection workers. Each completed read frees a slot for another Track, so an
+earlier slow file does not hold up later results. Progress reports the completed
+Track count, total, and most recently completed filename; rapid updates are
+coalesced while preserving the first and final counts. The progress bar and ETA
+cover these reads, with completion shown while the Library and cache are finalized.
+Acoustic Fingerprints are reused. Source validation remains in Storage, and
+cancellation or failure stops admission and joins the workers before returning.
+Only a fully successful refresh reaches the Library rebuild and cache update.
 
 Select Media and Review show diagnostics from both scans. iPod-only removal
 candidates start unselected; a partial Host scan therefore does not automatically

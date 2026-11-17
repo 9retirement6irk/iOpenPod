@@ -15,6 +15,7 @@ from iOpenPod.app.core.settings.stores import (
 )
 from iOpenPod.app.core.status import ApplicationStatus
 from iOpenPod.app.device_controller import DeviceController
+from iOpenPod.app.extras_controller import ExtrasController
 from iOpenPod.app.games_controller import GamesController
 from iOpenPod.app.genius_analysis import FFmpegGeniusPCMDecoder, GeniusAnalysisService
 from iOpenPod.app.host_media_controller import HostMediaScanController
@@ -35,6 +36,7 @@ from iOpenPod.app.models.track_table_model import TrackTableModel
 from iOpenPod.app.phase_analysis import PhaseAnalysisService
 from iOpenPod.app.photo_controller import PhotoController
 from iOpenPod.app.playback.qt_backend import QtPlaybackBackend
+from iOpenPod.app.playback.video_output import PlaybackVideoOutput
 from iOpenPod.app.playback_controller import PlaybackController
 from iOpenPod.app.podcasts.artwork_controller import PodcastArtworkController
 from iOpenPod.app.podcasts.controller import PodcastController
@@ -42,9 +44,11 @@ from iOpenPod.app.podcasts.feed_client import (
     FeedparserPodcastClient,
     HttpPodcastArtworkLoader,
 )
+from iOpenPod.app.preferences_controller import PreferencesController
 from iOpenPod.app.services.device_coordinator import DeviceCoordinator
 from iOpenPod.app.synesthesia import SynesthesiaController, WholeTrackMusicAnalyzer
 from iOpenPod.app.synesthesia.audio import FFmpegDecoder
+from iOpenPod.app.tone_conversion_controller import ToneConversionController
 from iOpenPod.GUI.presentation.i18n.manager import I18nManager
 from iOpenPod.GUI.presentation.theme.manager import ThemeManager
 from iPodDB.library import MediaKind
@@ -86,9 +90,43 @@ class AppContext:
     stream_preferences: MediaStreamPreferences = field(
         default_factory=MediaStreamPreferences
     )
+    playback_video_output: PlaybackVideoOutput | None = None
     games_controller: GamesController = field(init=False)
+    extras_controller: ExtrasController = field(init=False)
+    tone_conversion_controller: ToneConversionController = field(init=False)
+    preferences_controller: PreferencesController = field(init=False)
 
     def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "tone_conversion_controller",
+            ToneConversionController(
+                self.device_controller,
+                self.device_coordinator,
+                self.device_controller,
+                find_tool=self.find_media_tool,
+            ),
+        )
+        object.__setattr__(
+            self,
+            "preferences_controller",
+            PreferencesController(
+                self.device_coordinator,
+                self.device_controller,
+                self.device_controller,
+                status=self.status,
+            ),
+        )
+        object.__setattr__(
+            self,
+            "extras_controller",
+            ExtrasController(
+                self.device_coordinator,
+                self.device_controller,
+                self.device_controller,
+                status=self.status,
+            ),
+        )
         object.__setattr__(
             self,
             "games_controller",
@@ -219,10 +257,11 @@ class AppContext:
             settings=settings,
         )
         podcast_artwork_controller = PodcastArtworkController(
-            HttpPodcastArtworkLoader(),
+            HttpPodcastArtworkLoader(access=podcast_controller.access),
             application,
-            feed_client=FeedparserPodcastClient(),
+            feed_client=FeedparserPodcastClient(access=podcast_controller.access),
         )
+        podcast_controller.loginChanged.connect(podcast_artwork_controller.invalidate)
         status = ApplicationStatus(application)
         library_write_controller = LibraryWriteController(
             device_coordinator,
@@ -265,6 +304,7 @@ class AppContext:
             host_media_controller=host_media_controller,
             ipod_media_controller=ipod_media_controller,
             playback_controller=playback_controller,
+            playback_video_output=playback_backend,
             lyrics_controller=lyrics_controller,
             synesthesia_controller=synesthesia_controller,
             podcast_controller=podcast_controller,
@@ -292,6 +332,9 @@ class AppContext:
         self.playback_controller.shutdown()
         self.backup_controller.shutdown()
         self.games_controller.shutdown()
+        self.extras_controller.shutdown()
+        self.tone_conversion_controller.shutdown()
+        self.preferences_controller.shutdown()
         self.host_media_controller.shutdown()
         self.ipod_media_controller.shutdown()
         self.podcast_controller.shutdown()

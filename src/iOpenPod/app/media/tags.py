@@ -9,13 +9,14 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import replace
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from mutagen.apev2 import APETextValue
 from mutagen.id3 import ID3, ID3TimeStamp
 from mutagen.mp4 import AtomDataType, MP4FreeForm
+from whenever import TimeDelta
 
+from iOpenPod.app.core.dates import parse_iso_instant
 from iOpenPod.app.media.content_type import classify_content_type
 from iOpenPod.app.media.models import MediaTag
 from iPodDB.library import ContentAdvisory, MediaType, Track
@@ -25,6 +26,7 @@ if TYPE_CHECKING:
 
 # Native names precede editor/FFprobe aliases. Order defines conflict precedence.
 _ALIASES: dict[str, tuple[str, ...]] = {
+    "rating": ("----:com.apple.iTunes:RATING", "RATING", "WM/SharedUserRating"),
     "title": ("TIT2", "©nam", "title"),
     "artist": ("TPE1", "©ART", "artist", "Author"),
     "album": ("TALB", "©alb", "album", "WM/AlbumTitle"),
@@ -112,6 +114,9 @@ _ALIASES: dict[str, tuple[str, ...]] = {
     "purchaser_name": ("ownr", "ITUNESOWNER"),
 }
 TAG_NAMES = frozenset((*_ALIASES, "rating"))
+FALLBACK_PROBE_FORMAT_TAGS = tuple(
+    sorted({alias.casefold() for aliases in _ALIASES.values() for alias in aliases})
+)
 
 
 class _Tags(Protocol):
@@ -124,6 +129,35 @@ class _TagKeys(Protocol):
 
 def _key(value: str) -> str:
     return re.sub(r"[ _-]", "", value.casefold())
+
+
+def _star_rating(raw: str) -> str | None:
+    """Normalize native 5-star, percentage, or POPM-scale ratings to 0..100."""
+    try:
+        value = float(raw.strip())
+    except ValueError:
+        return None
+    if not math.isfinite(value):
+        return None
+    if value <= 0:
+        return "0"
+    if value <= 5:
+        stars = int(value + 0.5)
+    elif value <= 100:
+        stars = int(value / 20 + 0.5)
+    else:
+        stars = (
+            1
+            if value <= 31
+            else 2
+            if value <= 95
+            else 3
+            if value <= 159
+            else 4
+            if value <= 223
+            else 5
+        )
+    return str(max(1, min(5, stars)) * 20)
 
 
 def _text(value: object, depth: int = 0) -> str:
@@ -242,6 +276,10 @@ def read_tag_values(tags: object) -> tuple[MediaTag, ...]:
                 if value <= 223
                 else 100
             )
+    if "rating" in result and (stars := _star_rating(result["rating"])) is not None:
+        result["rating"] = stars
+    else:
+        result.pop("rating", None)
     # FFprobe qualifies ID3 USLT language/description with a lyrics- prefix.
     if "lyrics" not in result:
         for name in sorted(names.values()):
@@ -291,12 +329,12 @@ def _release_date(text: str) -> int | None:
             text += "-01-01"
         elif re.fullmatch(r"\d{4}-\d{2}", text, re.ASCII):
             text += "-01"
-        date = datetime.fromisoformat(text.replace("Z", "+00:00"))
-        if date.tzinfo is None:
-            date = date.replace(tzinfo=UTC)
-        seconds = int((date - datetime(1970, 1, 1, tzinfo=UTC)).total_seconds())
+        # Host tags with no offset use UTC as a stable projection. iPod fields
+        # retain whole seconds: floor fractional input, including before 1970.
+        # Native zero/1904 and u32 limits remain the iPodDB boundary (ADR-0240).
+        seconds = parse_iso_instant(text, naive_zone=TimeDelta.ZERO).timestamp()
         return seconds if -2_082_844_800 < seconds <= 2_212_122_495 else None
-    except ValueError:
+    except (OverflowError, ValueError):
         return None
 
 

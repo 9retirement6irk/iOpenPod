@@ -203,6 +203,8 @@ def test_connected_pages_join_the_media_list(
         buttons["albums"].click()
         assert not contacts.isVisible()
 
+        # The Review summary is only worked out while Review is showing.
+        workspace.show_review()
         workspace.set_extras_pending(True)
         summary = workspace.findChild(QLabel, "syncReviewSummary")
         assert summary is not None

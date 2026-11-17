@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from iOpenPod.app import developer_flags
 from iOpenPod.app.artwork_controller import ArtworkLoadFailure
 from iOpenPod.app.artwork_policy import rockbox_tag_policy
 from iOpenPod.app.backups import BackupProgress
@@ -38,9 +39,11 @@ from iOpenPod.app.connected_controller import (
 )
 from iOpenPod.app.context import AppContext
 from iOpenPod.app.core.settings.definitions import (
+    BACK_SYNC_RATINGS,
     NAVIGATION_STYLE,
     PLAYER_AUTO_MINIMIZE,
     PLAYER_POSITION,
+    RATING_CONFLICT_POLICY,
     ROCKBOX_METADATA_SUPPORT,
     WINDOW_GEOMETRY,
     NavigationStyle,
@@ -53,16 +56,18 @@ from iOpenPod.app.device_controller import (
     DeviceOperationFailure,
 )
 from iOpenPod.app.display_text import source_text
-from iOpenPod.app.host_media_folders import HostMediaFolder
+from iOpenPod.app.host_media_folders import HostMediaFolder, load_host_media_folders
 from iOpenPod.app.host_media_library import (
     HostMediaLibrary,
     HostMediaScanProgress,
+    HostMediaScanStage,
     PlaylistExternalReference,
 )
 from iOpenPod.app.library_export import (
     ExportProgress,
     ExportResult,
     PhotoExportResult,
+    PlaylistExportMode,
 )
 from iOpenPod.app.library_export_controller import LibraryExportController
 from iOpenPod.app.library_sync_helper import (
@@ -80,9 +85,13 @@ from iOpenPod.app.playback.backend import PlaybackFailure
 from iOpenPod.app.podcasts.sync import PodcastSyncRequest
 from iOpenPod.app.remote_media import RemoteCatalog, merge_remote
 from iOpenPod.app.scrobbling.controller import create_scrobbling
-from iOpenPod.app.scrobbling.models import ScrobbleResult
+from iOpenPod.app.scrobbling.models import ScrobbleProgress, ScrobbleResult
 from iOpenPod.app.scrobbling.settings import configured_accounts
 from iOpenPod.app.services.media_tools import MediaToolSetup
+from iOpenPod.app.sync_comparison_controller import (
+    SyncComparison,
+    SyncComparisonController,
+)
 from iOpenPod.app.sync_controller import SyncController
 from iOpenPod.app.sync_execution import (
     SyncExecutionResult,
@@ -90,7 +99,7 @@ from iOpenPod.app.sync_execution import (
     SyncExecutor,
     review_playlist_sync,
 )
-from iOpenPod.app.sync_plan import host_path_identity, prepare_sync_plan
+from iOpenPod.app.sync_plan import host_path_identity
 from iOpenPod.app.synesthesia import AnalysisProgress, TrackAnalysis
 from iOpenPod.app.tag_normalization_controller import TagNormalizationController
 from iOpenPod.app.tag_normalizer import tag_profile
@@ -111,8 +120,11 @@ from iOpenPod.GUI.dialogs.phase_runtime_setup import PhaseRuntimeSetupDialog
 from iOpenPod.GUI.dialogs.playlist_export import PlaylistExportDialog
 from iOpenPod.GUI.dialogs.scrobble_report import show_scrobble_report
 from iOpenPod.GUI.dialogs.tag_normalizer import TagNormalizerDialog
+from iOpenPod.GUI.dialogs.tone_conversion import ToneConversionDialog
 from iOpenPod.GUI.navigation import PageId
+from iOpenPod.GUI.pages.alarms_page import AlarmsPage
 from iOpenPod.GUI.pages.backup_page import BackupPage
+from iOpenPod.GUI.pages.calendar_page import CalendarPage
 from iOpenPod.GUI.pages.collection_page import CollectionPage
 from iOpenPod.GUI.pages.connected_pages import (
     CalendarsPage,
@@ -126,13 +138,16 @@ from iOpenPod.GUI.pages.device_summary import DeviceSummaryPage
 from iOpenPod.GUI.pages.games_page import GamesPage
 from iOpenPod.GUI.pages.genius_page import GeniusPage
 from iOpenPod.GUI.pages.library_page import LibraryPage
+from iOpenPod.GUI.pages.now_playing_page import NowPlayingPage
 from iOpenPod.GUI.pages.photo_page import PhotoPage
 from iOpenPod.GUI.pages.playlist_page import PlaylistPage
 from iOpenPod.GUI.pages.podcast_page import PodcastPage
 from iOpenPod.GUI.pages.settings_page import SettingsPage
 from iOpenPod.GUI.pages.start_page import StartPage
 from iOpenPod.GUI.pages.synesthesia_page import SynesthesiaPage
+from iOpenPod.GUI.pages.tones_page import TonesPage
 from iOpenPod.GUI.pages.track_page import TrackPage
+from iOpenPod.GUI.pages.video_player_page import VideoPlayerPage
 from iOpenPod.GUI.presentation.artwork_provider import ArtworkPixmapProvider
 from iOpenPod.GUI.presentation.desktop_services import open_desktop_url
 from iOpenPod.GUI.presentation.i18n.text import (
@@ -159,13 +174,14 @@ from iOpenPod.GUI.widgets.album_grid import AlbumGridView
 from iOpenPod.GUI.widgets.collection_grid import CollectionGridView
 from iOpenPod.GUI.widgets.compact_top_bar import CompactTopBar
 from iOpenPod.GUI.widgets.host_media_drop import HostMediaDropTarget
+from iOpenPod.GUI.widgets.page_fade import PageFade
 from iOpenPod.GUI.widgets.playback_pane import PlaybackPane, PlaybackPaneHost
 from iOpenPod.GUI.widgets.player_bar import PlayerBar
 from iOpenPod.GUI.widgets.sidebar import Sidebar
 from iOpenPod.GUI.widgets.status_controls import StatusBarControls
 from iOpenPod.GUI.widgets.status_list import StatusListButton
 from iOpenPod.GUI.widgets.track_actions import TrackActions
-from iPodDB.library import MediaKind, Photo, Track, TrackFieldEdit
+from iPodDB.library import MediaKind, Photo, Track, TrackFieldEdit, is_video_track
 from storage import HostPath, Storage
 
 if TYPE_CHECKING:
@@ -249,11 +265,14 @@ class MainWindow(QMainWindow):
         self._export_controller.failed.connect(self._export_failed)
         self._export_controller.cancelled.connect(self._export_cancelled)
         self._pending_host_media_library: HostMediaLibrary | None = None
-        self._pending_ipod_media_library: IPodMediaLibrary | None = None
+        self._pending_track_refresh: tuple[ActiveIPod, IPodMediaLibrary] | None = None
+        self._sync_comparison = SyncComparisonController(self)
+        self._sync_comparison.finished.connect(self._sync_comparison_finished)
+        self._sync_comparison.failed.connect(self._media_scan_failed)
         self._review_host: HostMediaLibrary | None = None
+        self._playlist_preview_dirty = False
         self._review_ipod: IPodMediaLibrary | None = None
         self._review_active: ActiveIPod | None = None
-        self._playlist_preview_stale = False
         scrobbler, self._scrobbling = create_scrobbling(
             context.device_coordinator,
             context.settings,
@@ -285,12 +304,14 @@ class MainWindow(QMainWindow):
         # Plex and Grimmory listed for the current Sync, merged after the scan.
         self._remote_catalog: RemoteCatalog | None = None
         self._stars_pending = False
+        self._scrobbling.progress.connect(self._scrobble_progress)
         self._scrobbling.finished.connect(self._scrobble_finished)
         self._scrobbling.set_plex_source(self._connected.plex_credentials)
         self._sync_controller = SyncController(
             SyncExecutor(
                 context.device_coordinator,
                 scrobbler=scrobbler,
+                podcast_access=context.podcast_controller.access,
                 find_tool=context.find_media_tool,
             ),
             context.library_workspace,
@@ -496,6 +517,7 @@ class MainWindow(QMainWindow):
             self._pages,
             scrobbling=self._scrobbling,
             connected=self._connected,
+            preferences=context.preferences_controller,
         )
         self._media_tools = MediaToolsController(
             self, find_tool=context.find_media_tool
@@ -666,6 +688,23 @@ class MainWindow(QMainWindow):
             self._pages.addWidget(page)
         self._pages.addWidget(self._photo_page)
         self._pages.addWidget(self._games_page)
+        calendar_page = CalendarPage(
+            context.extras_controller, self._pages, connected=self._connected
+        )
+        self._page_widgets[PageId.CALENDAR] = calendar_page
+        self._pages.addWidget(calendar_page)
+        tones_page = TonesPage(context.extras_controller, self._pages)
+        tones_page.previewRequested.connect(context.playback_controller.pause)
+        self._page_widgets[PageId.TONES] = tones_page
+        self._pages.addWidget(tones_page)
+        self._tone_dialog: ToneConversionDialog | None = None
+        self._track_actions.toneConversionRequested.connect(
+            self._tone_conversion_requested
+        )
+        if developer_flags.ENABLE_EXTRAS_PAGES:
+            alarms_page = AlarmsPage(context.extras_controller, self._pages)
+            self._page_widgets[PageId.ALARMS] = alarms_page
+            self._pages.addWidget(alarms_page)
         self._pages.addWidget(self._backup_page)
         self._pages.addWidget(self._synesthesia_page)
         self._pages.addWidget(self._settings_page)
@@ -725,8 +764,37 @@ class MainWindow(QMainWindow):
         self._workspaces.currentChanged.connect(self._exit_synesthesia_fullscreen)
         self._workspaces.currentChanged.connect(self._apply_navigation_style)
         self._apply_navigation_style()
-        self.setCentralWidget(shell)
-        # Window chrome stays outside both stacks for every page and workspace.
+        self._normal_shell = shell
+        self._shell_pages = QStackedWidget(self)
+        self._shell_pages.setObjectName("shellPages")
+        self._shell_pages.addWidget(shell)
+        self._now_playing_page = NowPlayingPage(
+            context.playback_controller,
+            context.theme_manager,
+            self._artwork_provider,
+            self._shell_pages,
+        )
+        self._shell_pages.addWidget(self._now_playing_page)
+        self._now_playing_page.closeRequested.connect(self._close_now_playing)
+        self._video_player_page = VideoPlayerPage(
+            context.playback_controller,
+            context.playback_video_output,
+            self._shell_pages,
+        )
+        self._shell_pages.addWidget(self._video_player_page)
+        self._video_player_page.closeRequested.connect(self._close_now_playing)
+        context.playback_controller.currentTrackChanged.connect(
+            self._refresh_now_playing_page
+        )
+        self._player.nowPlayingRequested.connect(self._open_now_playing)
+        self._now_playing_status_visible = False
+        # Cover the whole client area so the status bar fades with the shell.
+        self._now_playing_fade = PageFade(
+            self, duration_ms=LAYOUT.now_playing_page_fade_ms
+        )
+        self._now_playing_fade.setObjectName("nowPlayingPageFade")
+        self.setCentralWidget(self._shell_pages)
+        # Status is shell-owned; Now Playing temporarily hides it.
         status_bar = QStatusBar(self)
         status_bar.setObjectName("appStatusBar")
         status_bar.setSizeGripEnabled(False)
@@ -759,7 +827,7 @@ class MainWindow(QMainWindow):
         self._sync_workspace.selection.changed.connect(self._refresh_playlist_preview)
         self._sync_workspace.selection.changed.connect(self._refresh_default_status)
         self._sync_workspace.stageChanged.connect(self._refresh_default_status)
-        self._sync_workspace.stageChanged.connect(self._refresh_stale_playlist_preview)
+        self._sync_workspace.stageChanged.connect(self._sync_stage_changed)
         self._sync_workspace.playlistReconciliationChanged.connect(
             self._refresh_playlist_preview
         )
@@ -1163,6 +1231,61 @@ class MainWindow(QMainWindow):
             self._context.playback_controller.queue_model.rowCount()
         )
 
+    def _open_now_playing(self) -> None:
+        if (
+            self._context.playback_controller.current_track is None
+            or self._shell_pages.currentWidget() is not self._normal_shell
+        ):
+            return
+        self._now_playing_status_visible = not self.statusBar().isHidden()
+        page = self._current_playback_page()
+
+        def show_page() -> None:
+            self.statusBar().hide()
+            self._shell_pages.setCurrentWidget(page)
+            page.focus_close()
+
+        if page is self._video_player_page:
+            self._now_playing_fade.cancel()
+            show_page()
+        else:
+            self._now_playing_fade.transition(show_page)
+
+    def _current_playback_page(self) -> NowPlayingPage | VideoPlayerPage:
+        track = self._context.playback_controller.current_track
+        if track is not None and is_video_track(track):
+            return self._video_player_page
+        return self._now_playing_page
+
+    def _refresh_now_playing_page(self, track: Track | None) -> None:
+        if self._shell_pages.currentWidget() is self._normal_shell:
+            return
+        if track is None:
+            self._close_now_playing()
+            return
+        page = self._current_playback_page()
+        if self._shell_pages.currentWidget() is not page:
+            # Native video surfaces do not participate in QWidget snapshot fades.
+            self._now_playing_fade.cancel()
+            self._shell_pages.setCurrentWidget(page)
+            page.focus_close()
+
+    def _close_now_playing(self) -> None:
+        page = self._shell_pages.currentWidget()
+        if page is self._normal_shell:
+            return
+
+        def restore_shell() -> None:
+            self._shell_pages.setCurrentWidget(self._normal_shell)
+            self.statusBar().setVisible(self._now_playing_status_visible)
+            self._player.setFocus(Qt.FocusReason.OtherFocusReason)
+
+        if page is self._video_player_page:
+            self._now_playing_fade.cancel()
+            restore_shell()
+        else:
+            self._now_playing_fade.transition(restore_shell)
+
     def _queue_group_tracks(self, tracks: tuple[Track, ...]) -> None:
         controller = self._context.playback_controller
         controller.insert_tracks(tracks, controller.queue_model.rowCount())
@@ -1224,9 +1347,11 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(0, 0)
         # Recalculate hidden chrome before Qt applies native fullscreen geometry.
         # A pending layout can otherwise retain the open Playback pane's width.
-        layout = self.layout()
-        if layout is not None:
-            layout.activate()
+        for surface in (self._normal_shell, self._shell_pages, self):
+            layout = surface.layout()
+            if layout is not None:
+                layout.activate()
+            surface.updateGeometry()
         self.showFullScreen()
 
     def _exit_synesthesia_fullscreen(self) -> None:
@@ -1316,6 +1441,7 @@ class MainWindow(QMainWindow):
             or context.backup_controller.busy
             or context.host_media_controller.busy
             or context.ipod_media_controller.busy
+            or self._sync_comparison.busy
             or context.podcast_controller.busy
             or context.library_write_controller.state
             in (PreparationState.PREPARING, PreparationState.SAVING)
@@ -1406,6 +1532,7 @@ class MainWindow(QMainWindow):
         self._connected.shutdown()
         self._exit_synesthesia_fullscreen()
         self._sync_controller.shutdown()
+        self._sync_comparison.shutdown()
         self._normalization.shutdown()
         self._export_controller.shutdown()
         self._chaptered_controller.shutdown()
@@ -1421,6 +1548,7 @@ class MainWindow(QMainWindow):
         tracks = _tracks_from_signal(value)
         if tracks is None:
             return
+        active = self._context.device_controller.active_ipod
         if not self._export_controller.can_start:
             self._show_export_unavailable()
             return
@@ -1433,12 +1561,24 @@ class MainWindow(QMainWindow):
             )
             if directory is None:
                 return
+            if self._context.device_controller.active_ipod is not active:
+                self._show_export_unavailable()
+                return
+            mode = dialog.mode
             if self._export_controller.start_playlist(
                 name,
                 tracks,
                 directory,
                 dialog.selected_file_type,
-                dialog.mode,
+                mode,
+                lyrics_updates=frozenset(
+                    self._context.library_workspace.lyrics_updates
+                ),
+                host_folders=(
+                    load_host_media_folders(self._context.settings)
+                    if mode is PlaylistExportMode.HOST_REFERENCES
+                    else ()
+                ),
             ):
                 self._show_export_progress(self.tr("Preparing Playlist export…"))
         finally:
@@ -1454,8 +1594,44 @@ class MainWindow(QMainWindow):
         directory = self._choose_export_directory(self.tr("Choose Track Export Folder"))
         if directory is None:
             return
-        if self._export_controller.start_tracks(tracks, directory):
+        if self._export_controller.start_tracks(
+            tracks,
+            directory,
+            lyrics_updates=frozenset(self._context.library_workspace.lyrics_updates),
+        ):
             self._show_export_progress(self.tr("Preparing Track export…"))
+
+    def _tone_conversion_requested(self, value: object) -> None:
+        if not isinstance(value, Track):
+            return
+        if self._tone_dialog is not None and self._tone_dialog.isVisible():
+            self._tone_dialog.raise_()
+            return
+        conversion = self._context.tone_conversion_controller
+        if not conversion.start(value):
+            self._show_tone_unavailable()
+            return
+        self._context.extras_controller.refresh()
+        dialog = ToneConversionDialog(
+            value, conversion, self._context.extras_controller, self
+        )
+        dialog.previewRequested.connect(self._context.playback_controller.pause)
+        self._tone_dialog = dialog
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.finished.connect(self._tone_dialog_finished)
+        dialog.open()
+
+    def _show_tone_unavailable(self) -> None:
+        QMessageBox.information(
+            self,
+            self.tr("Convert to tone"),
+            self.tr(
+                "Tone conversion is unavailable while the iPod is busy. Select a saved music track and try again."
+            ),
+        )
+
+    def _tone_dialog_finished(self, _result: int) -> None:
+        self._tone_dialog = None
 
     def _chaptered_conversion_requested(self, value: object) -> None:
         tracks = _tracks_from_signal(value)
@@ -1615,6 +1791,20 @@ class MainWindow(QMainWindow):
                 )
         elif isinstance(value, ExportResult) and value.playlist_file is not None:
             detail = self.tr("Created %1").replace("%1", value.playlist_file.path.name)
+            if count := value.skipped_occurrences:
+                warning = english_count_fallback(
+                    "Skipped %n playlist track(s) that could not be found on this host.",
+                    self.tr(
+                        "Skipped %n playlist track(s) that could not be found on this host.",
+                        None,
+                        count,
+                    ),
+                    count,
+                )
+                QMessageBox.warning(
+                    self, self.tr("Export Complete"), detail + "\n\n" + warning
+                )
+                return
             if value.track_files:
                 detail += "\n" + english_count_fallback(
                     "Exported %n Track file(s) beside it.",
@@ -1705,6 +1895,21 @@ class MainWindow(QMainWindow):
             timeout_ms=0 if running else 20_000,
         )
 
+    def _scrobble_progress(self, progress: ScrobbleProgress) -> None:
+        self._context.status.show(
+            "scrobbling",
+            workflow_text(progress.message),
+            progress=StatusProgress(
+                progress.completed or 0,
+                progress.total or 0,
+                detail=progress.current_item,
+            ),
+            action=StatusAction(
+                "cancel", QCoreApplication.translate("CommonActions", "Cancel")
+            ),
+            timeout_ms=0,
+        )
+
     def _scrobble_finished(self, result: ScrobbleResult) -> None:
         message = result.summary
         if result.cancelled:
@@ -1772,6 +1977,10 @@ class MainWindow(QMainWindow):
 
     def _show_page(self, page_value: str) -> None:
         page_id = PageId(page_value)
+        if page_id in (PageId.CALENDAR, PageId.ALARMS, PageId.TONES):
+            if page_id not in self._page_widgets:
+                return
+            self._context.extras_controller.refresh()
         if (
             page_id is not PageId.SYNESTHESIA
             and self._pages.currentWidget() is self._synesthesia_page
@@ -2031,6 +2240,28 @@ class MainWindow(QMainWindow):
             self._context.status.show(
                 "connected.extras", " ".join(parts), timeout_ms=20_000
             )
+            # Calendar reads the iPod's files: show what was just written.
+            self._context.extras_controller.refresh()
+            return
+        if operation == "calendars-publish" and isinstance(_value, ExtrasSent):
+            logger.info(
+                "Calendars sent: calendars=%d issues=%s",
+                _value.calendars,
+                list(_value.issues),
+            )
+            self._context.status.show(
+                "connected.extras",
+                " ".join(
+                    (
+                        self.tr("On the iPod: {calendars} calendars.").format(
+                            calendars=_value.calendars
+                        ),
+                        *_value.issues[:3],
+                    )
+                ),
+                timeout_ms=20_000,
+            )
+            self._context.extras_controller.refresh()
             return
         folders = self._pending_sync_folders
         if operation == "prepare-sync" and folders is not None:
@@ -2095,6 +2326,7 @@ class MainWindow(QMainWindow):
             and not self._context.library_workspace.locked
             and not self._context.host_media_controller.busy
             and not self._context.ipod_media_controller.busy
+            and not self._sync_comparison.busy
             and not self._sync_controller.busy
             and not self._sync_controller.needs_recovery
             and not self._sync_controller.needs_cleanup
@@ -2133,6 +2365,8 @@ class MainWindow(QMainWindow):
     def _start_host_sync(
         self, folders: tuple[HostMediaFolder, ...], *, files: tuple[HostPath, ...] = ()
     ) -> None:
+        if self._sync_comparison.busy:
+            return
         # Plays captured during Sync go to Plex when it's switched on.
         self._scrobbling.ensure_plex()
         controller = self._context.host_media_controller
@@ -2165,7 +2399,7 @@ class MainWindow(QMainWindow):
         cancel_scans = self._sync_workspace.stage is SyncStage.SCANNING
         self._sync_workspace.stop_scan()
         self._pending_host_media_library = None
-        self._pending_ipod_media_library = None
+        self._pending_track_refresh = None
         self._review_host = None
         self._review_ipod = None
         self._review_active = None
@@ -2241,7 +2475,12 @@ class MainWindow(QMainWindow):
                 )
                 return
             self._pending_host_media_library = None
-        self._finish_media_scan(value, None)
+        self._exit_sync_workspace()
+        QMessageBox.information(
+            self,
+            self.tr("Sync Comparison Unavailable"),
+            self.tr("Select an Active iPod before building a Sync selection."),
+        )
 
     def _ipod_media_scan_finished(self, value: object) -> None:
         host, self._pending_host_media_library = (
@@ -2252,80 +2491,78 @@ class MainWindow(QMainWindow):
             return
         active_ipod = self._context.device_controller.active_ipod
         if active_ipod is not None:
-            comparison = prepare_sync_plan(
-                host,
-                value,
-                active_ipod.library,
-                file_tag_policy=rockbox_tag_policy(active_ipod.profile)
-                if self._context.settings.get(ROCKBOX_METADATA_SUPPORT)
-                else None,
+            self._start_sync_comparison(
+                host, value, active_ipod, check_host_details=True
             )
-            remote = {
-                host_path_identity(str(source.path))
-                for source in host.sources
-                if source.remote
-            }
-            paths = frozenset(
-                HostPath(Path(item.host_path))
-                for item in comparison.items
-                if item.metadata_changed
-                and not item.host_size_changed
-                and not item.host_modified_changed
-                and item.host_path is not None
-                # A remote item's details come from its server, not a file.
-                and host_path_identity(item.host_path) not in remote
-            )
-            if paths:
-                self._pending_ipod_media_library = value
-                if self._context.host_media_controller.refresh_tracks(host, paths):
-                    self._show_media_scan_progress(
-                        source_text("Checking Host Track details."), host_scan=False
-                    )
-                    return
-                self._pending_ipod_media_library = None
-                self._media_scan_failed("The Host Track details could not be checked.")
-                return
-        self._finish_media_scan(host, value)
 
     def _host_track_refresh_finished(self, value: object) -> None:
-        ipod, self._pending_ipod_media_library = (
-            self._pending_ipod_media_library,
+        pending, self._pending_track_refresh = (
+            self._pending_track_refresh,
             None,
         )
-        if isinstance(value, HostMediaLibrary) and ipod is not None:
-            self._finish_media_scan(self._with_remote(value), ipod)
+        if not isinstance(value, HostMediaLibrary) or pending is None:
+            return
+        active, ipod = pending
+        if self._context.device_controller.active_ipod is active:
+            self._start_sync_comparison(
+                self._with_remote(value), ipod, active, check_host_details=False
+            )
 
-    def _finish_media_scan(
+    def _start_sync_comparison(
         self,
-        value: HostMediaLibrary,
-        ipod: IPodMediaLibrary | None,
+        host: HostMediaLibrary,
+        ipod: IPodMediaLibrary,
+        active: ActiveIPod,
+        *,
+        check_host_details: bool,
     ) -> None:
-        if ipod is not None:
-            active_ipod = self._context.device_controller.active_ipod
-            if active_ipod is not None:
-                plan = prepare_sync_plan(
-                    value,
-                    ipod,
-                    active_ipod.library,
-                    file_tag_policy=rockbox_tag_policy(active_ipod.profile)
-                    if self._context.settings.get(ROCKBOX_METADATA_SUPPORT)
-                    else None,
-                )
-                self._sync_workspace.load_comparison(value, plan, active_ipod, ipod)
-                self._apply_connected_selection()
-                self._review_host = value
-                self._review_ipod = ipod
-                self._review_active = active_ipod
-                self._refresh_playlist_preview()
-                self._refresh_sync_availability()
-                self.retranslate_ui()
-                return
-        self._exit_sync_workspace()
-        QMessageBox.information(
-            self,
-            self.tr("Sync Comparison Unavailable"),
-            self.tr("Select an Active iPod before building a Sync selection."),
+        self._sync_workspace.update_scan(
+            source_text("Comparing Host and iPod media…"), phase="comparison"
         )
+        self._sync_comparison.start(
+            host,
+            ipod,
+            active,
+            rating_conflict_policy=self._context.settings.get(RATING_CONFLICT_POLICY)
+            if self._context.settings.get(BACK_SYNC_RATINGS)
+            else None,
+            file_tag_policy=rockbox_tag_policy(active.profile)
+            if self._context.settings.get(ROCKBOX_METADATA_SUPPORT)
+            else None,
+            check_host_details=check_host_details,
+        )
+
+    def _sync_comparison_finished(self, value: object) -> None:
+        if (
+            not isinstance(value, SyncComparison)
+            or self._workspaces.currentWidget() is not self._sync_workspace
+            or self._sync_workspace.stage is not SyncStage.SCANNING
+            or self._context.device_controller.active_ipod is not value.active
+        ):
+            return
+        if value.refresh_paths:
+            self._pending_track_refresh = (value.active, value.ipod)
+            if self._context.host_media_controller.refresh_tracks(
+                value.host, value.refresh_paths
+            ):
+                self._sync_workspace.update_scan(
+                    source_text("Checking Host Track details."),
+                    total=len(value.refresh_paths),
+                    phase=f"HostMediaScanProgress:{HostMediaScanStage.REFRESHING.value}",
+                )
+                return
+            self._media_scan_failed("The Host Track details could not be checked.")
+            return
+        self._sync_workspace.load_comparison(
+            value.host, value.plan, value.active, value.ipod
+        )
+        self._apply_connected_selection()
+        self._review_host = value.host
+        self._review_ipod = value.ipod
+        self._review_active = value.active
+        self._refresh_playlist_preview()
+        self._refresh_sync_availability()
+        self.retranslate_ui()
 
     def _apply_connected_selection(self) -> None:
         """Put back ticks kept over a photo update, and tick Immich's photos.
@@ -2352,7 +2589,7 @@ class MainWindow(QMainWindow):
 
     def _ipod_media_scan_failed(self, detail: str) -> None:
         self._pending_host_media_library = None
-        self._pending_ipod_media_library = None
+        self._pending_track_refresh = None
         self._exit_sync_workspace()
         QMessageBox.warning(
             self,
@@ -2362,7 +2599,7 @@ class MainWindow(QMainWindow):
 
     def _media_scan_failed(self, detail: str) -> None:
         self._pending_host_media_library = None
-        self._pending_ipod_media_library = None
+        self._pending_track_refresh = None
         self._exit_sync_workspace()
         QMessageBox.warning(
             self,
@@ -2372,12 +2609,21 @@ class MainWindow(QMainWindow):
 
     def _media_scan_cancelled(self) -> None:
         self._pending_host_media_library = None
-        self._pending_ipod_media_library = None
+        self._pending_track_refresh = None
         self._exit_sync_workspace()
 
     def _cancel_media_scans(self) -> None:
+        if self._sync_comparison.cancel():
+            self._media_scan_cancelled()
         self._context.host_media_controller.cancel()
         self._context.ipod_media_controller.cancel()
+
+    def _sync_stage_changed(self) -> None:
+        if (
+            self._sync_workspace.stage in (SyncStage.PLAYLISTS, SyncStage.REVIEW)
+            and self._playlist_preview_dirty
+        ):
+            self._refresh_playlist_preview()
 
     def _refresh_playlist_preview(self) -> None:
         """Work out Playlist changes for the stages that show them.
@@ -2394,9 +2640,9 @@ class MainWindow(QMainWindow):
             and self._sync_workspace.stage
             not in (SyncStage.PLAYLISTS, SyncStage.REVIEW)
         ):
-            self._playlist_preview_stale = True
+            self._playlist_preview_dirty = True
             return
-        self._playlist_preview_stale = False
+        self._playlist_preview_dirty = False
         selection = self._sync_workspace.selection
         changes = (
             review_playlist_sync(
@@ -2414,10 +2660,6 @@ class MainWindow(QMainWindow):
         self._sync_workspace.set_playlist_preview(
             changes, active.library if active is not None else None
         )
-
-    def _refresh_stale_playlist_preview(self) -> None:
-        if self._playlist_preview_stale:
-            self._refresh_playlist_preview()
 
     def _refresh_sync_availability(self) -> None:
         podcasts = self._context.podcast_controller

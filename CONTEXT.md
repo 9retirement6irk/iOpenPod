@@ -23,6 +23,110 @@ the end of Sync with Host, whose CONNECTED checklists choose what goes on. Plex 
 Scrobbling service for iPod plays, with two-way star ratings. Virtual-volume and
 scripted-protocol tests cover the work; physical-device acceptance is unverified. See
 [ADR-0900](docs/adr/0900-add-connected-sources-and-ipod-extras.md).
+The Calendar page's **Subscribe to Link…** adds a calendar link to Connected Sources
+and publishes it immediately; see
+[ADR-0905](docs/adr/0905-subscribe-to-calendar-links-from-the-calendar-page.md).
+
+Settings > Sync offers default-off **Scrobble Ratings** for connected Last.fm and
+ListenBrainz accounts. During manual scrobbling or the enabled Sync scrobble step,
+committed music ratings map 4-5 stars to Love on both services and 1-2 stars to
+Last.fm Unlove or ListenBrainz Hate. Neutral ratings leave remote feedback unchanged.
+Last.fm uses artist/title; ListenBrainz prefers embedded recording IDs before
+artist/title lookup. Failed feedback retries independently of each account's
+accepted plays and Host-file rating Back Sync. See
+[Scrobbling](docs/scrobbling.md#scrobble-ratings), ADR-0268 and ADR-0269.
+
+Native star ratings in MP4, FLAC/Vorbis, APE and ASF now reach scanned Tracks.
+Settings > Sync offers default-off rating Back Sync to paired Host files, with
+Host/iPod/average conflict choices and separate rating baselines. Host tag writes
+follow verified device publication. Pending Host writes survive a failed write
+or interrupted Sync in a separate iPod catalog. Exports include the current
+rating. See ADR-0252. See
+[Host media tags](docs/host-media-tags.md#rating-reads-and-back-sync).
+
+Settings > iPod Preferences groups and searches saved observations. Explicit
+Apply/Revert editing is implemented behind the currently disabled development
+flag `ENABLE_IPOD_PREFERENCES_WRITES`, for verified fields in the latest studied Mini 1/2,
+Nano 1/3/4/5/6/7, Video 5/5.5 and Classic firmwares. The readable catalog is
+broader than the edit allowlist: partial meanings, raw values and bounded Unknown
+Data summaries remain visible without authorizing writes. Exact identity and
+file framing qualify each interpretation and editor. Nano 5/6/7 use the separate
+`iPodSettings.xml` model; earlier targets use binary Preferences. Nano 4's
+extensionless named store is read-only in the Preferences catalog. Nano 6/7
+Countdown Timer support has been removed by user direction (ADR-0267).
+Optional legacy Nano binary state does not gate XML edits. Clock uncertainty
+remains nonblocking, and unrelated bytes remain preserved. Changes use
+source-checked Storage Transactions. Successful file publication is distinct from
+live firmware adoption, because the iPod can retain and later save its in-memory
+settings.
+Qualified saved Nano 5/6/7 cities now join Classic city rules and Mini effective
+offsets as evidence for the Library's captured Device Time Context. Its historical
+Host interpretation is shared by date reads and explicit new date writes;
+unchanged native words remain preserved. Missing, contradictory or reset-request
+clock evidence falls back to the database offset or UTC without blocking Library
+work. Video and Nano 1/3/4 retain that fallback until a clock source is qualified.
+Later settings changes do not reinterpret the loaded Library or become Library
+write preconditions. See [the time contract](docs/ipod-time.md#captured-clock-sources).
+See [ADR-0248](docs/adr/0248-edit-qualified-firmware-preferences.md) and the
+[supported fields](docs/ipod-preferences.md#qualified-firmware-preference-editing).
+The [coverage matrix and remaining questions](docs/research/preferences-model-coverage-2026-11-07.md)
+distinguish the independently verified targets and unknown settings.
+
+Calendar is available for Mini 1/2, Nano 1–5, Video and Classic through their
+Device Profiles. The same editor serves these models without a firmware version.
+Nano 2 follows the shared policy by user direction while its native firmware
+remains unreadable in the lab. Nano 6/7 report no Calendar support. Compact
+navigation offers Calendar under **Extras**, and Sidebar lists it directly.
+The Alarms page remains behind `ENABLE_EXTRAS_PAGES`.
+
+Calendar lists named and empty calendars alongside All calendars. Users can
+create or rename calendars, import original `.ics`/`.vcs` files, choose a name
+on import and select a destination for new entries. Group renames publish the
+captured member files together. The month grid and day agenda project daily,
+weekly, monthly and yearly series, supported selectors and added/excluded dates.
+They use the native day-query fallback and retain source identity for edits.
+Events can use local time, UTC or a usable zone defined in their Calendar.
+The editor supports saved start-relative, end-relative and absolute reminders,
+and the native To Do states. Unknown properties and unsupported combinations
+retain their original bytes. See [ADR-0251](docs/adr/0251-use-shared-calendar-behavior-by-model.md)
+and the [firmware evidence](docs/research/calendar-firmware-coverage-2026-11-08.md).
+Alarms use localized times, explicit saved enable states and contextual editing.
+The latest studied Classic and Nano 3–5 firmwares support creation, removal,
+date/time, repeat, native labels, enable, tones and native Playlist selection. Mini 1/2 support
+saved time, sound and source-qualified enable edits. Nano 1 and Video edit
+the persistent per-city Clock Alarms, including city creation/removal, manual DST,
+Beep and native Playlist choices; their Preferences projection is not edited.
+Nano 2 1.1.3 follows Nano 1's city editor by explicit user-directed compatibility
+policy (ADR-0261, extended by ADR-0263);
+its encrypted firmware remains unverified. Nano 6/7 have no Alarms route or
+Countdown Timer workflow. Unknown data remains preserved; optional
+Extras failures never block Library loading. Library writes leave saved Alarm
+selections unchanged, including when Playlist positions change or selected Playlists
+are deleted (ADR-0262). Publication uses
+source-checked Storage Transactions and remains distinct from firmware adoption.
+See [Alarms](docs/alarms.md) and
+[ADR-0260](docs/adr/0260-bind-alarm-sounds-to-native-sources-and-preserve-playlist-identities.md).
+
+Classic and Nano 3–5 also expose Tones under Extras. A saved Music Track's
+**Convert to tone…** action analyzes the song locally and arranges a short melodic
+phrase as native notes. Users listen, name and explicitly save the tone; it then
+appears in Alarm sound selection. The original Track and existing Alarms are
+preserved. See [ADR-0265](docs/adr/0265-author-alarm-tones-from-local-melody-arrangements.md)
+for the analysis limits and verified publication path.
+
+The Track metadata editor offers 22 translated EQ presets and **Use iPod setting**.
+Unknown assignments remain preserved until explicitly replaced, and mixed
+selections remain unchanged until edited. The Track table uses the same labels.
+Sync preserves per-Track EQ through Host metadata updates and media replacement;
+EQ-only edits do not request embedded media-tag work. Global device EQ settings
+remain separate. See [ADR-0246](docs/adr/0246-edit-track-eq-with-canonical-presets-and-preserve-it-during-sync.md).
+
+Settings > Sync offers **Calculate missing BPM**, off by default. It shares the
+existing Genius audio-analysis pass and cache, covering new and retained music.
+BPM and Genius are independent options; each file is analyzed once when both are
+on. Existing BPM and Host files are preserved. Normal Smart Playlist evaluation,
+optional Rockbox tagging, Library publication, and Sync history use the resulting
+metadata. See ADR-0076 and ADR-0179.
 
 First launch opens a nine-page onboarding dialog before device loading
 and startup prompts. Users choose navigation style, iPod Library View Mode, device
@@ -221,8 +325,9 @@ Video stream choices can retain primary and alternate audio with their languages
 default status and saved intent. Native subtitle preparation validates track
 headers and repairs unsafe clocks only through exact rescaling. Caption payloads
 are verified, including rejection of remuxes that would drop field-2 data. The
-qualified Classic Preferences view displays Alternate Audio without adding a
-physical settings writer. Device switching and rendering still require playback
+initial qualified Classic Preferences view exposed Alternate Audio read-only;
+the exact-firmware editor now offers saved-byte edits under ADR-0248. Device
+switching and rendering still require playback
 acceptance. See [ADR-0205](docs/adr/0205-adopt-native-video-playback-contracts.md).
 
 Artwork reads now use stored filenames and primary pixel lengths, preserve
@@ -256,13 +361,41 @@ fallback. See [ADR-0198](docs/adr/0198-adopt-native-rule-operands-and-import-mar
 for evidence and cross-model limits.
 
 Binary Play Counts now replaces present playback dates even after clock setbacks,
-while retaining the Finder sentinel and failing closed on unrepresentable dates.
+while retaining the Finder sentinel and exact native words through approximate
+date interpretation. Calendar metadata never blocks Library workflows; see
+[ADR-0240](docs/adr/0240-treat-calendar-dates-as-best-effort-metadata.md).
 Unsupported Smart date ranges preserve both native endpoints and saved membership.
 A qualified Classic 120GB 2.0.1 Preferences view reads full city IDs and exposes
 saved DST and clock-bias observations without using them as extra timestamp
 adjustments. Historical IANA interpretation remains explicit Host policy; raw
 hardware-clock UTC/local provenance remains unproved. See
 [ADR-0196](docs/adr/0196-adopt-firmware-clock-and-date-evidence.md).
+
+Firmware DST Rules now have a lossless read-only document with separate Classic
+2.0.1/2.0.4/2.0.5 framing and week semantics. Optional saved rules are inspected
+through Storage; incomplete or unknown files never gate Library workflows.
+Latest Classic Calendar Targets now cover updater 24 / 1.1.2, 33 / 2.0.1,
+35 / 2.0.4 and 38 / 2.0.5. All expose full city IDs and saved clock observations;
+the latter three also qualify saved annual DST files. Strongest-authority updater
+and release evidence distinguishes the later 160GB branches without inventing a
+retail model split. Family 24's optional DST file remains opaque.
+Saved DST State and the automatic predicate cache are separate observations, and
+annual rules do not reconstruct historical UTC times. See
+[ADR-0241](docs/adr/0241-inspect-firmware-dst-rules-as-optional-evidence.md).
+See [ADR-0242](docs/adr/0242-qualify-the-latest-classic-calendar-targets.md) and
+[the per-target research questions](docs/classic-calendar-support.md).
+The concrete deferred clock callback now resolves to a protected-media timing
+cache updater on all four targets; its body does not rebase ordinary Track dates.
+Fresh Smart evaluations initialize their own day context. Later DST prefix bytes
+remain opaque after bounded native loader/lookup execution and a reference audit;
+retained prefix bytes do not establish the active rules. These findings reinforce
+native-date preservation and non-blocking optional evidence, rather than adding
+calendar prerequisites to Library workflows.
+Queued Host clock handling is now traced through concrete application handlers
+on all four targets: it mirrors live correction, reconciles the saved city and
+marks Preferences dirty. City selection can be automatic and can fall back to
+unresolved ID zero. Saved files can lag this processing and later persistence;
+iOpenPod explains the uncertainty without rebasing native dates or blocking saves.
 
 iPodDB now uses the firmware-backed total skip counter, preserves the independent
 secondary counter, and retains Playlist repeat data during text edits. Binary
@@ -429,8 +562,10 @@ FFprobe, or fpcalc. Settings > Media Tools shows tool and FFmpeg encoder status,
 with setup offered when a tool is missing. Installation is explicitly user-directed
 through WinGet, architecture-specific Homebrew, or supported Linux
 package managers, with progress and subsequent executable verification. Tools stay
-outside the app distribution; fpcalc remains optional. See
-[Media-tool setup](docs/media-tools.md) and ADR-0103 for platform prerequisites.
+outside the app distribution. FFmpeg, FFprobe and fpcalc are required dependencies
+for supported installations (ADR-0264). Current code still permits reduced Sync
+operation without fpcalc; that behavior does not satisfy the dependency requirement.
+See [Media-tool setup](docs/media-tools.md) and ADR-0103 for platform prerequisites.
 
 Scrobbling now submits committed iPod music plays to Last.fm and ListenBrainz from
 Maintenance or an optional Sync step. Account-specific Host receipts prevent
@@ -441,19 +576,33 @@ counters remain evidence rather than per-service delivery state. See
 Last.fm dates older than its backdating window are moved to the current day for
 submission, with original evidence retained separately while pending (ADR-0102).
 
-iPodDB also provides lossless typed readers/writers for firmware Preferences and
-binary iTunesPrefs. They expose documented device and iTunes settings while
-retaining Unknown Data. Model-specific fields require explicit caller assertions;
-layout recognition remains separate from Device Identity. Companion plist modeling
-and physical preferences editing remain separate work.
-Library dates now use a captured Device Time Context: historical city rules or an
+iPodDB also provides lossless typed readers/writers for firmware Preferences,
+qualified named settings in `iPodSettings.xml`, and binary iTunesPrefs. Pure
+inspectors additionally expose exact-profile saved fields and named Nano stores,
+with raw values and explicit limits. Observation
+catalogs do not grant editing authority. Unknown Data remains retained;
+model-specific fields require explicit caller assertions, and layout recognition
+remains separate from Device Identity. Companion plist modeling and physical
+firmware adoption tests remain separate work.
+Library dates now use a captured Device Time Context: an IANA key for historical city rules or an
 explicit fixed-offset fallback, UTC-only release/purchase fields, and local Mac
-conversion for Photo dates. Preferences are checked again before publication;
-ambiguous dates remain unavailable and losslessly retained. See ADR-0098 and
-[the time contract](docs/ipod-time.md).
-Settings includes a read-only iPod Preferences tab under the iPod scope. Device selection captures
-both binary preference files through Storage and publishes display summaries with
-the Active iPod; switching or disconnecting clears the previous device's values.
+conversion for Photo dates. Unknown zones fall back to UTC when no valid fixed
+offset exists; ambiguous dates receive deterministic estimates. Preferences are
+read-only evidence, not a save precondition. Native dates remain losslessly
+retained, and new dates are bounded before verification. See ADR-0240 and
+[the time contract](docs/ipod-time.md). Calendar interpretation, Host clocks and
+date display use Whenever; native words and semantic Unix seconds retain their
+integer contracts. [ADR-0243](docs/adr/0243-use-whenever-for-calendar-interpretation.md)
+and the [engineering guide](docs/datetime-engineering.md) document the type,
+precision, packaging and firmware-evidence boundaries. Monotonic elapsed timers
+and required plistlib/WinRT adapters remain distinct.
+Settings includes an iPod Preferences tab with grouped, searchable observations
+and explicit edits for qualified fields. Device selection remains read-only: it
+captures binary preferences and optional saved DST rules through Storage and
+publishes display summaries with the Active iPod. The editor separately captures
+its binary or XML source and optional model-specific stores on refresh. An
+unreadable optional store does not hide other settings; switching or disconnecting
+clears the previous device's values and drafts.
 See [the Preferences contract](docs/ipod-preferences.md) and ADR-0097.
 
 iOpenPod 2.0 is in its foundation and binary-format implementation stage. Current
@@ -487,7 +636,11 @@ publish writes before removals, and support explicit restoration after reconnect
 Storage now also performs user-directed native safe removal through Windows Plug and
 Play, macOS Disk Arbitration's `diskutil` client, and Linux UDisks2. It never forces
 an unmount, preserves native refusal details, and models an unmounted-but-not-ejected
-partial result by expiring the Connection Generation. Incoming-media planning/import
+partial result by expiring the Connection Generation. Linux sibling checks use
+standard Drive introspection to support UDisks releases before 2.11 while still
+refusing shared power-off hardware and incomplete inventories; see
+[the safe-removal research](docs/research/safe-native-eject.md).
+Incoming-media planning/import
 and event-driven connection monitoring remain prerequisites for general Sync and
 destructive maintenance workflows. See ADR-0029 and ADR-0060.
 
@@ -917,11 +1070,15 @@ devices use an optimized grayscale JPEG fitting within 120x120 pixels. Unrelated
 edits preserve file-only lyrics, and incoming music reads embedded lyrics into its
 draft. Preparation exceeding the whole-media memory budget uses private Host disk
 staging, preserving complete media and lyrics without a warning for normal overflow.
-Sync Add/Update preparation prefers nonempty lyrics in the captured Host file
-over older reviewed text and publishes matching media tags and iTunesDB text.
-This applies with Rockbox Metadata Support on or off. Sync does not inspect
-unchanged iPod media for lyric differences.
-See ADR-0075 and `docs/research/itunesdb-lyrics.md`.
+Sync prepares lyrics when the Device Profile supports native display or Rockbox
+Metadata Support is enabled. Explicit Library lyrics edits remain available on
+every target. Text is published in media tags; the native presence flag is enabled
+only on capable devices. iTunesDB no longer stores or projects a lyrics cache in
+MHOD 10, whose unidentified retained records remain lossless. Lazy media reads
+supply the Player and editor, and explicit clearing remains draft intent even
+when no text was loaded from the database. Unrelated tag edits preserve file-only
+lyrics. Sync does not inspect unchanged iPod media for lyric differences.
+See ADR-0075, ADR-0270, and `docs/research/itunesdb-lyrics.md`.
 
 Artwork capture, generated artwork, and Photo batches also use private Host disk
 staging when preparation memory budgets are reached. Large valid batches continue
@@ -949,6 +1106,13 @@ that iPod's native Backup Identifier and Archive Key, preventing imported and na
 snapshots from splitting into separate sidebar devices; unmatched and explicitly
 unstable imports retain their stricter legacy authorization. See ADR-0039, ADR-0040,
 ADR-0041, and ADR-0062.
+
+Private Podcast feeds support HTTPS username/password login, including
+pasted credential URLs. Logins stay in the Host's native credential store or the
+current application session and apply to feed refreshes, downloads and protected
+publisher images on the same server. Podcast Login updates or forgets a login.
+Failed feed logins preserve that show's existing Episodes, and failed Episode
+replacements keep their current Tracks. See ADR-0266.
 
 The Podcasts browser now projects a typed Podcast Snapshot from versioned
 subscriptions, independent Listening History, refreshed RSS/Atom metadata, and the
@@ -1014,7 +1178,9 @@ Episode tag differences, preserving unrelated show metadata and validating the
 album once across all its members. Explicit title/feed changes can split shows;
 ordinary saves do not merge separate source albums. See ADR-0165.
 Episode slots are an automatic filling target;
-manual additions may exceed it. Episode count alone never authorizes removal.
+manual additions may exceed it. **All**, after 50 in the Keep choices, removes the
+count limit while preserving the selected ordering and clearing rules. It is also
+available in Host defaults. Episode count alone never authorizes removal.
 Setting the target to zero disables automatic feed refresh, filling, clearing,
 replacement, and retained-cover repair during Sync for that Podcast Subscription;
 manual Episode additions and removals remain available.
@@ -1129,6 +1295,33 @@ Queue. **Play now** starts the first selected Track and places the remainder ato
 the Queue. **Edit** opens the metadata editor for the selection. Selections retain
 visible order and Playlist occurrences; explicit queue buttons keep their own
 actions.
+
+Clicking the Player artwork for an audio Track opens Now Playing across the app's content area,
+temporarily hiding navigation, the Player bar, and the status bar. Its two columns
+show larger shadowed artwork with Title, Artist, Album, a scrubber and the existing
+Previous, Play/Pause and Next actions on the left, and the pending Playback Queue
+on the right. Opening and closing crossfade the entire content area over 320 ms.
+The background magnifies and heavily blurs the current artwork, boosts its color
+saturation, and preserves readable theme text. Its color fields flow slowly, with smooth
+crossfades when artwork changes. Motion stops while hidden or minimized and follows
+the Host's widget-animation preference. Timed artwork changes and missing covers follow
+the Player's existing artwork rules. The top-left close button or Escape restores
+the previous layout without interrupting playback or changing the Queue.
+
+For Movies, TV Shows, Music Videos and Video Podcast Episodes, clicking Player
+artwork opens a basic video player instead. Video retains its aspect ratio and
+shares the current Track's play/pause, seeking, volume and Previous/Next controls.
+Space toggles playback; Close or Escape restores the previous layout while playback
+continues. An open viewer follows transitions between audio and video Tracks, and
+clearing playback restores the shell. Errors appear inside the video player and
+Play retries through the existing transport. No additional package is required;
+see [ADR-0245](docs/adr/0245-present-video-through-the-existing-playback-backend.md).
+
+The video's Subtitles selector offers Off and the embedded subtitle streams,
+including `tx3g` timed text, using title/language labels when available. Choices
+last for the current Playback Entry and survive closing the viewer; a new video
+starts with subtitles off. A choice made while paused takes effect on resume.
+Viewing subtitles changes neither Sync choices nor the media on the iPod.
 
 The Player's Queue/History/Lyrics slideout displays read-only lyrics for the
 current Track. Known Library text appears immediately. When the Lyrics tab is

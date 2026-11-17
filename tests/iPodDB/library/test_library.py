@@ -1,9 +1,9 @@
 """Tests through the public, Qt-independent Library translation interface."""
 
 from dataclasses import replace
-from datetime import UTC, datetime
 
 import pytest
+from whenever import Instant, TimeDelta
 
 from iPodDB.ArtworkDB.builder.build_ArtworkDB import (
     new_artwork_chunk,
@@ -59,8 +59,8 @@ from iPodDB.shared.chunk import EmptyChunkHeader, ParsedChunk
 
 
 def test_ipod_library_translates_optional_metadata_without_exposing_chunks() -> None:
-    timestamp = int(datetime(2024, 5, 6, 12, tzinfo=UTC).timestamp())
-    mac_timestamp = unix_to_mac(timestamp, UTC)
+    timestamp = Instant.from_utc(2024, 5, 6, 12).timestamp()
+    mac_timestamp = unix_to_mac(timestamp, TimeDelta.ZERO)
     metadata = (
         new_string_mhod(MhodType.TITLE, "Title"),
         new_string_mhod(
@@ -74,7 +74,7 @@ def test_ipod_library_translates_optional_metadata_without_exposing_chunks() -> 
         new_string_mhod(MhodType.EQ_SETTING, "Acoustic"),
         new_string_mhod(MhodType.COMMENT, "Comment"),
         new_string_mhod(MhodType.CATEGORY, "Technology"),
-        new_string_mhod(MhodType.LYRICS, "Lyrics"),
+        new_string_mhod(MhodType.UNKNOWN_TEXT_10, "Lyrics"),
         new_string_mhod(MhodType.COMPOSER, "Composer"),
         new_string_mhod(MhodType.GROUPING, "Grouping"),
         new_string_mhod(MhodType.DESCRIPTION, "Description"),
@@ -302,7 +302,7 @@ def test_ipod_library_translates_optional_metadata_without_exposing_chunks() -> 
             equalizer="Acoustic",
             comment="Comment",
             category="Technology",
-            lyrics="Lyrics",
+            lyrics="",
             composer="Composer",
             grouping="Grouping",
             description="Description",

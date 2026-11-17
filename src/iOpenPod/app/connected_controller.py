@@ -87,6 +87,7 @@ if TYPE_CHECKING:
     from iOpenPod.app.connected.memos import Memo
     from iOpenPod.app.core.settings.service import SettingsService
     from iOpenPod.app.device_controller import DeviceController
+    from iOpenPod.app.models.device import ActiveIPod
     from iOpenPod.app.services.device_coordinator import DeviceCoordinator
     from iPodDB.library import Track
 
@@ -1219,6 +1220,69 @@ class ConnectedController(QObject):
             self._calendar_links = list(links)
             self.changed.emit()
 
+    def add_calendar_link(self, link: str, name: str = "") -> bool:
+        """Subscribe to a calendar link; False, with a message, when it can't be added."""
+
+        try:
+            target = calendar_files.subscription_url(link)
+        except ConnectedError as error:
+            self.message.emit(str(error))
+            return False
+        links = self.calendar_links()
+        if any(
+            calendar_files.subscription_url(existing) == target
+            for existing, _name in links
+        ):
+            self.message.emit(self.tr("That calendar link is already added."))
+            return False
+        links.append((link.strip(), " ".join(name.split())))
+        self.set_calendar_links(links)
+        return len(self.calendar_links()) == len(links)
+
+    def publish_calendars(self) -> bool:
+        """Download the calendar links and write the chosen calendars to the iPod now.
+
+        The same step Sync runs last: it replaces only the calendars iOpenPod put
+        there before.
+        """
+
+        active = self._devices.active_ipod
+        config = self._config.calendars
+        links = self.calendar_links()
+        if active is None or not (config.files or links):
+            return False
+
+        def work(job: _Job) -> ExtrasSent:
+            return self._send_calendars(job, active, config, links, ExtrasSent())
+
+        return self._start("calendars-publish", work, exclusive=True)
+
+    def _send_calendars(
+        self,
+        job: _Job,
+        active: ActiveIPod,
+        config: CalendarsConfig,
+        links: list[tuple[str, str]],
+        sent: ExtrasSent,
+    ) -> ExtrasSent:
+        try:
+            files, _dropped, issues = self._calendar_files(job, config, links)
+            job.signals.progress.emit(self.tr("Writing calendars to the iPod…"))
+            result = self._coordinator.publish_extras(
+                active, ExtrasSection.CALENDARS, files, job.cancelled
+            )
+            return replace(
+                sent,
+                calendars=len(files),
+                issues=(*sent.issues, *issues, *result.issues),
+            )
+        except CancelledError:
+            raise
+        except Exception as error:
+            # One kind failing must not stop the others.
+            _LOGGER.warning("Calendars were not sent", exc_info=True)
+            return replace(sent, issues=(*sent.issues, f"Calendars: {error}"))
+
     # --- Contacts --------------------------------------------------------------------
 
     def contacts_directory(self) -> Path:
@@ -1502,25 +1566,7 @@ class ConnectedController(QObject):
                     _LOGGER.warning("Notes were not sent", exc_info=True)
                     sent = replace(sent, issues=(*sent.issues, f"Notes: {error}"))
             if calendars:
-                try:
-                    files, _dropped, issues = self._calendar_files(
-                        job, config.calendars, links
-                    )
-                    job.signals.progress.emit(self.tr("Writing calendars to the iPod…"))
-                    result = self._coordinator.publish_extras(
-                        active, ExtrasSection.CALENDARS, files, job.cancelled
-                    )
-                    sent = replace(
-                        sent,
-                        calendars=len(files),
-                        issues=(*sent.issues, *issues, *result.issues),
-                    )
-                except CancelledError:
-                    raise
-                except Exception as error:
-                    # One kind failing must not stop the others.
-                    _LOGGER.warning("Calendars were not sent", exc_info=True)
-                    sent = replace(sent, issues=(*sent.issues, f"Calendars: {error}"))
+                sent = self._send_calendars(job, active, config.calendars, links, sent)
             if contacts:
                 from iOpenPod.app.connected.contacts import plan_contacts
 

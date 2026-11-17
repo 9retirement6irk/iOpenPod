@@ -153,6 +153,8 @@ These go into the iPod's **Extras** menu.
 * **Calendars.** Add `.ics` files, or subscription links (`https://` or
   `webcal://`, such as Google Calendar's secret iCal address), which are
   downloaded fresh at each Sync. You can leave out events that ended long ago.
+  The iPod's **Calendar** page also has **Subscribe to Link…**, which adds a link
+  and puts its calendar on the iPod straight away.
 * **Contacts.** Add `.vcf` files exported from your phone, Google Contacts, iCloud
   or Outlook. Each contact becomes its own card the iPod can read (up to 5,000),
   so one bad card can't hide the rest. Photos inside contacts are left out
@@ -241,7 +243,7 @@ Clone the repository and use the locked UV environment:
 
 ```shell
 uv sync --locked
-uv run python scripts/prepare_qt_typing.py
+uv run python -m scripts.prepare_typing
 uv run iopenpod
 ```
 

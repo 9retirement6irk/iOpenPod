@@ -2,12 +2,13 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
 from enum import IntEnum, auto
 from typing import cast
 
 from PySide6.QtCore import QT_TRANSLATE_NOOP, QCoreApplication
+from whenever import SYSTEM_TZ, Instant
 
+from iOpenPod.app.models.equalizer import track_equalizer_label
 from iPodDB.library import ContentAdvisory, MediaKind, MediaType, Track
 
 type TrackSortValue = str | int | float | None
@@ -519,9 +520,7 @@ def _build_column_definitions() -> tuple[TrackColumnDefinition, ...]:
         _column(
             "Plays", lambda track: track.play_count, _format_count, right_aligned=True
         ),
-        _column(
-            "Rating", lambda track: track.rating, _format_rating, right_aligned=True
-        ),
+        _column("Rating", lambda track: track.rating, rating_stars, right_aligned=True),
         _column("Album Artist", lambda track: track.album_artist),
         _column("Composer", lambda track: track.metadata.composer),
         _column("Comment", lambda track: track.metadata.comment),
@@ -769,7 +768,9 @@ def _build_column_definitions() -> tuple[TrackColumnDefinition, ...]:
             _format_positive_integer,
             right_aligned=True,
         ),
-        _column("Equalizer", lambda track: track.metadata.equalizer),
+        _column(
+            "Equalizer", lambda track: track_equalizer_label(track.metadata.equalizer)
+        ),
         _column("Location", lambda track: track.metadata.location),
         _column("Lyrics", lambda track: track.metadata.lyrics),
         _column("Keywords", lambda track: track.metadata.track_keywords),
@@ -893,7 +894,7 @@ def _format_bitrate(value: int) -> str:
     return f"{value} kbps" if value > 0 else _MISSING
 
 
-def _format_rating(value: int) -> str:
+def rating_stars(value: int) -> str:
     stars = min(5, max(0, round(value / 20)))
     return ("★" * stars) + ("☆" * (5 - stars))
 
@@ -913,10 +914,11 @@ def _format_sound_check(value: float | None) -> str:
 
 
 def _format_date(value: int) -> str:
-    if value <= 0:
+    # Zero alone is the semantic unset sentinel; pre-1970 dates remain valid.
+    if value == 0:
         return _MISSING
     try:
-        return datetime.fromtimestamp(value).strftime("%Y-%m-%d")
+        return Instant.from_timestamp(value).to_tz(SYSTEM_TZ).date().format_iso()
     except (OSError, OverflowError, ValueError):
         return _MISSING
 

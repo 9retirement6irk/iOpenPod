@@ -8,8 +8,8 @@ import pytest
 from iPodDB.preferences import (
     CityPreferences,
     CityTimezone,
-    Classic201ClockPreferences,
     Classic201Preferences,
+    ClassicClockPreferences,
     FixedOffsetTimezone,
     FourthGenerationPreferences,
     Nano3Preferences,
@@ -19,6 +19,7 @@ from iPodDB.preferences import (
     PreferencesTimezone,
     VideoPreferences,
     VolumeLimitPreferences,
+    matches_preferences_profile,
     parse_preferences,
     write_preferences,
 )
@@ -34,6 +35,22 @@ def _source(size: int, offset: int, value: int) -> bytes:
     struct.pack_into("<h", data, offset, value)
     data[2808] = 0
     return bytes(data)
+
+
+def test_exact_frame_recognition_does_not_grant_a_generic_clock_interpretation() -> (
+    None
+):
+    source = bytearray(2924)
+    struct.pack_into("<I", source, 0, 0x39)
+    assert matches_preferences_profile(bytes(source), PreferencesProfile.VIDEO_1_3)
+    assert not matches_preferences_profile(bytes(source), PreferencesProfile.STANDARD)
+    assert not matches_preferences_profile(
+        bytes(source[:-1]), PreferencesProfile.VIDEO_1_3
+    )
+    # Even an unqualified generic read must not treat Video's alarm word as a zone.
+    assert parse_preferences(source).timezone is None
+    struct.pack_into("<I", source, 0, 0x38)
+    assert not matches_preferences_profile(bytes(source), PreferencesProfile.VIDEO_1_3)
 
 
 @pytest.mark.parametrize(
@@ -114,6 +131,44 @@ def test_video_preserves_signed_minutes_and_fractional_hour_offsets(
 ) -> None:
     document = parse_preferences(_source(2924, 0xB22, code))
     assert document.timezone == FixedOffsetTimezone(seconds)
+
+
+@pytest.mark.parametrize("alarm_word", (0, 480, 0xA2F2, 0xF59F))
+def test_video13_alarm_word_is_preserved_without_becoming_a_timezone(
+    alarm_word: int,
+) -> None:
+    # Independently executed Video 13/20/25 1.3 vectors: low 12 bits hold
+    # hour*60+minute; the alarm setter preserves the high four bits.
+    source = bytearray(_source(2924, 0xB22, 0))
+    struct.pack_into("<I", source, 0, 0x39)
+    struct.pack_into("<H", source, 0xB22, alarm_word)
+    document = parse_preferences(source)
+    assert document.has_video13_framing
+    assert isinstance(document.settings, VideoPreferences)
+    assert document.settings.timezone_code == struct.unpack_from("<h", source, 0xB22)[0]
+    assert document.timezone is None
+    assert write_preferences(document) == source
+
+    language = replace(document.settings, language_code=2)
+    expected = bytearray(source)
+    expected[0xAF8] = 2
+    assert write_preferences(replace(document, settings=language)) == expected
+    with pytest.raises(iPodDBWriteError) as error:
+        write_preferences(
+            replace(document, settings=replace(document.settings, timezone_code=825))
+        )
+    assert error.value.code == "preferences.invalid_timezone"
+
+
+@pytest.mark.parametrize("version", (0, 0x38, 0x39, 0x3A, 0x10039))
+def test_video_alarm_exclusion_requires_the_exact_full_version_word(
+    version: int,
+) -> None:
+    source = bytearray(_source(2924, 0xB22, 480))
+    struct.pack_into("<I", source, 0, version)
+    document = parse_preferences(source)
+    assert document.has_video13_framing is (version == 0x39)
+    assert document.timezone == (None if version == 0x39 else FixedOffsetTimezone(0))
 
 
 @pytest.mark.parametrize(
@@ -386,7 +441,8 @@ def _classic201_source(
     data[0xB6C] = dst
     data[0xB85] = alternate_audio
     struct.pack_into("<iI", data, 0xB78, -1, 81000)
-    data[2808] = 0
+    # Qualified Classic firmware loads the entire language word, not a byte.
+    struct.pack_into("<I", data, 0xAF8, 0)
     return bytes(data)
 
 
@@ -444,9 +500,7 @@ def test_classic201_profile_reads_full_city_and_retains_saved_clock_words(
     source = _classic201_source(city_id, dst)
     document = parse_preferences(source, profile=PreferencesProfile.CLASSIC_120GB_2_0_1)
     assert document.settings == Classic201Preferences(city_id, 0)
-    assert document.extended_settings == Classic201ClockPreferences(
-        0x3D, dst, -1, 81000
-    )
+    assert document.extended_settings == ClassicClockPreferences(0x3D, dst, -1, 81000)
     assert document.timezone == CityTimezone(
         city_id, "America/New_York" if city_id == 0x29 else None
     )
@@ -492,7 +546,7 @@ def test_classic201_clock_observations_cannot_be_edited(field: str, value: int) 
         _classic201_source(), profile=PreferencesProfile.CLASSIC_120GB_2_0_1
     )
     clock = document.extended_settings
-    assert isinstance(clock, Classic201ClockPreferences)
+    assert isinstance(clock, ClassicClockPreferences)
     with pytest.raises(iPodDBWriteError) as error:
         write_preferences(
             replace(document, extended_settings=replace(clock, **{field: value}))
@@ -504,7 +558,7 @@ def test_classic201_city_is_observation_only_and_raw_seconds_are_unsigned() -> N
     data = bytearray(_classic201_source())
     struct.pack_into("<I", data, 0xB7C, 0xFFFFFFFF)
     document = parse_preferences(data, profile=PreferencesProfile.CLASSIC_120GB_2_0_1)
-    assert isinstance(document.extended_settings, Classic201ClockPreferences)
+    assert isinstance(document.extended_settings, ClassicClockPreferences)
     assert document.extended_settings.clock_bias_seconds == 0xFFFFFFFF
     assert write_preferences(document) == data
     with pytest.raises(iPodDBWriteError) as error:
@@ -578,7 +632,7 @@ def test_classic201_alternate_audio_cannot_bypass_clock_protection() -> None:
     )
     assert isinstance(document.settings, Classic201Preferences)
     clock = document.extended_settings
-    assert isinstance(clock, Classic201ClockPreferences)
+    assert isinstance(clock, ClassicClockPreferences)
     alternate_edit = replace(
         document, settings=replace(document.settings, alternate_audio=1)
     )

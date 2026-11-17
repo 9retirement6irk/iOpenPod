@@ -46,6 +46,7 @@ def test_corrected_city_resolves_literal_calendar_word_without_rewriting_databas
     context = resolve_device_time(parse_preferences(data, profile=profile))
     assert context.source is DeviceTimeSource.PREFERENCES_CITY
     assert context.timezone_name == name
+    assert context.zone == name
     # 2024-01-01 00:00:00 as a calendar-shaped Mac word. Expected UTC
     # instants are literals, independent of the conversion implementation.
     assert mac_to_unix(3786912000, context) == instant
@@ -84,8 +85,7 @@ def test_qualified_classic_unresolved_city_explains_existing_header_fallback(
     if offset == 86400:
         assert source.device_time.source is DeviceTimeSource.UNRESOLVED
         code = "source.timezone_unresolved"
-        with pytest.raises(ValueError, match="unresolved"):
-            mac_to_unix(3786912000, source.device_time)
+        assert mac_to_unix(3786912000, source.device_time) == 1704067200
     else:
         assert source.device_time.source is DeviceTimeSource.DATABASE_HEADER
         assert mac_to_unix(3786912000, source.device_time) == 1704067200 - offset
@@ -133,6 +133,85 @@ def test_qualified_classic_city_conflict_reaches_inspection_and_save_warning(
         assert "city 0x26" in warning_at_save.detail
         assert device.save(review).active is not None
         assert path.read_bytes() == data
+    finally:
+        device.coordinator.close()
+
+
+@pytest.mark.parametrize(
+    "model,updater_family",
+    (("MA002", 13), ("MA146", 20), ("MA450", 25), ("MA450", None)),
+)
+def test_video13_alarm_is_not_a_timezone_and_header_fallback_survives_save(
+    tmp_path: Path, model: str, updater_family: int | None
+) -> None:
+    device = build_device(tmp_path, model=model)
+    try:
+        metadata = device.root / "iPod_Control/Device"
+        if updater_family is not None:
+            sysinfo = metadata / "SysInfo"
+            sysinfo.write_text(
+                sysinfo.read_text(encoding="utf-8")
+                + f"visibleBuildID: 1.3\nUpdaterFamilyID: {updater_family}\n",
+                encoding="utf-8",
+            )
+        data = bytearray(2924)
+        struct.pack_into("<I", data, 0, 0x39)
+        # An 08:00 alarm would falsely appear to be UTC under the old formula.
+        struct.pack_into("<H", data, 0xB22, 480)
+        preferences = metadata / "Preferences"
+        preferences.write_bytes(data)
+        context = resolve_device_time(parse_preferences(data))
+        assert context.source is DeviceTimeSource.UNRESOLVED
+        assert context.zone is None
+        assert "Video 1.3" in context.detail and "verified timezone" in context.detail
+
+        database = device.root / "iPod_Control/iTunes/iTunesDB"
+        document = parse_iTunesDB(database.read_bytes())
+        for slot in document.find_chunks(MhitHeader):
+            document = document.replace_chunk(
+                slot,
+                replace(
+                    slot.chunk,
+                    header=replace(slot.chunk.header, last_played=3786912000),
+                ),
+            )
+        document = replace(
+            document, header=replace(document.header, timezone_offset=-18000)
+        )
+        database.write_bytes(write_iTunesDB(document))
+        candidate = device.coordinator.discover_devices().candidates[0]
+        active = device.coordinator.select_device(
+            candidate.id, reconcile_metadata=False
+        )
+        assert active.library.tracks[0].metadata.last_played == 1704085200
+        settings = next(
+            section for section in active.preferences if section.key == "device"
+        )
+        assert (
+            next(row.value for row in settings.rows if row.key == "timezone")
+            == "Unknown"
+        )
+        assert any(
+            issue.code is DeviceCandidateIssueCode.TIMEZONE_UNCERTAIN
+            and "verified timezone" in issue.detail
+            for issue in active.candidate.issues
+        )
+        review = device.prepare(
+            replace(active.library, device_name="Video date fallback")
+        )
+        assert review.result.prepared is not None, review.result.issues
+        assert any(
+            issue.code == "source.timezone_fallback" for issue in review.result.issues
+        )
+        saved = device.save(review)
+        assert saved.active is not None, saved.issues
+        assert saved.active.library.tracks[0].metadata.last_played == 1704085200
+        retained = parse_iTunesDB(database.read_bytes())
+        assert retained.header.timezone_offset == -18000
+        assert (
+            retained.find_chunks(MhitHeader)[0].chunk.header.last_played == 3786912000
+        )
+        assert preferences.read_bytes() == data
     finally:
         device.coordinator.close()
 
@@ -215,7 +294,7 @@ def test_selected_preferences_control_saved_dates_and_adopted_source(
 
 @pytest.mark.parametrize("initially_present", [True, False])
 @pytest.mark.parametrize("change_after_review", [True, False])
-def test_timezone_changes_or_appearance_invalidate_preparation_and_save(
+def test_timezone_changes_or_appearance_do_not_block_preparation_or_save(
     tmp_path: Path, initially_present: bool, change_after_review: bool
 ) -> None:
     device = build_device(tmp_path)
@@ -233,14 +312,14 @@ def test_timezone_changes_or_appearance_invalidate_preparation_and_save(
         if not change_after_review:
             path.write_bytes(_prefs(0x69))
         review = device.prepare(desired)
+        assert review.result.prepared is not None, review.result.issues
         if change_after_review:
-            assert review.result.prepared is not None, review.result.issues
             path.write_bytes(_prefs(0x69))
-            saved = device.save(review)
-            assert saved.active is None
-        else:
-            assert review.result.prepared is None
-        assert database.read_bytes() == original
+        saved = device.save(review)
+        assert saved.active is not None, saved.issues
+        assert saved.active.library.device_name == "Changed name"
+        assert database.read_bytes() != original
+        assert path.read_bytes() == _prefs(0x69)
     finally:
         device.coordinator.close()
 
@@ -264,7 +343,7 @@ def test_unknown_city_reports_fixed_header_fallback(tmp_path: Path) -> None:
         device.coordinator.close()
 
 
-def test_unverified_preferences_leave_library_readable_but_block_save(
+def test_unverified_preferences_allow_loading_and_saving(
     tmp_path: Path,
 ) -> None:
     device = build_device(tmp_path)
@@ -279,7 +358,8 @@ def test_unverified_preferences_leave_library_readable_but_block_save(
             replace(active.library, device_name="Changed"), active, 1, 1
         )
         result = device.coordinator.prepare_library(request, lambda _: None, Event())
-        assert result.result.prepared is None
+        assert result.result.prepared is not None, result.result.issues
+        assert device.save(result).active is not None
         assert active.library.tracks
     finally:
         device.coordinator.close()

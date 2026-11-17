@@ -4,6 +4,7 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
 from tests.iOpenPod.app.test_library_write_controller import wait_for
 from tests.iOpenPod.GUI.application_shell_test_support import APPLICATION
 
@@ -150,5 +151,41 @@ def test_ticked_notes_calendars_and_contacts_are_sent(tmp_path: Path) -> None:
             ExtrasSection.CALENDARS: ["Family.ics", "Work.ics"],
             ExtrasSection.CONTACTS: ["Ada.vcf", "Grace.vcf"],
         }
+    finally:
+        made.shutdown()
+
+
+def test_calendar_links_are_added_once_and_sent_without_a_sync(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    made, coordinator = controller(tmp_path)
+    said: list[str] = []
+    results: list[tuple[str, object]] = []
+    made.message.connect(said.append)
+    made.result.connect(lambda op, value: results.append((op, value)))
+    fetched: list[str] = []
+
+    def fetch(link: str) -> str:
+        fetched.append(link)
+        return CALENDAR.format(name="Shared")
+
+    monkeypatch.setattr(
+        "iOpenPod.app.connected_controller.calendar_files.fetch_calendar", fetch
+    )
+    try:
+        assert not made.publish_calendars()  # nothing to send yet
+        assert not made.add_calendar_link("ftp://example.com/a.ics")
+        assert said and "https://" in said[-1]
+        assert made.add_calendar_link(" webcal://example.com/team.ics ", " Team  A ")
+        # The same calendar under its https:// spelling is not added twice.
+        assert not made.add_calendar_link("https://example.com/team.ics")
+        assert made.calendar_links() == [("webcal://example.com/team.ics", "Team A")]
+
+        assert made.publish_calendars()
+        wait_for(lambda: not made.busy)
+        APPLICATION.processEvents()
+        assert fetched == ["webcal://example.com/team.ics"]
+        assert written(coordinator) == {ExtrasSection.CALENDARS: ["Team A.ics"]}
+        assert results[-1] == ("calendars-publish", ExtrasSent(calendars=1))
     finally:
         made.shutdown()

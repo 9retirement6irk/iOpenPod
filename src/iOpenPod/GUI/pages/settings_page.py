@@ -2,6 +2,7 @@
 
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import (
     QCoreApplication,
@@ -83,6 +84,9 @@ from iOpenPod.GUI.widgets.settings_tab import SettingsTab
 from iOpenPod.GUI.widgets.sync_settings import SyncSettings, TranscodingSettings
 from iOpenPod.GUI.widgets.themed_buttons import ActionButton, ActionButtonKind
 
+if TYPE_CHECKING:
+    from iOpenPod.app.preferences_controller import PreferencesController
+
 _DONATION_URL = "https://ko-fi.com/johngibbons"
 
 
@@ -105,11 +109,11 @@ class SettingsPage(QWidget):
         *,
         scrobbling: ScrobbleController | None = None,
         connected: ConnectedController | None = None,
+        preferences: "PreferencesController | None" = None,
     ) -> None:
         super().__init__(parent)
         self._settings = settings
         self._editor = SettingsEditor(settings, self)
-        self._active_ipod: ActiveIPod | None = None
         self._theme_manager = theme_manager
         self._i18n_manager = i18n_manager
         self._version = get_version()
@@ -368,7 +372,6 @@ class SettingsPage(QWidget):
         self._tabs.setDocumentMode(True)
         self._tabs.setUsesScrollButtons(True)
         self._tabs.tabBar().setExpanding(True)
-        self._tabs.currentChanged.connect(self._update_tab_width)
         # Keep tab clicks from restoring an off-screen control and jumping the scroll.
         self._tabs.tabBar().setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._transcoding_settings = TranscodingSettings(
@@ -421,7 +424,7 @@ class SettingsPage(QWidget):
         self._backups_tab = self._add_tab(
             "backupSettingsScroll", self._backups_title, backups
         )
-        self._ipod_preferences = IPodPreferencesView(self)
+        self._ipod_preferences = IPodPreferencesView(self, controller=preferences)
         self._ipod_preferences_tab = self._add_tab(
             "ipodPreferencesScroll", self._ipod_preferences
         )
@@ -503,6 +506,7 @@ class SettingsPage(QWidget):
         self._open_log_folder.clicked.connect(self._show_log_folder)
         self._donate.clicked.connect(self._open_donation_page)
         self._tabs.currentChanged.connect(self._update_saved_note)
+        self._ipod_preferences.stateChanged.connect(self._update_saved_note)
         self._tabs.currentChanged.connect(self._check_media_tools_tab)
         settings.settingChanged.connect(self._setting_changed)
         settings.deviceStateChanged.connect(self._update_scope_state)
@@ -562,19 +566,18 @@ class SettingsPage(QWidget):
         scroll = SettingsTab(
             name, widgets, self._tabs, theme_manager=self._theme_manager
         )
-        scroll.columnWidthChanged.connect(self._update_tab_width)
         return self._tabs.addTab(scroll, "")
-
-    def _update_tab_width(self) -> None:
-        current = self._tabs.currentWidget()
-        if isinstance(current, SettingsTab):
-            self._tabs.tabBar().setFixedWidth(current.column_width)
 
     def retranslate_ui(self) -> None:
         self._update_version()
         self._media_tools.retranslate_ui()
         self._header.set_title(self.tr("Settings"))
         self._scope_switcher.retranslate_ui()
+        self._scope_description.setText(
+            self.tr(
+                "Choose an iPod to customize its settings. Unset settings follow the Host automatically."
+            )
+        )
         self._choose_ipod.setText(self.tr("Choose iPod…"))
         self._tabs.setAccessibleName(self.tr("Settings categories"))
         self._tabs.setTabText(self._appearance_tab, self.tr("Appearance"))
@@ -745,9 +748,7 @@ class SettingsPage(QWidget):
         self._update_scope_state()
 
     def set_active_ipod(self, active: ActiveIPod | None) -> None:
-        self._active_ipod = active
         self._ipod_preferences.set_active_ipod(active)
-        self._update_scope_state()
 
     def _select_scope(self, device: bool) -> None:
         current = self._tabs.currentIndex()
@@ -784,49 +785,28 @@ class SettingsPage(QWidget):
         self._update_scope_state()
 
     def _update_scope_state(self) -> None:
-        device = self._editor.device
-        connected = self._settings.device_connected
-        self._tabs.setVisible(not device or connected)
-        self._empty_scope.setVisible(device and not connected)
-        self._choose_ipod.setVisible(device and not connected)
-        if not device:
-            text = self.tr(
-                "Global defaults for your iPods. Individual iPod overrides take priority."
-            )
-        elif not connected:
-            text = self.tr(
-                "Choose an iPod to customize its settings. Unset settings follow the Host automatically."
-            )
-        else:
-            name = (
-                self._active_ipod.display_name
-                if self._active_ipod is not None
-                else self.tr("Active iPod")
-            )
-            text = self.tr(
-                "%1 · Settings saved on this iPod. Choose Use Host to follow global defaults."
-            ).replace("%1", name)
-        self._scope_description.setText(text)
+        needs_ipod = self._editor.device and not self._settings.device_connected
+        self._tabs.setVisible(not needs_ipod)
+        self._empty_scope.setVisible(needs_ipod)
+        self._scope_notice.setVisible(needs_ipod)
         self._update_saved_note()
 
     def _update_saved_note(self, _index: int = -1) -> None:
-        if self._editor.device:
+        if self._tabs.currentIndex() == self._ipod_preferences_tab:
+            text = self._ipod_preferences.status_text
+        elif self._editor.device:
             if self._settings.device_busy:
                 text = self.tr("Saving settings to your iPod…")
             elif self._settings.device_message:
                 text = workflow_text(self._settings.device_message)
             elif not self._settings.device_connected:
                 text = self.tr("Choose an iPod to view its settings.")
-            elif self._tabs.currentIndex() == self._ipod_preferences_tab:
-                text = self.tr("iPod preferences are read-only.")
             elif not self._settings.device_writable:
                 text = self.tr(
                     "iPod settings are read-only or another device operation is in progress."
                 )
             else:
                 text = self.tr("Changes are saved automatically to this iPod.")
-        elif self._tabs.currentIndex() == self._ipod_preferences_tab:
-            text = self.tr("iPod preferences are read-only.")
         else:
             text = self.tr("Changes are saved automatically.")
         if self._saved_note.text() != text:

@@ -267,6 +267,28 @@ def _prepare_sqlite(
     """Project checked native state with the explicit supplemental-data invalidations."""
     if not plan.changes_sqlite:
         return None
+    native_ids = {
+        mapping.draft_id: mapping.output_id
+        for mapping in mappings
+        if mapping.subject == "track"
+    }
+    lyrics = {
+        native_ids.get(item.track_id, item.track_id): item.lyrics
+        for item in resources.lyrics
+    }
+    # Extras.itdb has a real lyrics table. Populate it only from verified media,
+    # while keeping the binary Library Snapshot free of a fabricated text cache.
+    checked = replace(
+        checked,
+        tracks=tuple(
+            replace(
+                track, metadata=replace(track.metadata, lyrics=lyrics[track.track_id])
+            )
+            if track.track_id in lyrics
+            else track
+            for track in checked.tracks
+        ),
+    )
     hash72_material = plan.target.hash72_material
     previous_tracks = {t.track_id: t for t in source.snapshot.tracks}
     replaced_pids = frozenset(
@@ -279,7 +301,8 @@ def _prepare_sqlite(
         for t in checked.tracks
         if (old := previous_tracks.get(t.track_id)) is not None
         and (
-            old.metadata.lyrics != t.metadata.lyrics
+            t.track_id in lyrics
+            or old.metadata.lyrics != t.metadata.lyrics
             or old.metadata.has_lyrics != t.metadata.has_lyrics
         )
     )
@@ -635,7 +658,8 @@ def _verify_desired_snapshot(
                 identity_maps["artwork"].get(wanted.artwork_id, wanted.artwork_id),
             ),
         )
-        metadata = expected.metadata
+        # File-only text is verified by PreparedLyrics, not the binary database.
+        metadata = replace(expected.metadata, lyrics="")
         prior = original_tracks.get(wanted.track_id)
         if (
             not had_artwork
@@ -819,6 +843,26 @@ def _prepare(
         source.snapshot, artwork, artwork_index, resolved, resources, issues
     )
     desired, generated_podcasts = resolved.desired, resolved.generated_podcasts
+    verified_lyrics = {item.track_id: item.lyrics for item in resources.lyrics}
+    if verified_lyrics:
+        desired = replace(
+            desired,
+            tracks=tuple(
+                replace(
+                    track,
+                    metadata=replace(
+                        track.metadata,
+                        lyrics=verified_lyrics[track.track_id],
+                        has_lyrics=plan.target.supports_lyrics
+                        and bool(verified_lyrics[track.track_id]),
+                    ),
+                )
+                if track.track_id in verified_lyrics
+                else track
+                for track in desired.tracks
+            ),
+        )
+        resolved = replace(resolved, desired=desired)
     # An unchanged draft still validates supplied evidence. Returning retained
     # bytes needs no reconciliation or signing, even for unsupported signatures.
     if not plan.changes and not plan.changes_sqlite:
@@ -859,23 +903,20 @@ def _prepare(
                 else None,
             ),
         )
+    expected_schemes = {
+        WriteChecksum.NONE: (0,),
+        WriteChecksum.HASH58: (0, 1),
+        WriteChecksum.HASH72: (0, 1, 2),
+        WriteChecksum.HASHAB: (0, 3, 4),
+    }
     if (
         plan.changes_itunes
-        and document.header.hashing_scheme
-        and plan.target.checksum is WriteChecksum.NONE
+        and document.header.hashing_scheme not in expected_schemes[plan.target.checksum]
     ):
-        issues.append(
-            WriteIssue(
-                "target.signature_required",
-                "The source database is signed; supply its supported signature target before editing.",
-            )
-        )
-    if plan.changes_itunes and document.header.hashing_scheme not in (0, 1, 2, 3, 4):
-        issues.append(
-            WriteIssue(
-                "target.unsupported_source_signature",
-                "The retained iTunesDB uses an unsupported signature scheme. Its signing requirements cannot be replaced implicitly.",
-            )
+        logger.warning(
+            "Ignoring source iTunesDB hashing scheme %d; using write target checksum %s",
+            document.header.hashing_scheme,
+            plan.target.checksum.value,
         )
     if _blocked(issues):
         return LibraryWriteResult(tuple(issues))
@@ -949,6 +990,12 @@ def _prepare(
             )
         phase = "serialization"
         notify(WritePhase.SERIALIZATION)
+        if plan.changes_itunes and plan.target.checksum is WriteChecksum.NONE:
+            # The selected device's write policy owns the output scheme. Keep
+            # retained signature bytes as Unknown Data on unsigned targets.
+            candidate = replace(
+                candidate, header=replace(candidate.header, hashing_scheme=0)
+            )
         binary_document = candidate
         logical_itunes = write_iTunesDB(candidate)
         retained_output = source.serialize()
@@ -1107,6 +1154,7 @@ def _prepare(
                 normalize_podcasts=plan.draft.normalize_podcasts,
                 genius_update=plan.draft.genius_update,
                 replaced_tracks=plan.draft.replace_media,
+                playback_dates=resolved.playback_dates,
             )
         )
         issues.extend(

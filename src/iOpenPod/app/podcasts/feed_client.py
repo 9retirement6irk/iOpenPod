@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import calendar
 import hashlib
 import html
 import io
@@ -10,21 +9,25 @@ import json
 import re
 import time
 from dataclasses import dataclass
+from http.client import HTTPException
 from typing import TYPE_CHECKING, Protocol, cast
-from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import Request
 from xml.etree import ElementTree
 
 import feedparser  # type: ignore[import-untyped]
 from PIL import Image, ImageOps, UnidentifiedImageError
+from whenever import Instant
 
+from iOpenPod.app.media.image_pixels import rgb_image
+from iOpenPod.app.podcasts.errors import PodcastFeedError
 from iOpenPod.app.podcasts.feed_extensions import (
     EpisodeExtensions,
     description_links,
     episode_extensions,
     publisher_url,
 )
+from iOpenPod.app.podcasts.http_client import open_podcast_request
 from iOpenPod.app.podcasts.identity import (
     episode_identity,
     normalize_feed_url,
@@ -43,6 +46,8 @@ from iPodDB.library import ContentAdvisory
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
+
+    from iOpenPod.app.podcasts.credentials import PodcastAccess, PodcastCredentials
 
 _USER_AGENT = "iOpenPod/2 Podcast Browser"
 _FEED_LIMIT = 16 * 1024 * 1024
@@ -69,12 +74,10 @@ _MEDIA_EXTENSIONS = (
 )
 
 
-class PodcastFeedError(ValueError):
-    """A feed or directory request could not produce safe podcast data."""
-
-
 class PodcastFeedClient(Protocol):
-    def fetch(self, feed_url: str) -> PodcastSubscription: ...
+    def fetch(
+        self, feed_url: str, *, credentials: PodcastCredentials | None = None
+    ) -> PodcastSubscription: ...
 
 
 class PodcastDirectoryClient(Protocol):
@@ -104,8 +107,11 @@ class FeedparserPodcastClient:
     """Fetch and normalize varied RSS/Atom feeds behind one typed interface."""
 
     timeout_seconds: int = _TIMEOUT_SECONDS
+    access: PodcastAccess | None = None
 
-    def fetch(self, feed_url: str) -> PodcastSubscription:
+    def fetch(
+        self, feed_url: str, *, credentials: PodcastCredentials | None = None
+    ) -> PodcastSubscription:
         normalized = normalize_feed_url(feed_url)
         if not normalized:
             raise PodcastFeedError("Enter a valid HTTP or HTTPS podcast feed URL")
@@ -114,6 +120,9 @@ class FeedparserPodcastClient:
             limit=_FEED_LIMIT,
             timeout_seconds=self.timeout_seconds,
             accept="application/rss+xml, application/atom+xml, application/xml, text/xml",
+            feed_url=normalized,
+            access=self.access,
+            credentials=credentials,
         )
         parsed = _mapping(
             _FEEDPARSER.parse(
@@ -123,8 +132,7 @@ class FeedparserPodcastClient:
         )
         entries = _sequence(parsed.get("entries", ()))
         if parsed.get("bozo") and not entries:
-            detail = str(parsed.get("bozo_exception", "malformed feed"))
-            raise PodcastFeedError(f"The podcast feed could not be parsed: {detail}")
+            raise PodcastFeedError("The podcast feed could not be parsed.")
         feed = _mapping(parsed.get("feed", {}))
         title = _text(feed.get("title")) or "Unknown Podcast"
         author = _text(feed.get("author")) or _text(feed.get("itunes_author"))
@@ -168,14 +176,14 @@ class FeedparserPodcastClient:
             description=_plain_text(
                 _text(feed.get("subtitle")) or _text(feed.get("summary"))
             ),
-            artwork_url=_artwork_url(feed),
+            artwork_url=publisher_url(_artwork_url(feed), final_url),
             category=_category(feed),
             categories=_categories(feed),
             copyright=_plain_text(_text(feed.get("rights"))),
             website_url=_website_url(feed, final_url),
             show_type=_show_type(_text(feed.get("itunes_type"))),
             language=_text(feed.get("language")),
-            last_refreshed=int(time.time()),
+            last_refreshed=Instant.now().timestamp(),
             episodes=tuple(
                 sorted(
                     episodes,
@@ -255,6 +263,7 @@ class HttpPodcastArtworkLoader:
 
     timeout_seconds: int = _TIMEOUT_SECONDS
     checkpoint: Callable[[], None] | None = None
+    access: PodcastAccess | None = None
 
     def load_artwork(
         self,
@@ -269,6 +278,8 @@ class HttpPodcastArtworkLoader:
             timeout_seconds=self.timeout_seconds,
             accept="image/avif, image/webp, image/png, image/jpeg, image/*",
             checkpoint=self.checkpoint,
+            feed_url=request.feed_url,
+            access=self.access,
         )
         target_px = min(request.target_px, _ARTWORK_TARGET_LIMIT)
         try:
@@ -277,7 +288,7 @@ class HttpPodcastArtworkLoader:
                 if width <= 0 or height <= 0 or width * height > _ARTWORK_PIXEL_LIMIT:
                     raise PodcastFeedError("The Podcast artwork dimensions are unsafe")
                 oriented = ImageOps.exif_transpose(opened)
-                pixels = oriented.convert("RGB")
+                pixels = rgb_image(oriented)
                 if request.preserve_aspect:
                     pixels.thumbnail((target_px, target_px), Image.Resampling.LANCZOS)
                 else:
@@ -307,6 +318,9 @@ def request_podcast_bytes(
     timeout_seconds: int,
     accept: str,
     checkpoint: Callable[[], None] | None = None,
+    feed_url: str = "",
+    access: PodcastAccess | None = None,
+    credentials: PodcastCredentials | None = None,
 ) -> tuple[bytes, str]:
     """Fetch a bounded Podcast resource and return its bytes and final HTTP(S) URL."""
     deadline = time.monotonic() + _REQUEST_DEADLINE_SECONDS
@@ -327,9 +341,15 @@ def request_podcast_bytes(
     )
     try:
         check()
-        with urlopen(request, timeout=timeout_seconds) as response:
+        with open_podcast_request(
+            request,
+            timeout=timeout_seconds,
+            feed_url=feed_url,
+            access=access,
+            credentials=credentials,
+        ) as response:
             check()
-            final_url = normalize_feed_url(response.geturl())
+            final_url = normalize_feed_url(response.url)
             if not final_url:
                 raise PodcastFeedError("The request redirected outside HTTP or HTTPS")
             length = response.headers.get("Content-Length")
@@ -350,8 +370,10 @@ def request_podcast_bytes(
                     break
                 captured.extend(chunk)
             payload = bytes(captured)
-    except (HTTPError, URLError, TimeoutError, OSError) as error:
-        raise PodcastFeedError(f"The podcast request failed: {error}") from error
+    except (TimeoutError, OSError, HTTPException):
+        raise PodcastFeedError(
+            "The podcast response could not be read. Try again."
+        ) from None
     if len(payload) > limit:
         raise PodcastFeedError("The response is larger than iOpenPod accepts")
     if not payload:
@@ -375,7 +397,7 @@ def _episode(
             relation = _text(link.get("rel"))
             if name == "links" and relation != "enclosure":
                 continue
-            candidate = _text(link.get("href"))
+            candidate = normalize_feed_url(_text(link.get("href")))
             mime = _text(link.get("type")).casefold()
             if not candidate or not (
                 mime.startswith(("audio/", "video/"))
@@ -391,10 +413,15 @@ def _episode(
         return None
 
     published_at = 0
-    published = entry.get("published_parsed") or entry.get("updated_parsed")
+    published = entry.get("published_parsed") or (
+        entry.get("updated_parsed") if "updated_parsed" in entry else None
+    )
     if isinstance(published, time.struct_time):
         try:
-            published_at = max(0, calendar.timegm(published))
+            # feedparser supplies UTC civil fields. Keep its external struct_time
+            # at this adapter boundary; zero means unknown, not every pre-1970
+            # release. Malformed feed dates remain optional metadata (ADR-0240).
+            published_at = Instant.from_utc(*published[:6]).timestamp()
         except (OverflowError, ValueError):
             published_at = 0
     title = _text(entry.get("title")) or "Untitled Episode"

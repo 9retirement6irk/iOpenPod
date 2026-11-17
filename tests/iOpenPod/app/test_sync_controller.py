@@ -21,6 +21,8 @@ from tests.iOpenPod.GUI.application_shell_test_support import build_context
 from device_registry import DEFAULT_DEVICE_REGISTRY
 from iOpenPod.app.core.settings.definitions import (
     ANALYZE_FOR_GENIUS,
+    BACK_SYNC_RATINGS,
+    COMPUTE_MISSING_BPM,
     COMPUTE_SOUND_CHECK,
 )
 from iOpenPod.app.core.settings.service import SettingsService
@@ -40,7 +42,11 @@ from iOpenPod.app.models.track_table_model import TrackColumn, TrackTableModel
 from iOpenPod.app.playlist_sync import PlaylistSyncChoice
 from iOpenPod.app.podcasts.models import PodcastSnapshot
 from iOpenPod.app.podcasts.sync import PodcastSyncRequest
-from iOpenPod.app.scrobbling.settings import LASTFM_USERNAME, SCROBBLE_DURING_SYNC
+from iOpenPod.app.scrobbling.settings import (
+    LASTFM_USERNAME,
+    SCROBBLE_DURING_SYNC,
+    SCROBBLE_RATINGS,
+)
 from iOpenPod.app.services.device_coordinator import (
     DeviceCoordinator,
     SyncCleanupCompletedError,
@@ -90,8 +96,10 @@ def test_execution_reserves_workspace_and_uses_immutable_settings(
     workspace.load(active.library)
     settings = SettingsService(GlobalSettingsStore(), DeviceSettingsStore())
     settings.set_global(COMPUTE_SOUND_CHECK, True)
+    settings.set_global(COMPUTE_MISSING_BPM, True)
     settings.set_global(ANALYZE_FOR_GENIUS, False)
     settings.set_global(SCROBBLE_DURING_SYNC, True)
+    settings.set_global(SCROBBLE_RATINGS, True)
     settings.set_global(LASTFM_USERNAME, "listener")
     service = SyncExecutionStub()
     controller = SyncController(service, workspace, devices, settings)
@@ -102,14 +110,18 @@ def test_execution_reserves_workspace_and_uses_immutable_settings(
         wait_for(service.entered.is_set)
         assert workspace.locked and devices.busy
         settings.set_global(COMPUTE_SOUND_CHECK, False)
+        settings.set_global(COMPUTE_MISSING_BPM, False)
         settings.set_global(ANALYZE_FOR_GENIUS, True)
         settings.set_global(SCROBBLE_DURING_SYNC, False)
+        settings.set_global(SCROBBLE_RATINGS, False)
         assert (
             service.request is not None and service.request.options.compute_sound_check
         )
         assert not service.request.options.analyze_for_genius
+        assert service.request.options.compute_missing_bpm
         assert service.request.playlist_choices == choices
         assert service.request.options.scrobble
+        assert service.request.options.scrobble_ratings
         assert service.request.scrobble_accounts[0].username == "listener"
         assert not controller.start(*_inputs(), active)
         controller.skip_genius_analysis()
@@ -396,12 +408,9 @@ def test_podcast_sync_uses_shared_reservation_without_host_scans(
     assert active is not None
     workspace.load(active.library)
     service = SyncExecutionStub()
-    controller = SyncController(
-        service,
-        workspace,
-        devices,
-        SettingsService(GlobalSettingsStore(), DeviceSettingsStore()),
-    )
+    settings = SettingsService(GlobalSettingsStore(), DeviceSettingsStore())
+    settings.set_global(BACK_SYNC_RATINGS, True)
+    controller = SyncController(service, workspace, devices, settings)
     podcasts = PodcastSyncRequest(PodcastSnapshot(writable=True))
     try:
         assert controller.start_podcasts(podcasts, active)

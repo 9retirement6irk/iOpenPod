@@ -9,12 +9,14 @@ import os
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import ExitStack, closing
-from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
+from itertools import chain
 from threading import Event
-from time import perf_counter, time_ns
+from time import perf_counter
 from typing import TYPE_CHECKING, Protocol, cast
+
+from whenever import Instant
 
 from iOpenPod.app.display_text import source_text
 from iOpenPod.app.host_media_fingerprint import (
@@ -30,6 +32,7 @@ from iOpenPod.app.ipod_analysis_cache import (
     ipod_analysis_cache_identity,
 )
 from iOpenPod.app.media.fingerprint_codec import decode_fingerprint, encode_fingerprint
+from iOpenPod.app.media.ratings import whole_star_rating
 from iOpenPod.app.playlist_sync import PlaylistAssociation, playlist_sync_target
 from iOpenPod.app.sync_track_details import track_tag_sha256
 from iPodDB.library import PhotoRepresentationKind
@@ -57,10 +60,12 @@ if TYPE_CHECKING:
 
 
 LIBRARY_SYNC_HELPER_PATH = DevicePath("iPod_Control/iOpenPod/library-sync-helper.json")
+RATING_SYNC_PATH = DevicePath("iPod_Control/iOpenPod/rating-sync.json")
 _IPOD_CONTROL_PATH = DevicePath("iPod_Control")
 _PHOTOS_PATH = DevicePath("Photos")
 _FORMAT_VERSION = 7
 _MAX_RECORDS = 250_000
+logger = logging.getLogger(__name__)
 
 
 class LibrarySyncHelperError(RuntimeError):
@@ -93,6 +98,33 @@ class IPodMediaScanProgress:
 
 
 @dataclass(frozen=True, slots=True)
+class PendingRatingWrite:
+    """Reviewed Host rating and the target to write after the iPod commits it."""
+
+    host_rating: int
+    target_rating: int
+
+    def __post_init__(self) -> None:
+        _validate_rating(self.host_rating)
+        _validate_rating(self.target_rating)
+
+    @property
+    def host_target(self) -> int:
+        return whole_star_rating(self.target_rating)
+
+    def matches(self, host_rating: int, ipod_rating: int) -> bool:
+        return ipod_rating == self.target_rating and host_rating in (
+            self.host_rating,
+            self.host_target,
+        )
+
+
+def _validate_rating(rating: int) -> None:
+    if type(rating) is not int or not 0 <= rating <= 100:
+        raise ValueError("Sync rating baselines must use the 0-100 scale")
+
+
+@dataclass(frozen=True, slots=True)
 class SyncDetails:
     """Host-source facts captured only after one successful Sync commit."""
 
@@ -111,8 +143,14 @@ class SyncDetails:
     host_tag_sha256: str | None = None
     file_tag_policy: str | None = None
     stream_selection_sha256: str | None = None
+    host_rating: int | None = None
+    ipod_rating: int | None = None
+    pending_rating: PendingRatingWrite | None = None
 
     def __post_init__(self) -> None:
+        for rating in (self.host_rating, self.ipod_rating):
+            if rating is not None:
+                _validate_rating(rating)
         if not self.last_synced_at.strip():
             raise ValueError("Sync Details require a last-synced timestamp")
         if self.host_size_bytes < 0:
@@ -217,6 +255,8 @@ class IPodMediaLibrary:
     helper_revision: FileFingerprint | None
     persisted: bool
     playlist_associations: tuple[PlaylistAssociation, ...] = ()
+    rating_revision: FileFingerprint | None = None
+    ratings_available: bool = True
     # iPod Tracks deliberately not fingerprinted (see IPodMediaCacheStats.skipped).
     # Sync planning pairs them by details or offers them as iPod-only.
     unanalyzed_tracks: tuple[IPodUnanalyzedTrack, ...] = ()
@@ -234,6 +274,7 @@ class SyncedTrack:
     acoustic_fingerprint: str
     sync: SyncDetails | None = None
     track_id: int | None = None
+    refresh_metadata_baseline: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -289,7 +330,9 @@ def retain_retagged_sync_details(
         return transaction
     # FAT represents modification times in two-second increments. Storage verifies
     # this timestamp along with content, including after interrupted-write recovery.
-    modified_ns = time_ns() // 2_000_000_000 * 2_000_000_000
+    modified_ns = (
+        Instant.now().timestamp(unit="nanosecond") // 2_000_000_000 * 2_000_000_000
+    )
     refreshed: set[DevicePath] = set()
     tracks: list[IPodTrackFingerprint] = []
     for record in loaded.tracks:
@@ -324,8 +367,9 @@ def retain_retagged_sync_details(
         tuple(tracks),
         loaded.images,
         library_sha256,
-        updated_at=datetime.now(UTC).isoformat(),
+        updated_at=Instant.now().to_fixed_offset().format_iso(unit="microsecond"),
         playlists=loaded.playlists,
+        include_inline_ratings=loaded.inline_ratings,
     )
     return replace(
         transaction,
@@ -344,6 +388,80 @@ def retain_retagged_sync_details(
             ),
         ),
     )
+
+
+def read_sync_history(
+    session: FilesystemSession, library: LibrarySnapshot
+) -> IPodMediaLibrary:
+    """Read established, still-valid associations without analyzing audio.
+
+    Library refresh has no Host comparison. It can still carry existing Sync
+    Details through its own metadata updates using the normal publication path.
+    """
+    loaded, issue = _load_helper(session)
+    if issue is not None or not loaded.writable:
+        raise LibrarySyncHelperError("The existing Sync helper is invalid.")
+    retained = {_track_key(record): record for record in loaded.tracks}
+    tracks: list[IPodTrackFingerprint] = []
+    for track in library.tracks:
+        record = retained.get(_track_key_for_track(track))
+        if record is None:
+            continue
+        path = _track_path(track)
+        if _matches(session, record, path, _regular_file(session, path)):
+            tracks.append(replace(record, track_id=track.track_id))
+    return IPodMediaLibrary(
+        tuple(tracks),
+        loaded.images,
+        (loaded.rating_issue,) if loaded.rating_issue is not None else (),
+        IPodMediaCacheStats(),
+        loaded.revision,
+        loaded.revision is not None,
+        loaded.playlists,
+        loaded.ratings.revision,
+        loaded.rating_issue is None,
+    )
+
+
+def read_track_sync_paths(
+    session: FilesystemSession,
+    tracks: tuple[Track, ...],
+    *,
+    checkpoint: Callable[[], None],
+) -> dict[int, str]:
+    """Read committed Host path hints for the requested, still-matching Tracks."""
+    checkpoint()
+    try:
+        loaded, issue = _load_helper(session)
+    except FilesystemSessionError:
+        raise
+    except (OSError, StorageError) as error:
+        logger.warning("Could not read the Library Sync Helper for export: %s", error)
+        return {}
+    if issue is not None:
+        logger.warning(
+            "Could not use the Library Sync Helper for export: %s", issue.detail
+        )
+        return {}
+
+    retained = {_track_key(record): record for record in loaded.tracks}
+    paths: dict[int, str] = {}
+    for track in tracks:
+        checkpoint()
+        record = retained.get(_track_key_for_track(track))
+        if record is None or record.sync is None or not record.sync.host_path_hint:
+            continue
+        try:
+            path = _track_path(track)
+            if record.path == path and _matches(
+                session, record, path, _regular_file(session, path)
+            ):
+                paths[track.track_id] = record.sync.host_path_hint
+        except FilesystemSessionError:
+            raise
+        except (OSError, StorageError, ValueError):
+            continue
+    return paths
 
 
 def publish_sync_helper(
@@ -374,6 +492,10 @@ def publish_sync_helper(
     if previous is not None and loaded.revision != previous.helper_revision:
         raise LibrarySyncHelperError(
             "The Sync helper changed after Review. Rescan the iPod before retrying."
+        )
+    if previous is not None and loaded.ratings.revision != previous.rating_revision:
+        raise LibrarySyncHelperError(
+            "Rating Sync state changed after Review. Rescan before retrying."
         )
     updated = {
         str(item.path).casefold(): item for item in synced if item.track_id is None
@@ -406,7 +528,7 @@ def publish_sync_helper(
         for item in (loaded.tracks if previous is None else previous.tracks)
     }
     tracks: list[IPodTrackFingerprint] = []
-    issues: list[IPodMediaScanIssue] = []
+    issues = [loaded.rating_issue] if loaded.rating_issue is not None else []
     for track in library.tracks:
         try:
             path = _track_path(track)
@@ -457,8 +579,8 @@ def publish_sync_helper(
                         ipod_tag_sha256=track_tag_sha256(track),
                         ipod_baseline_pending=False,
                     )
-                    if new.sync is not None
-                    else None,
+                    if new.sync is not None and new.refresh_metadata_baseline
+                    else new.sync,
                 )
             )
         elif old is not None and _matches(session, old, path, entry):
@@ -541,7 +663,7 @@ def publish_sync_helper(
         and item.ipod_playlist_id not in target_claims
     )
     associations = (*retained_playlists, *playlists)
-    revision = _save_helper(
+    revision, rating_revision = _save_helper(
         session,
         tuple(tracks),
         tuple(images),
@@ -569,6 +691,8 @@ def publish_sync_helper(
         revision,
         True,
         associations,
+        rating_revision,
+        loaded.rating_issue is None,
     )
 
 
@@ -586,6 +710,22 @@ CancellationCheck = Callable[[], None]
 
 
 @dataclass(frozen=True, slots=True)
+class _RatingRecord:
+    host_path: str
+    host_rating: int
+    ipod_rating: int
+    pending: PendingRatingWrite | None
+
+
+@dataclass(frozen=True, slots=True)
+class _RatingCatalog:
+    records: dict[tuple[str, int], _RatingRecord] = field(
+        default_factory=dict[tuple[str, int], _RatingRecord]
+    )
+    revision: FileFingerprint | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class _LoadedHelper:
     tracks: tuple[IPodTrackFingerprint, ...] = ()
     images: tuple[IPodImageFingerprint, ...] = ()
@@ -595,6 +735,9 @@ class _LoadedHelper:
     revision: FileFingerprint | None = None
     writable: bool = True
     playlists: tuple[PlaylistAssociation, ...] = ()
+    ratings: _RatingCatalog = field(default_factory=_RatingCatalog)
+    rating_issue: IPodMediaScanIssue | None = None
+    inline_ratings: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -734,7 +877,9 @@ class IPodMediaScanner:
         checkpoint()
         _emit(progress, IPodMediaScanStage.LOADING, 0, 0, "Reading Sync helper…")
         loaded, load_issue = _load_helper_for_scan(session, checkpoint)
-        issues = [load_issue] if load_issue is not None else []
+        issues = [
+            issue for issue in (load_issue, loaded.rating_issue) if issue is not None
+        ]
         cached_tracks = {_track_key(item): item for item in loaded.tracks}
         cached_images = {item.image_id: item for item in loaded.images}
 
@@ -933,6 +1078,7 @@ class IPodMediaScanner:
 
         checkpoint()
         helper_revision = loaded.revision
+        rating_revision = loaded.ratings.revision
         persisted = False
         if persist and loaded.writable:
             if validate_source is not None:
@@ -945,7 +1091,7 @@ class IPodMediaScanner:
                 "Saving Sync helper…",
                 reused=reused,
             )
-            helper_revision = _save_helper(
+            helper_revision, rating_revision = _save_helper(
                 session,
                 tuple(tracks),
                 tuple(images),
@@ -1011,7 +1157,9 @@ class IPodMediaScanner:
             helper_revision,
             persisted,
             loaded.playlists,
-            tuple(skipped),
+            rating_revision,
+            loaded.rating_issue is None,
+            unanalyzed_tracks=tuple(skipped),
         )
 
     def _track_outcomes(
@@ -1313,7 +1461,7 @@ def _load_helper(
     session: FilesystemSession,
 ) -> tuple[_LoadedHelper, IPodMediaScanIssue | None]:
     if not session.exists(LIBRARY_SYNC_HELPER_PATH):
-        return _LoadedHelper(), None
+        return _attach_ratings(session, _LoadedHelper()), None
     entry = session.stat(LIBRARY_SYNC_HELPER_PATH)
     if entry.kind is not DeviceEntryKind.FILE:
         return (
@@ -1343,7 +1491,177 @@ def _load_helper(
                 ),
             ),
         )
-    return replace(loaded, revision=source.fingerprint), None
+    return _attach_ratings(session, replace(loaded, revision=source.fingerprint)), None
+
+
+def _rating_records(
+    tracks: tuple[IPodTrackFingerprint, ...],
+) -> dict[tuple[str, int], _RatingRecord]:
+    return {
+        _track_key(track): _RatingRecord(
+            sync.host_path_hint, sync.host_rating, sync.ipod_rating, sync.pending_rating
+        )
+        for track in tracks
+        if (sync := track.sync) is not None
+        and sync.host_path_hint
+        and sync.host_rating is not None
+        and sync.ipod_rating is not None
+    }
+
+
+def _attach_ratings(session: FilesystemSession, loaded: _LoadedHelper) -> _LoadedHelper:
+    try:
+        catalog = _load_rating_catalog(session)
+    except FilesystemSessionError:
+        raise
+    except (OSError, StorageError, ValueError) as error:
+        return replace(
+            loaded,
+            rating_issue=IPodMediaScanIssue(
+                "Rating Sync state",
+                source_text(
+                    "Rating Sync state could not be read and was left unchanged: {error}",
+                    error=str(error),
+                ),
+            ),
+        )
+
+    def attach(track: IPodTrackFingerprint) -> IPodTrackFingerprint:
+        sync = track.sync
+        record = catalog.records.get(_track_key(track))
+        if (
+            sync is None
+            or record is None
+            or not sync.host_path_hint
+            or os.path.normcase(record.host_path)
+            != os.path.normcase(sync.host_path_hint)
+        ):
+            return track
+        return replace(
+            track,
+            sync=replace(
+                sync,
+                host_rating=record.host_rating,
+                ipod_rating=record.ipod_rating,
+                pending_rating=record.pending,
+            ),
+        )
+
+    return replace(loaded, tracks=tuple(map(attach, loaded.tracks)), ratings=catalog)
+
+
+def _load_rating_catalog(session: FilesystemSession) -> _RatingCatalog:
+    if not session.exists(RATING_SYNC_PATH):
+        return _RatingCatalog()
+    snapshot = session.read_snapshot(RATING_SYNC_PATH)
+    try:
+        raw: object = json.loads(
+            snapshot.data.decode("utf-8"), object_pairs_hook=_pairs
+        )
+    except RecursionError as error:
+        raise ValueError("Rating Sync state is nested too deeply") from error
+    document = _exact_object(raw, "Rating Sync state", {"version", "records", "sha256"})
+    if _nonnegative_integer(document["version"], "version") != 1:
+        raise ValueError("Rating Sync state version is unsupported")
+    rows = _array(document["records"], "Rating Sync records")
+    if len(rows) > _MAX_RECORDS:
+        raise ValueError("Rating Sync state contains too many records")
+    if hashlib.sha256(_canonical_json(rows)).hexdigest() != document["sha256"]:
+        raise ValueError("Rating Sync state checksum does not match")
+    records: dict[tuple[str, int], _RatingRecord] = {}
+    for raw_row in rows:
+        row = _exact_object(
+            raw_row,
+            "Rating Sync record",
+            {"kind", "id", "host_path", "host_rating", "ipod_rating", "pending"},
+        )
+        kind = _text(row["kind"], "Track identity kind")
+        identity = _decimal_identifier(row["id"], "Track identity")
+        host_path = _text(row["host_path"], "Host path")
+        if kind not in {"database", "track"} or not identity or not host_path:
+            raise ValueError("Rating Sync record has an invalid Track or Host identity")
+        key = (kind, identity)
+        if key in records:
+            raise ValueError("Rating Sync state contains duplicate Track identities")
+        host_rating = _nonnegative_integer(row["host_rating"], "Host rating")
+        ipod_rating = _nonnegative_integer(row["ipod_rating"], "iPod rating")
+        _validate_rating(host_rating)
+        _validate_rating(ipod_rating)
+        pending = None
+        if row["pending"] is not None:
+            intent = _exact_object(row["pending"], "Pending rating", {"host", "target"})
+            pending = PendingRatingWrite(
+                _nonnegative_integer(intent["host"], "Pending Host rating"),
+                _nonnegative_integer(intent["target"], "Pending target rating"),
+            )
+        records[key] = _RatingRecord(host_path, host_rating, ipod_rating, pending)
+    return _RatingCatalog(records, snapshot.fingerprint)
+
+
+def _save_rating_catalog(
+    session: FilesystemSession,
+    records: dict[tuple[str, int], _RatingRecord],
+    previous: _RatingCatalog,
+) -> FileFingerprint | None:
+    if records == previous.records:
+        return previous.revision
+    if len(records) > _MAX_RECORDS:
+        raise LibrarySyncHelperError("Rating Sync state contains too many records")
+    rows = [
+        {
+            "kind": kind,
+            "id": str(identity),
+            "host_path": record.host_path,
+            "host_rating": record.host_rating,
+            "ipod_rating": record.ipod_rating,
+            "pending": (
+                {
+                    "host": record.pending.host_rating,
+                    "target": record.pending.target_rating,
+                }
+                if record.pending is not None
+                else None
+            ),
+        }
+        for (kind, identity), record in sorted(records.items())
+    ]
+    payload = _canonical_json(
+        {
+            "version": 1,
+            "records": rows,
+            "sha256": hashlib.sha256(_canonical_json(rows)).hexdigest(),
+        }
+    )
+    return session.atomic_write(
+        RATING_SYNC_PATH, payload, expected=previous.revision, create_parents=True
+    ).fingerprint
+
+
+def stage_rating_writes(
+    session: FilesystemSession,
+    reviewed: IPodMediaLibrary,
+    pending: dict[int, PendingRatingWrite],
+) -> IPodMediaLibrary:
+    """Save retry intent before the corresponding iPod ratings can commit."""
+    catalog = _load_rating_catalog(session)
+    if catalog.revision != reviewed.rating_revision or (
+        session.fingerprint(LIBRARY_SYNC_HELPER_PATH) != reviewed.helper_revision
+    ):
+        raise LibrarySyncHelperError(
+            "Rating Sync state changed after Review. Rescan before retrying."
+        )
+    tracks = tuple(
+        replace(track, sync=replace(track.sync, pending_rating=intent))
+        if track.sync is not None
+        and (intent := pending.get(track.track_id)) is not None
+        else track
+        for track in reviewed.tracks
+    )
+    updates = _rating_records(
+        tuple(track for track in tracks if track.track_id in pending)
+    )
+    revision = _save_rating_catalog(session, catalog.records | updates, catalog)
+    return replace(reviewed, tracks=tracks, rating_revision=revision)
 
 
 def _save_helper(
@@ -1354,7 +1672,8 @@ def _save_helper(
     loaded: _LoadedHelper,
     *,
     playlists: tuple[PlaylistAssociation, ...] | None = None,
-) -> FileFingerprint:
+) -> tuple[FileFingerprint, FileFingerprint | None]:
+    rating_revision = loaded.ratings.revision
     if playlists is None:
         playlists = loaded.playlists
     unchanged = (
@@ -1363,17 +1682,27 @@ def _save_helper(
         and images == loaded.images
         and library_sha256 == loaded.library_sha256
         and loaded.version == _FORMAT_VERSION
+        and (not loaded.inline_ratings or loaded.rating_issue is not None)
         and loaded.revision is not None
     )
     if unchanged:
         assert loaded.revision is not None
-        return loaded.revision
+        return loaded.revision, rating_revision
+    if loaded.inline_ratings and loaded.rating_issue is None:
+        # Preserve preview baselines before removing them from the v7 document.
+        rating_revision = _save_rating_catalog(
+            session,
+            loaded.ratings.records | _rating_records(loaded.tracks),
+            loaded.ratings,
+        )
     payload = _encode_helper(
         tracks,
         images,
         library_sha256,
-        updated_at=datetime.now(UTC).isoformat(),
+        updated_at=Instant.now().to_fixed_offset().format_iso(unit="microsecond"),
         playlists=playlists,
+        include_inline_ratings=loaded.inline_ratings
+        and loaded.rating_issue is not None,
     )
     result = session.atomic_write(
         LIBRARY_SYNC_HELPER_PATH,
@@ -1381,7 +1710,14 @@ def _save_helper(
         expected=loaded.revision,
         create_parents=True,
     )
-    return result.fingerprint
+    if loaded.rating_issue is None:
+        # Pending Host work must survive a failed update of the v7 helper.
+        rating_revision = _save_rating_catalog(
+            session,
+            _rating_records(tracks),
+            replace(loaded.ratings, revision=rating_revision),
+        )
+    return result.fingerprint, rating_revision
 
 
 def _track_path(track: Track) -> DevicePath:
@@ -1496,12 +1832,16 @@ def _encode_helper(
     *,
     updated_at: str,
     playlists: tuple[PlaylistAssociation, ...] = (),
+    include_inline_ratings: bool = False,
 ) -> bytes:
     _validate_playlist_associations(playlists)
     if len(tracks) + len(images) + len(playlists) > _MAX_RECORDS:
         raise LibrarySyncHelperError("The Sync helper contains too many records")
     records = {
-        "tracks": [_track_document(item) for item in tracks],
+        "tracks": [
+            _track_document(item, include_inline_ratings=include_inline_ratings)
+            for item in tracks
+        ],
         "images": [_image_document(item) for item in images],
         "playlists": [
             {
@@ -1577,6 +1917,12 @@ def _decode_helper(payload: bytes) -> _LoadedHelper:
         _text(document["updated_at"], "updated_at"),
         version,
         playlists=playlists,
+        inline_ratings=any(
+            isinstance(row, dict)
+            and isinstance(sync := cast("dict[str, object]", row).get("sync"), dict)
+            and ("host_rating" in sync or "ipod_rating" in sync)
+            for row in chain(tracks_raw, images_raw)
+        ),
     )
 
 
@@ -1599,7 +1945,14 @@ def _validate_playlist_associations(values: tuple[PlaylistAssociation, ...]) -> 
         raise ValueError("Playlist matches must be one-to-one")
 
 
-def _track_document(value: IPodTrackFingerprint) -> dict[str, object]:
+def _track_document(
+    value: IPodTrackFingerprint, *, include_inline_ratings: bool
+) -> dict[str, object]:
+    sync = _sync_document(value.sync)
+    if include_inline_ratings and sync is not None and value.sync is not None:
+        sync.update(
+            host_rating=value.sync.host_rating, ipod_rating=value.sync.ipod_rating
+        )
     return {
         "database_track_id": str(value.database_track_id),
         "track_id": value.track_id,
@@ -1607,7 +1960,7 @@ def _track_document(value: IPodTrackFingerprint) -> dict[str, object]:
         "size_bytes": value.size_bytes,
         "modified_ns": value.modified_ns,
         "acoustic_fingerprint": encode_fingerprint(value.acoustic_fingerprint),
-        "sync": _sync_document(value.sync),
+        "sync": sync,
     }
 
 
@@ -1718,6 +2071,8 @@ def _sync_from_document(value: object) -> SyncDetails | None:
         "host_tag_sha256",
         "file_tag_policy",
         "stream_selection_sha256",
+        "host_rating",
+        "ipod_rating",
     }
     row = _object(value, "Sync details")
     if not required <= row.keys() or row.keys() - required - optional:
@@ -1760,6 +2115,12 @@ def _sync_from_document(value: object) -> SyncDetails | None:
             if row.get("file_tag_policy") is None
             else _text(row["file_tag_policy"], "file_tag_policy")
         ),
+        host_rating=None
+        if row.get("host_rating") is None
+        else _nonnegative_integer(row["host_rating"], "host_rating"),
+        ipod_rating=None
+        if row.get("ipod_rating") is None
+        else _nonnegative_integer(row["ipod_rating"], "ipod_rating"),
         stream_selection_sha256=(
             None
             if row.get("stream_selection_sha256") is None

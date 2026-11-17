@@ -12,9 +12,11 @@ from mutagen import MutagenError, PaddingInfo
 from mutagen.aiff import AIFF
 from mutagen.id3 import ID3, ID3NoHeaderError
 from mutagen.mp3 import MP3
-from mutagen.mp4 import MP4, MP4Cover
+from mutagen.mp4 import MP4, MP4Cover, MP4FreeForm
 from mutagen.wave import WAVE
 from PIL import Image, ImageChops
+
+from iOpenPod.app.media.ratings import whole_star_rating
 
 if TYPE_CHECKING:
     from iPodDB.library import Track
@@ -73,6 +75,7 @@ class ExportMediaTagger:
         *,
         preserve_artwork: bool = False,
         file_name: str | None = None,
+        preserve_lyrics: bool = False,
     ) -> None:
         path = Path(os.fspath(destination))
         self._prepare(
@@ -81,6 +84,7 @@ class ExportMediaTagger:
             track,
             artwork,
             preserve_artwork=preserve_artwork,
+            preserve_lyrics=preserve_lyrics,
         )
 
     def prepare_bytes(
@@ -130,6 +134,7 @@ class ExportMediaTagger:
         artwork: _Artwork | None,
         *,
         preserve_artwork: bool,
+        preserve_lyrics: bool = False,
     ) -> None:
         suffix = Path(file_name).suffix.casefold()
         if suffix not in _ID3_EXTENSIONS | _RAW_AAC_EXTENSIONS | _MP4_EXTENSIONS:
@@ -138,11 +143,21 @@ class ExportMediaTagger:
             )
         cover = _jpeg_cover(artwork) if artwork is not None else None
         if suffix in _MP4_EXTENSIONS:
-            expected = _tag_mp4(buffer, track, cover, preserve_artwork=preserve_artwork)
+            expected = _tag_mp4(
+                buffer,
+                track,
+                cover,
+                preserve_artwork=preserve_artwork,
+                preserve_lyrics=preserve_lyrics,
+            )
             factory: _MutagenFactory = cast("_MutagenFactory", MP4)
         elif suffix in _RAW_AAC_EXTENSIONS:
             expected = _tag_raw_aac(
-                buffer, track, cover, preserve_artwork=preserve_artwork
+                buffer,
+                track,
+                cover,
+                preserve_artwork=preserve_artwork,
+                preserve_lyrics=preserve_lyrics,
             )
             if not isinstance(buffer, Path):
                 buffer.seek(0)
@@ -154,7 +169,12 @@ class ExportMediaTagger:
             return
         else:
             expected = _tag_id3_container(
-                buffer, suffix, track, cover, preserve_artwork=preserve_artwork
+                buffer,
+                suffix,
+                track,
+                cover,
+                preserve_artwork=preserve_artwork,
+                preserve_lyrics=preserve_lyrics,
             )
             factory = cast(
                 "_MutagenFactory",
@@ -182,6 +202,7 @@ def _tag_id3_container(
     cover: bytes | None,
     *,
     preserve_artwork: bool = False,
+    preserve_lyrics: bool = False,
 ) -> tuple[tuple[str, str], ...]:
     factory = MP3 if suffix == ".mp3" else WAVE if suffix in (".wav", ".wave") else AIFF
     audio = cast("_MutagenFactory", factory)(path)
@@ -191,7 +212,13 @@ def _tag_id3_container(
         raise ValueError(f"The exported {suffix} file does not support ID3 metadata.")
     tags: Any = audio.tags
 
-    _apply_id3_tags(tags, track, cover, preserve_artwork=preserve_artwork)
+    _apply_id3_tags(
+        tags,
+        track,
+        cover,
+        preserve_artwork=preserve_artwork,
+        preserve_lyrics=preserve_lyrics,
+    )
     if not isinstance(path, Path):
         # Mutagen expects a file object at offset zero for every operation.
         path.seek(0)
@@ -207,13 +234,20 @@ def _tag_raw_aac(
     cover: bytes | None,
     *,
     preserve_artwork: bool = False,
+    preserve_lyrics: bool = False,
 ) -> tuple[tuple[str, str], ...]:
     """Write an ID3 prefix because Mutagen's AAC wrapper is read-only for tags."""
     try:
         tags = _ID3_TAG(path)
     except ID3NoHeaderError:
         tags = _ID3_TAG()
-    _apply_id3_tags(tags, track, cover, preserve_artwork=preserve_artwork)
+    _apply_id3_tags(
+        tags,
+        track,
+        cover,
+        preserve_artwork=preserve_artwork,
+        preserve_lyrics=preserve_lyrics,
+    )
     if not isinstance(path, Path):
         path.seek(0)
     tags.save(
@@ -228,6 +262,7 @@ def _apply_id3_tags(
     cover: bytes | None,
     *,
     preserve_artwork: bool,
+    preserve_lyrics: bool = False,
 ) -> None:
     keys = (
         "COMM",
@@ -252,9 +287,23 @@ def _apply_id3_tags(
         "USLT",
     )
     for key in keys:
-        tags.delall(key)
+        if key != "USLT" or not preserve_lyrics:
+            tags.delall(key)
     if not preserve_artwork:
         tags.delall("APIC")
+    owners = tags.getall("POPM")
+    popm_rating = (0, 1, 64, 128, 196, 255)[whole_star_rating(track.rating) // 20]
+    if owners:
+        for owner in owners:
+            owner.rating = popm_rating
+    else:
+        tags.add(
+            _ID3_FRAMES.POPM(
+                email="iOpenPod",
+                rating=popm_rating,
+                count=0,
+            )
+        )
     metadata = track.metadata
     frame_values = (
         (_ID3_FRAMES.TIT2, track.title),
@@ -288,7 +337,7 @@ def _apply_id3_tags(
         tags.add(
             _ID3_FRAMES.COMM(encoding=3, lang="eng", desc="", text=metadata.comment)
         )
-    if metadata.lyrics:
+    if metadata.lyrics and not preserve_lyrics:
         tags.add(
             _ID3_FRAMES.USLT(encoding=3, lang="eng", desc="", text=metadata.lyrics)
         )
@@ -318,6 +367,7 @@ def _tag_mp4(
     cover: bytes | None,
     *,
     preserve_artwork: bool = False,
+    preserve_lyrics: bool = False,
 ) -> tuple[tuple[str, str], ...]:
     audio = cast("_MutagenFactory", MP4)(path)
     if audio.tags is None:
@@ -327,6 +377,9 @@ def _tag_mp4(
         raise ValueError("The exported MP4 file does not support metadata.")
     metadata = track.metadata
     values: dict[str, object | None] = {
+        "----:com.apple.iTunes:RATING": [
+            cast("Any", MP4FreeForm)(str(track.rating).encode("ascii"))
+        ],
         "\xa9nam": [track.title] if track.title else None,
         "\xa9ART": [track.artist] if track.artist else None,
         "\xa9alb": [track.album] if track.album else None,
@@ -363,6 +416,8 @@ def _tag_mp4(
     elif not preserve_artwork:
         values["covr"] = None
     for key, value in values.items():
+        if key == "\xa9lyr" and preserve_lyrics:
+            continue
         if value is None:
             tags.pop(key, None)
         else:

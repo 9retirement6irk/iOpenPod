@@ -4,22 +4,25 @@ from __future__ import annotations
 
 import time
 from contextlib import contextmanager, suppress
-from datetime import UTC, datetime
+from http.client import HTTPException
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, cast
 from urllib.error import URLError
 from urllib.parse import urlsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import Request
 
+from whenever import Instant
+
+from iOpenPod.app.podcasts.http_client import open_podcast_request
 from iOpenPod.app.podcasts.identity import normalize_feed_url
 from iPodDB.library import MediaType, Track, TrackMetadata
 from storage.media_processing import media_workspace
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
-    from http.client import HTTPMessage
-    from typing import IO, BinaryIO
+    from typing import BinaryIO
 
+    from iOpenPod.app.podcasts.credentials import PodcastAccess
     from iOpenPod.app.podcasts.sync import PodcastEpisodeAddition
     from storage import HostPath
 
@@ -43,28 +46,13 @@ _SUFFIXES = frozenset(
 )
 
 
-class _SafeRedirects(HTTPRedirectHandler):
-    def redirect_request(
-        self,
-        req: Request,
-        fp: IO[bytes],
-        code: int,
-        msg: str,
-        headers: HTTPMessage,
-        newurl: str,
-    ) -> Request | None:
-        normalized = normalize_feed_url(newurl)
-        if not normalized:
-            raise ValueError("The Podcast download redirected to an unsupported URL")
-        return super().redirect_request(req, fp, code, msg, headers, normalized)
-
-
 @contextmanager
 def download_episode(
     addition: PodcastEpisodeAddition,
     *,
     checkpoint: Callable[[], None],
     progress: Callable[[int, int | None], None] | None = None,
+    access: PodcastAccess | None = None,
 ) -> Generator[HostPath]:
     """Stream an enclosure without trusting RSS size, filenames, or media types."""
     url = normalize_feed_url(addition.episode.enclosure_url)
@@ -91,12 +79,15 @@ def download_episode(
     check()
     try:
         with (
-            build_opener(_SafeRedirects()).open(
-                request, timeout=_TIMEOUT_SECONDS
+            open_podcast_request(
+                request,
+                timeout=_TIMEOUT_SECONDS,
+                feed_url=addition.subscription.feed_url,
+                access=access,
             ) as response,
             media_workspace(checkpoint=check) as workspace,
         ):
-            if not normalize_feed_url(response.geturl()):
+            if not normalize_feed_url(response.url):
                 raise ValueError("The Podcast download returned an unsupported URL")
             encoding = str(response.headers.get("Content-Encoding", "identity"))
             if encoding.casefold() not in ("", "identity"):
@@ -115,8 +106,10 @@ def download_episode(
                 ),
             )
             yield captured.snapshot
-    except URLError as error:
-        raise OSError(f"The Podcast media download failed: {error.reason}") from error
+    except (URLError, HTTPException):
+        raise OSError(
+            "The Podcast media download failed. Check your connection and try again."
+        ) from None
 
 
 def episode_track(addition: PodcastEpisodeAddition, *, video: bool = False) -> Track:
@@ -125,7 +118,7 @@ def episode_track(addition: PodcastEpisodeAddition, *, video: bool = False) -> T
     year = 0
     if episode.published_at:
         with suppress(OverflowError, OSError, ValueError):
-            year = datetime.fromtimestamp(episode.published_at, UTC).year
+            year = Instant.from_timestamp(episode.published_at).to_fixed_offset().year
     return Track(
         0,
         episode.title or "Untitled Episode",
@@ -149,7 +142,7 @@ def episode_track(addition: PodcastEpisodeAddition, *, video: bool = False) -> T
             description=episode.description,
             subtitle=episode.subtitle or episode.description[:255],
             content_advisory=episode.content_advisory,
-            last_modified=int(time.time()),
+            last_modified=Instant.now().timestamp(),
             release_date=episode.published_at,
             category=subscription.category,
             copyright=subscription.copyright,

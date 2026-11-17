@@ -35,11 +35,22 @@ from iOpenPod.app.metadata_fields import (
     display_value,
     parse_field,
 )
+from iOpenPod.app.models.equalizer import equalizer_label
+from iOpenPod.GUI.presentation.theme.tokens import LAYOUT
 from iOpenPod.GUI.widgets.app_combo_box import AppComboBox
+from iOpenPod.GUI.widgets.metadata_date_edit import MetadataDateEdit
 from iOpenPod.GUI.widgets.star_rating import StarRating
 from iOpenPod.GUI.widgets.themed_buttons import ActionButton, ActionButtonKind
 from iOpenPod.GUI.widgets.volume_adjustment import VolumeAdjustment
-from iPodDB.library import ContentAdvisory, MediaType, MetadataValue, TrackChapter
+from iPodDB.library import (
+    ContentAdvisory,
+    EqualizerPreset,
+    MediaType,
+    MetadataValue,
+    TrackChapter,
+    decode_track_equalizer,
+    encode_track_equalizer,
+)
 
 _MEDIA_TYPE_LABELS = {
     MediaType.AUDIO: str(QT_TRANSLATE_NOOP("FieldEditor", "Music")),
@@ -290,6 +301,25 @@ class FieldEditor(QFrame):
             )
             volume_editor.valueEdited.connect(self._modified)
             self.editor = volume_editor
+        elif spec.kind is FieldKind.EQUALIZER:
+            assert isinstance(value, str)
+            eq_editor = AppComboBox(self)
+            current_preset = decode_track_equalizer(value)
+            if mixed:
+                eq_editor.addItem(
+                    QCoreApplication.translate("EditorLabels", "Mixed values"), None
+                )
+            elif current_preset is None:
+                eq_editor.addItem(equalizer_label(None), None)
+            for preset in EqualizerPreset:
+                eq_editor.addItem(equalizer_label(preset), preset.value)
+            eq_editor.setCurrentIndex(
+                0
+                if mixed or current_preset is None
+                else eq_editor.findData(current_preset.value)
+            )
+            eq_editor.currentIndexChanged.connect(self._modified)
+            self.editor = eq_editor
         elif spec.kind is FieldKind.MEDIA_TYPE:
             media_editor = AppComboBox(self)
             current = (
@@ -352,6 +382,11 @@ class FieldEditor(QFrame):
             editor.setCurrentIndex(0 if mixed else editor.findData(value))
             editor.currentIndexChanged.connect(self._modified)
             self.editor = editor
+        elif spec.kind is FieldKind.DATE:
+            assert isinstance(value, int)
+            date_editor = MetadataDateEdit(value, mixed, self)
+            date_editor.valueChanged.connect(self._modified)
+            self.editor = date_editor
         elif spec.kind is FieldKind.LONG_TEXT:
             long_editor = QPlainTextEdit(self)
             long_editor.setMaximumHeight(120)
@@ -375,11 +410,7 @@ class FieldEditor(QFrame):
             line = QLineEdit(self)
             line.setText("" if mixed else display_value(value, spec.kind))
             line.setPlaceholderText(
-                self.tr("Mixed values — unchanged")
-                if mixed
-                else self.tr("ISO date or Unix seconds; blank to clear")
-                if spec.kind is FieldKind.DATE
-                else ""
+                self.tr("Mixed values — unchanged") if mixed else ""
             )
             line.textChanged.connect(self._modified)
             self.editor = line
@@ -392,6 +423,7 @@ class FieldEditor(QFrame):
             kind=ActionButtonKind.QUIET,
         )
         reset.setObjectName("metadataFieldReset")
+        reset.setProperty("metadataDateReset", spec.kind is FieldKind.DATE)
         reset_policy = reset.sizePolicy()
         reset_policy.setRetainSizeWhenHidden(True)
         reset.setSizePolicy(reset_policy)
@@ -401,12 +433,19 @@ class FieldEditor(QFrame):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 8, 10, 10)
         layout.setSpacing(6)
+        if spec.kind is FieldKind.DATE:
+            layout.setContentsMargins(10, LAYOUT.space_2xs, 10, LAYOUT.space_2xs)
+            layout.setSpacing(LAYOUT.space_2xs)
         header = QHBoxLayout()
         header.setContentsMargins(0, 0, 0, 0)
         header.setSpacing(8)
         header.addWidget(field_label)
-        header.addStretch(1)
-        header.addWidget(reset)
+        if spec.kind is FieldKind.DATE:
+            header.addWidget(reset)
+            header.addStretch(1)
+        else:
+            header.addStretch(1)
+            header.addWidget(reset)
         layout.addLayout(header)
         layout.addWidget(self.editor)
         if self._rating_mixed_label is not None:
@@ -440,6 +479,8 @@ class FieldEditor(QFrame):
                         label = QCoreApplication.translate(
                             "EditorLabels", "Mixed values"
                         )
+                    elif self.spec.kind is FieldKind.EQUALIZER:
+                        label = equalizer_label(None)
                     else:
                         retained = (
                             " + ".join(
@@ -451,6 +492,8 @@ class FieldEditor(QFrame):
                             else str(self.initial)
                         )
                         label = self.tr("Current (%1)").replace("%1", retained)
+                elif self.spec.kind is FieldKind.EQUALIZER:
+                    label = equalizer_label(EqualizerPreset(value))
                 elif self.spec.kind is FieldKind.BOOLEAN:
                     label = self.tr("Yes") if value else self.tr("No")
                 elif self.spec.kind is FieldKind.ADVISORY:
@@ -471,11 +514,7 @@ class FieldEditor(QFrame):
                 )
         elif isinstance(editor, QLineEdit | QPlainTextEdit):
             editor.setPlaceholderText(
-                self.tr("Mixed values — unchanged")
-                if self.mixed
-                else self.tr("ISO date or Unix seconds; blank to clear")
-                if self.spec.kind is FieldKind.DATE
-                else ""
+                self.tr("Mixed values — unchanged") if self.mixed else ""
             )
 
     def changeEvent(self, event: QEvent) -> None:
@@ -486,8 +525,14 @@ class FieldEditor(QFrame):
     def _modified(self, *_args: object) -> None:
         if self._syncing:
             return
+        if isinstance(self.editor, MetadataDateEdit):
+            self._set_modified(self.editor.is_modified())
+            return
         if (
-            (self.mixed or self.spec.kind is FieldKind.MEDIA_TYPE)
+            (
+                self.mixed
+                or self.spec.kind in (FieldKind.MEDIA_TYPE, FieldKind.EQUALIZER)
+            )
             and isinstance(self.editor, AppComboBox)
             and self.editor.currentData() is None
         ):
@@ -535,6 +580,9 @@ class FieldEditor(QFrame):
                 editor.set_value(
                     None if self.mixed else round(self.initial * 255 / 100)
                 )
+            elif isinstance(editor, MetadataDateEdit):
+                assert isinstance(self.initial, int)
+                editor.set_value(self.initial, mixed=self.mixed)
             elif isinstance(editor, QLineEdit):
                 editor.setText(
                     "" if self.mixed else display_value(self.initial, self.spec.kind)
@@ -549,6 +597,10 @@ class FieldEditor(QFrame):
                         if isinstance(self.initial, tuple) and len(self.initial) == 1
                         else None
                     )
+                elif self.spec.kind is FieldKind.EQUALIZER:
+                    assert isinstance(self.initial, str)
+                    preset = decode_track_equalizer(self.initial)
+                    initial = None if preset is None else preset.value
                 index = editor.findData(initial)
                 editor.setCurrentIndex(0 if self.mixed or index < 0 else index)
             elif isinstance(editor, ChapterEditor):
@@ -571,6 +623,8 @@ class FieldEditor(QFrame):
             return editor.rating
         if isinstance(editor, VolumeAdjustment):
             return editor.value / 255 * 100
+        if isinstance(editor, MetadataDateEdit):
+            return editor.value()
         if isinstance(editor, QLineEdit):
             return parse_field(self.spec, editor.text())
         if isinstance(editor, QPlainTextEdit):
@@ -579,6 +633,8 @@ class FieldEditor(QFrame):
             return editor.value()
         if isinstance(editor, AppComboBox):
             value: object = editor.currentData()
+            if self.spec.kind is FieldKind.EQUALIZER and type(value) is int:
+                return encode_track_equalizer(EqualizerPreset(value))
             if self.spec.kind is FieldKind.ADVISORY and isinstance(value, str):
                 return ContentAdvisory(value)
             if self.spec.kind is FieldKind.MEDIA_TYPE and isinstance(value, str):
