@@ -14,7 +14,8 @@ then beyond it.
 
 ## Current stage
 
-Connected Sources (this fork): Plex music, chosen Plex video libraries, and Grimmory audiobooks are listed in
+Connected Sources (this fork): Plex music, chosen Plex video libraries, and Grimmory and BookOrbit
+audiobooks are listed in
 Sync's media list as Remote Items and downloaded only when Sync prepares them, kept
 in a size-limited Media Cache; Immich materializes Selections as a Host Media
 Library folder that Sync refreshes before scanning; and iPod Extras (Memos notes,
@@ -26,6 +27,9 @@ scripted-protocol tests cover the work; physical-device acceptance is unverified
 The Calendar page's **Subscribe to Link…** adds a calendar link to Connected Sources
 and publishes it immediately; see
 [ADR-0905](docs/adr/0905-subscribe-to-calendar-links-from-the-calendar-page.md).
+BookOrbit connects with an API key and exchanges listening progress through its
+playback state; see
+[ADR-0906](docs/adr/0906-bookorbit-audiobooks-and-listening-progress.md).
 
 Settings > Sync offers default-off **Scrobble Ratings** for connected Last.fm and
 ListenBrainz accounts. During manual scrobbling or the enabled Sync scrobble step,

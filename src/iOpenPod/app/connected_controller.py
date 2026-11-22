@@ -12,12 +12,14 @@ import logging
 import threading
 import time
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Protocol, cast
 
 from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal
 
 from iOpenPod.app.connected import calendars as calendar_files
 from iOpenPod.app.connected import grimmory_sso
+from iOpenPod.app.connected.bookorbit import SOURCE as BOOKORBIT_LINKS
+from iOpenPod.app.connected.bookorbit import BookOrbitClient
 from iOpenPod.app.connected.config import (
     CalendarFile,
     CalendarsConfig,
@@ -34,6 +36,7 @@ from iOpenPod.app.connected.config import (
 from iOpenPod.app.connected.grimmory import (
     GrimmoryClient,
     GrimmoryCollection,
+    GrimmoryLink,
     GrimmoryProgress,
     GrimmoryTokens,
 )
@@ -65,7 +68,7 @@ from iOpenPod.app.connected.plex import (
     client_identifier,
 )
 from iOpenPod.app.connected.plex_ratings import RatingPlan, plan_ratings
-from iOpenPod.app.connected.remote_source import ConnectedRemote
+from iOpenPod.app.connected.remote_source import BOOKORBIT_FOLDER, ConnectedRemote
 from iOpenPod.app.connected.secrets import SecretKey, SecretStore, SystemSecretStore
 from iOpenPod.app.host_media_folders import (
     HostMediaFolder,
@@ -98,10 +101,28 @@ AUDIOBOOKS_FOLDER = "Audiobooks"
 _SIGN_IN_POLL = 2.0
 
 
+STREAMED_SOURCES: tuple[str, ...] = ("plex", "grimmory", "bookorbit")
+
+
 class ConnectedSource:
     PLEX = "plex"
     IMMICH = "immich"
     GRIMMORY = "grimmory"
+    BOOKORBIT = "bookorbit"
+
+
+class _ProgressServer(Protocol):
+    """Grimmory or BookOrbit, as the audiobook progress exchange sees them."""
+
+    def progress(self, book_id: str) -> GrimmoryProgress: ...
+
+    def save_progress(
+        self,
+        link: GrimmoryLink,
+        position_ms: int,
+        track_index: int | None,
+        track_position_ms: int,
+    ) -> None: ...
 
 
 _FOLDER_TYPES: dict[str, tuple[str, frozenset[HostMediaType]]] = {
@@ -111,6 +132,7 @@ _FOLDER_TYPES: dict[str, tuple[str, frozenset[HostMediaType]]] = {
     ),
     ConnectedSource.IMMICH: (IMMICH_FOLDER, frozenset({HostMediaType.PHOTOS})),
     ConnectedSource.GRIMMORY: (AUDIOBOOKS_FOLDER, frozenset({HostMediaType.AUDIO})),
+    ConnectedSource.BOOKORBIT: (BOOKORBIT_FOLDER, frozenset({HostMediaType.AUDIO})),
 }
 
 
@@ -131,6 +153,7 @@ class SyncPreparation:
     progress_sent: int = 0
     marks: tuple[GrimmoryMark, ...] = ()
     notes: tuple[str, ...] = ()
+    bookorbit_marks: tuple[GrimmoryMark, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -309,6 +332,13 @@ class ConnectedController(QObject):
                     grimmory=replace(self._config.grimmory, username=""),
                 )
             )
+        if key is SecretKey.BOOKORBIT:
+            self.update_config(
+                replace(
+                    self._config,
+                    bookorbit=replace(self._config.bookorbit, username=""),
+                )
+            )
         if key is SecretKey.PLEX:
             self._plex_server = None
             self.update_config(
@@ -425,11 +455,11 @@ class ConnectedController(QObject):
         save_host_media_folders(self._settings, (*folders, wanted))
 
     def unregister_streamed(self) -> None:
-        """Plex and Grimmory join Sync from their catalogs, not as scanned folders."""
+        """Plex, Grimmory and BookOrbit join Sync from their catalogs, not as folders."""
 
         streamed = [
             HostMediaFolder(HostPath(self.folder(source)))
-            for source in (ConnectedSource.PLEX, ConnectedSource.GRIMMORY)
+            for source in STREAMED_SOURCES
         ]
         folders = load_host_media_folders(self._settings)
         kept = tuple(
@@ -736,14 +766,19 @@ class ConnectedController(QObject):
 
     @property
     def streams(self) -> bool:
-        """Whether Plex or Grimmory is set up to appear in Sync."""
+        """Whether Plex, Grimmory or BookOrbit is set up to appear in Sync."""
 
-        return bool(self._config.plex.server_id) or bool(self._config.grimmory.username)
+        return (
+            bool(self._config.plex.server_id)
+            or bool(self._config.grimmory.username)
+            or bool(self._config.bookorbit.username)
+        )
 
     def _make_remote(self) -> ConnectedRemote | None:
         server = self._plex_server if self.plex_restore() else None
         grimmory = self.grimmory() if self._config.grimmory.username else None
-        if server is None and grimmory is None:
+        bookorbit = self.bookorbit() if self._config.bookorbit.username else None
+        if server is None and grimmory is None and bookorbit is None:
             return None
         return ConnectedRemote(
             self._config.root(),
@@ -757,10 +792,11 @@ class ConnectedController(QObject):
             },
             plex_music_videos=self._config.plex.music_videos,
             grimmory=grimmory,
+            bookorbit=bookorbit,
         )
 
     def prepare_for_sync(self, *, immich: bool, tracks: tuple[Track, ...] = ()) -> bool:
-        """Before a Host scan: update Immich picks, send Grimmory progress, list remotes.
+        """Before a Host scan: update Immich picks, send audiobook progress, list remotes.
 
         Returns False when there is nothing to do, so Sync can start at once.
         """
@@ -777,6 +813,11 @@ class ConnectedController(QObject):
             if config.grimmory.sync_progress and config.grimmory.username
             else ()
         )
+        orbit_books = (
+            ipod_books(tracks, BOOKORBIT_LINKS)
+            if config.bookorbit.sync_progress and config.bookorbit.username
+            else ()
+        )
 
         def work(job: _Job) -> SyncPreparation:
             outcomes: list[RefreshOutcome] = []
@@ -787,43 +828,61 @@ class ConnectedController(QObject):
             catalog = RemoteCatalog()
             sent = 0
             marks: tuple[GrimmoryMark, ...] = ()
+            orbit_marks: tuple[GrimmoryMark, ...] = ()
             notes: tuple[str, ...] = ()
             if remote is not None:
                 if books:
                     sent, marks, notes = self._push_progress(
-                        self.grimmory(), books, config, job
+                        self.grimmory(), books, config.grimmory.marks, job, "Grimmory"
                     )
+                if orbit_books:
+                    orbit_sent, orbit_marks, orbit_notes = self._push_progress(
+                        self.bookorbit(),
+                        orbit_books,
+                        config.bookorbit.marks,
+                        job,
+                        "BookOrbit",
+                    )
+                    sent += orbit_sent
+                    notes = (*notes, *orbit_notes)
                 catalog = remote.catalog(job.cancelled, job.signals.progress.emit)
-            return SyncPreparation(tuple(outcomes), catalog, sent, marks, notes)
+            return SyncPreparation(
+                tuple(outcomes), catalog, sent, marks, notes, orbit_marks
+            )
 
         def then(value: object) -> None:
             if isinstance(value, SyncPreparation):
                 self._remote = remote
                 if value.marks:
                     self._save_marks(value.marks)
+                if value.bookorbit_marks:
+                    self._save_marks(value.bookorbit_marks, ConnectedSource.BOOKORBIT)
 
         return self._start("prepare-sync", work, then=then)
 
     def _push_progress(
         self,
-        client: GrimmoryClient,
+        client: _ProgressServer,
         books: tuple[IPodBook, ...],
-        config: ConnectedConfig,
+        marks: tuple[GrimmoryMark, ...],
         job: _Job,
+        service: str,
     ) -> tuple[int, tuple[GrimmoryMark, ...], tuple[str, ...]]:
-        job.signals.progress.emit("Grimmory: sending listening progress…")
+        job.signals.progress.emit(f"{service}: sending listening progress…")
         try:
             exchange = plan_progress(
                 books,
                 self._remote_progress(client, books, job),
-                {mark.book_id: mark for mark in config.grimmory.marks},
+                {mark.book_id: mark for mark in marks},
                 pull=False,
             )
         except CancelledError:
             raise
         except ConnectedError as error:
-            return 0, (), (f"Grimmory progress: {error}",)
-        result = self._send_progress(client, exchange, job, pulled=False)
+            return 0, (), (f"{service} progress: {error}",)
+        result = self._send_progress(
+            client, exchange, job, pulled=False, service=service
+        )
         return (
             result.sent,
             self._kept_marks(exchange, result, pulled=False),
@@ -1025,7 +1084,7 @@ class ConnectedController(QObject):
 
     @staticmethod
     def _remote_progress(
-        client: GrimmoryClient, books: tuple[IPodBook, ...], job: _Job
+        client: _ProgressServer, books: tuple[IPodBook, ...], job: _Job
     ) -> dict[str, GrimmoryProgress | None]:
         remote: dict[str, GrimmoryProgress | None] = {}
         for book in books:
@@ -1041,7 +1100,12 @@ class ConnectedController(QObject):
 
     @staticmethod
     def _send_progress(
-        client: GrimmoryClient, plan: ProgressPlan, job: _Job, *, pulled: bool
+        client: _ProgressServer,
+        plan: ProgressPlan,
+        job: _Job,
+        *,
+        pulled: bool,
+        service: str = "Grimmory",
     ) -> ProgressSent:
         sent = 0
         failed: list[str] = []
@@ -1050,7 +1114,7 @@ class ConnectedController(QObject):
             if job.cancelled.is_set():
                 raise CancelledError
             job.signals.progress.emit(
-                f"Grimmory: sending progress {index} of {len(plan.to_grimmory)}…"
+                f"{service}: sending progress {index} of {len(plan.to_grimmory)}…"
             )
             try:
                 client.save_progress(
@@ -1082,16 +1146,23 @@ class ConnectedController(QObject):
             if mark.book_id not in failed and mark.book_id not in skipped
         )
 
-    def _save_marks(self, marks: tuple[GrimmoryMark, ...]) -> None:
-        merged = {mark.book_id: mark for mark in self._config.grimmory.marks}
+    def _save_marks(
+        self, marks: tuple[GrimmoryMark, ...], source: str = ConnectedSource.GRIMMORY
+    ) -> None:
+        orbit = source == ConnectedSource.BOOKORBIT
+        known = self._config.bookorbit.marks if orbit else self._config.grimmory.marks
+        merged = {mark.book_id: mark for mark in known}
         merged.update((mark.book_id, mark) for mark in marks)
+        kept = tuple(merged[k] for k in sorted(merged))
         self.update_config(
             replace(
                 self._config,
-                grimmory=replace(
-                    self._config.grimmory,
-                    marks=tuple(merged[k] for k in sorted(merged)),
-                ),
+                bookorbit=replace(self._config.bookorbit, marks=kept),
+            )
+            if orbit
+            else replace(
+                self._config,
+                grimmory=replace(self._config.grimmory, marks=kept),
             )
         )
 
@@ -1132,6 +1203,97 @@ class ConnectedController(QObject):
                 self._save_marks(self._kept_marks(plan, value, pulled=pulled))
 
         self._start("grimmory-progress-send", work, then=then)
+
+    # --- BookOrbit ----------------------------------------------------------------------
+
+    def bookorbit(self) -> BookOrbitClient:
+        return BookOrbitClient(
+            self._config.bookorbit.url,
+            self.secret(SecretKey.BOOKORBIT).get("api_key", ""),
+        )
+
+    def bookorbit_connect(self, url: str, api_key: str) -> None:
+        """Check the address and key, then keep the key in the vault."""
+
+        key = api_key.strip() or self.secret(SecretKey.BOOKORBIT).get("api_key", "")
+        url = url.strip()
+
+        def work(job: _Job) -> tuple[str, int]:
+            client = BookOrbitClient(url, key)
+            username = client.username()
+            job.signals.progress.emit(self.tr("Listing your BookOrbit audiobooks…"))
+            return username, len(client.audiobooks(job.cancelled))
+
+        def then(value: object) -> None:
+            username, _count = cast("tuple[str, int]", value)
+            if api_key.strip() and not self.save_secret(
+                SecretKey.BOOKORBIT, {"api_key": api_key.strip()}
+            ):
+                return
+            self.update_config(
+                replace(
+                    self._config,
+                    bookorbit=replace(
+                        self._config.bookorbit, url=url, username=username
+                    ),
+                )
+            )
+
+        if not key:
+            self.message.emit(self.tr("Enter a BookOrbit API key."))
+            return
+        self._start("bookorbit-connect", work, then=then)
+
+    def set_bookorbit_sync_progress(self, enabled: bool) -> None:
+        self.update_config(
+            replace(
+                self._config,
+                bookorbit=replace(self._config.bookorbit, sync_progress=enabled),
+            )
+        )
+
+    def bookorbit_progress_plan(self, tracks: tuple[Track, ...]) -> None:
+        """Compare iPod audiobook bookmarks with BookOrbit's listening progress."""
+
+        books = ipod_books(tracks, BOOKORBIT_LINKS)
+        if not books:
+            self.message.emit(
+                self.tr(
+                    "No audiobooks from BookOrbit are on this iPod yet. Sync them first."
+                )
+            )
+            return
+        marks = {mark.book_id: mark for mark in self._config.bookorbit.marks}
+        client = self.bookorbit()
+
+        def work(job: _Job) -> ProgressPlan:
+            job.signals.progress.emit(
+                self.tr("Reading listening progress from BookOrbit…")
+            )
+            return plan_progress(
+                books, self._remote_progress(client, books, job), marks
+            )
+
+        self._start("bookorbit-progress-plan", work)
+
+    def bookorbit_send_progress(self, plan: ProgressPlan, *, pulled: bool) -> None:
+        """Send iPod positions; ``pulled`` says the iPod changes were applied."""
+
+        client = self.bookorbit()
+
+        def work(job: _Job) -> ProgressSent:
+            return self._send_progress(
+                client, plan, job, pulled=pulled, service="BookOrbit"
+            )
+
+        def then(value: object) -> None:
+            if isinstance(value, ProgressSent):
+                self._save_marks(
+                    self._kept_marks(plan, value, pulled=pulled),
+                    ConnectedSource.BOOKORBIT,
+                )
+
+        self._start("bookorbit-progress-send", work, then=then)
 
     # --- Memos → Notes -----------------------------------------------------------------
 

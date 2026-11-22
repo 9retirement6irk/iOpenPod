@@ -126,6 +126,18 @@ class GrimmoryConfig:
     marks: tuple[GrimmoryMark, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class BookOrbitConfig:
+    url: str = ""
+    # The API key owner's username; empty until connected. The key is in the vault.
+    username: str = ""
+    # Exchange audiobook listening progress with BookOrbit before each Sync.
+    sync_progress: bool = True
+    # Positions when the iPod and BookOrbit last agreed (``grimmory_ms`` holds
+    # BookOrbit's position: the mark is shared with Grimmory's progress rules).
+    marks: tuple[GrimmoryMark, ...] = ()
+
+
 class TagMatch(StrEnum):
     ANY = "any"
     ALL = "all"
@@ -179,7 +191,8 @@ class ConnectedConfig:
     plex: PlexConfig = field(default_factory=PlexConfig)
     immich: ImmichConfig = field(default_factory=ImmichConfig)
     grimmory: GrimmoryConfig = field(default_factory=GrimmoryConfig)
-    # Keep Plex and Grimmory downloads between Syncs, up to this many GB.
+    bookorbit: BookOrbitConfig = field(default_factory=BookOrbitConfig)
+    # Keep Plex, Grimmory and BookOrbit downloads between Syncs, up to this many GB.
     cache_media: bool = True
     cache_limit_gb: int = 20
     memos: MemosConfig = field(default_factory=MemosConfig)
@@ -218,6 +231,7 @@ _ITEM_TYPES: dict[tuple[type, str], type] = {
     (ImmichConfig, "picks"): ImmichPick,
     (GrimmoryConfig, "picks"): GrimmoryPick,
     (GrimmoryConfig, "marks"): GrimmoryMark,
+    (BookOrbitConfig, "marks"): GrimmoryMark,
     (CalendarsConfig, "files"): CalendarFile,
     (ContactsConfig, "files"): ContactsFile,
 }
@@ -339,6 +353,7 @@ class ConnectedConfigStore:
 
 
 __all__ = [
+    "BookOrbitConfig",
     "CalendarFile",
     "CalendarsConfig",
     "ConnectedConfig",

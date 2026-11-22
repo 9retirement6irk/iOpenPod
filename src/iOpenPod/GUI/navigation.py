@@ -35,6 +35,7 @@ class PageId(StrEnum):
     PLEX = "plex"
     IMMICH = "immich"
     GRIMMORY = "grimmory"
+    BOOKORBIT = "bookorbit"
     NOTES = "notes"
     CALENDARS = "calendars"
     CONTACTS = "contacts"
@@ -130,6 +131,7 @@ _PAGE_LABEL_SOURCES = cast(
         PageId.PLEX: QT_TRANSLATE_NOOP("Navigation", "Plex"),
         PageId.IMMICH: QT_TRANSLATE_NOOP("Navigation", "Immich"),
         PageId.GRIMMORY: QT_TRANSLATE_NOOP("Navigation", "Grimmory"),
+        PageId.BOOKORBIT: QT_TRANSLATE_NOOP("Navigation", "BookOrbit"),
         PageId.NOTES: QT_TRANSLATE_NOOP("Navigation", "Notes"),
         PageId.CALENDARS: QT_TRANSLATE_NOOP("Navigation", "Calendars"),
         PageId.CONTACTS: QT_TRANSLATE_NOOP("Navigation", "Contacts"),

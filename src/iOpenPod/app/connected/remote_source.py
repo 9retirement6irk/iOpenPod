@@ -1,7 +1,7 @@
-"""Plex music and video and Grimmory audiobooks as remote Host media, with a cache.
+"""Plex music and video, and Grimmory and BookOrbit audiobooks, as remote Host media.
 
-Every Plex song, video from the chosen Plex video libraries, and Grimmory audiobook
-track is listed as a Remote Item (see
+Every Plex song, video from the chosen Plex video libraries, and Grimmory or BookOrbit
+audiobook file is listed as a Remote Item (see
 ``iOpenPod.app.remote_media``) from what its server reports. Nothing is downloaded
 until Sync prepares an item for the iPod; the download lands at the item's cache
 location inside the Connected Source Folder, which is where a pick was saved before
@@ -43,6 +43,15 @@ from iOpenPod.app.sync_plan import host_path_identity
 from iPodDB.library import MediaType
 from storage import HostPath
 
+from .bookorbit import (
+    BookOrbitBook,
+    BookOrbitClient,
+    BookOrbitManifest,
+    asset_name,
+    fetch_asset,
+    manifest_from,
+)
+from .bookorbit import book_folder as bookorbit_folder
 from .config import PlexVideoUse
 from .grimmory import (
     AudiobookInfo,
@@ -74,6 +83,7 @@ if TYPE_CHECKING:
 
 PLEX_FOLDER = "Plex"
 AUDIOBOOKS_FOLDER = "Audiobooks"
+BOOKORBIT_FOLDER = "BookOrbit"
 _COVER = "cover.jpg"
 _COVER_WORKERS = 6
 _DOWNLOADS_AT_ONCE = 2
@@ -137,6 +147,14 @@ class _Memory:
         default_factory=dict[str, dict[str, object]]
     )
     sizes: dict[str, int] = field(default_factory=dict[str, int])
+    # BookOrbit: the last book list, and each book's manifest with the book's
+    # ``updated`` value it was read at ({"updated": ..., "manifest": ...}).
+    orbit_books: list[dict[str, object]] = field(
+        default_factory=list[dict[str, object]]
+    )
+    orbit_manifests: dict[str, dict[str, object]] = field(
+        default_factory=dict[str, dict[str, object]]
+    )
 
 
 def _load_memory(path: Path) -> _Memory:
@@ -151,11 +169,17 @@ def _load_memory(path: Path) -> _Memory:
     for name in ("plex_server",):
         if isinstance(data.get(name), str):
             setattr(memory, name, data[name])
-    for name in ("plex_tracks", "plex_playlists", "plex_videos", "books"):
+    for name in (
+        "plex_tracks",
+        "plex_playlists",
+        "plex_videos",
+        "books",
+        "orbit_books",
+    ):
         value = data.get(name)
         if isinstance(value, list):
             setattr(memory, name, [v for v in value if isinstance(v, dict)])
-    for name in ("infos", "sizes"):
+    for name in ("infos", "sizes", "orbit_manifests"):
         value = data.get(name)
         if isinstance(value, dict):
             setattr(memory, name, dict(value))
@@ -183,7 +207,7 @@ def _info(data: dict[str, object]) -> AudiobookInfo | None:
 
 
 class ConnectedRemote:
-    """Lists Plex and Grimmory as Remote Items and downloads them during Sync."""
+    """Lists Plex, Grimmory and BookOrbit as Remote Items; downloads them during Sync."""
 
     def __init__(
         self,
@@ -197,6 +221,7 @@ class ConnectedRemote:
         plex_videos: Mapping[str, str] | None = None,
         plex_music_videos: bool = False,
         grimmory: GrimmoryClient | None = None,
+        bookorbit: BookOrbitClient | None = None,
     ) -> None:
         self.root = root
         self._memory_path = memory
@@ -208,6 +233,7 @@ class ConnectedRemote:
         self._plex_videos = dict(plex_videos or {})
         self._plex_music_videos = plex_music_videos
         self._grimmory = grimmory
+        self._bookorbit = bookorbit
         self._specs: dict[str, _Spec] = {}
         self._lock = threading.Lock()
         self._slots = threading.BoundedSemaphore(_DOWNLOADS_AT_ONCE)
@@ -220,6 +246,10 @@ class ConnectedRemote:
     @property
     def audiobooks_folder(self) -> Path:
         return self.root / AUDIOBOOKS_FOLDER
+
+    @property
+    def bookorbit_folder(self) -> Path:
+        return self.root / BOOKORBIT_FOLDER
 
     # --- listing -------------------------------------------------------------------
 
@@ -243,6 +273,10 @@ class ConnectedRemote:
             issues.extend(problems)
         if self._grimmory is not None:
             found, problems = self._grimmory_catalog(cancelled, progress)
+            items.extend(found)
+            issues.extend(problems)
+        if self._bookorbit is not None:
+            found, problems = self._bookorbit_catalog(cancelled, progress)
             items.extend(found)
             issues.extend(problems)
         self.save_memory()
@@ -653,6 +687,110 @@ class ConnectedRemote:
         progress(f"Grimmory: {len(books)} audiobooks.")
         return items, issues
 
+    def _bookorbit_catalog(
+        self, cancelled: Event, progress: Callable[[str], None]
+    ) -> tuple[list[RemoteItem], list[str]]:
+        client = self._bookorbit
+        assert client is not None
+        issues: list[str] = []
+        progress("BookOrbit: listing your audiobooks…")
+        try:
+            books = client.audiobooks(cancelled)
+            self._memory.orbit_books = [asdict(book) for book in books]
+        except CancelledError:
+            raise
+        except ConnectedError as error:
+            if not self._memory.orbit_books:
+                return [], [f"BookOrbit: {error}"]
+            issues.append(f"BookOrbit: {error} Showing your audiobooks as last listed.")
+            books = tuple(
+                BookOrbitBook(**cast("dict[str, Any]", row))
+                for row in self._memory.orbit_books
+            )
+        manifests: dict[str, BookOrbitManifest] = {}
+        for index, book in enumerate(books, start=1):
+            if cancelled.is_set():
+                raise CancelledError
+            known = self._memory.orbit_manifests.get(book.book_id) or {}
+            manifest: BookOrbitManifest | None = None
+            if known and known.get("updated") == book.updated and book.updated:
+                manifest = manifest_from(
+                    cast("dict[str, object]", known.get("manifest") or {}),
+                    book.book_id,
+                )
+                if not manifest.assets:
+                    manifest = None
+            if manifest is None:
+                if index % 10 == 1:
+                    progress(f"BookOrbit: reading audiobook {index} of {len(books)}…")
+                try:
+                    data = client.manifest_data(book.book_id)
+                    manifest = manifest_from(data, book.book_id)
+                except CancelledError:
+                    raise
+                except ConnectedError as error:
+                    issues.append(f"{book.title}: {error}")
+                    continue
+                if not manifest.assets:
+                    issues.append(f"{book.title}: BookOrbit lists no audio files.")
+                    continue
+                self._memory.orbit_manifests[book.book_id] = {
+                    "updated": book.updated,
+                    "manifest": data,
+                }
+            manifests[book.book_id] = manifest
+        folder = self.bookorbit_folder
+        owned = load_owned(folder)
+        directories = {book.book_id: bookorbit_folder(book) for book in books}
+        wanted = {
+            directories[book.book_id]: (
+                f"cover|bookorbit:{book.book_id}:{book.updated}",
+                _bookorbit_cover(client, book.book_id),
+            )
+            for book in books
+            if book.book_id in manifests and manifests[book.book_id].has_cover
+        }
+        covers = self._covers(folder, owned, wanted, cancelled, progress, "BookOrbit")
+        items: list[RemoteItem] = []
+        for book in books:
+            manifest = manifests.get(book.book_id)
+            if manifest is None:
+                continue
+            directory = directories[book.book_id]
+            several = len(manifest.assets) > 1
+            title = book.title or manifest.title
+            for index, asset in enumerate(manifest.assets):
+                link = manifest.link(index)
+                spec = _Spec(
+                    f"bookorbit:{book.book_id}:{asset.asset_id}",
+                    folder,
+                    relative_path(directory, asset_name(manifest, index, title)),
+                    f"bookorbit:{book.book_id}:{asset.asset_id}:{asset.etag}",
+                    f"bookorbit-native:{book.book_id}",
+                    _bookorbit_fetch(client, manifest, index),
+                )
+                items.append(
+                    self._item(
+                        spec,
+                        owned,
+                        asset.size_bytes or asset.duration_ms * _BYTES_PER_MS,
+                        covers.get(directory),
+                        title=f"{title} ({index + 1}/{len(manifest.assets)})"
+                        if several
+                        else title,
+                        artist=book.author or manifest.authors,
+                        album=title,
+                        album_artist=book.author or manifest.authors,
+                        track_number=index + 1 if several else 0,
+                        total_tracks=len(manifest.assets) if several else 0,
+                        length_ms=asset.duration_ms,
+                        media_type=MediaType.AUDIOBOOK,
+                        comment=link.comment,
+                    )
+                )
+        progress(f"BookOrbit: {len(manifests)} audiobooks.")
+        return items, issues
+
     def save_memory(self) -> None:
         try:
             self._memory_path.parent.mkdir(parents=True, exist_ok=True)
@@ -675,7 +813,7 @@ class ConnectedRemote:
         spec = self._specs.get(host_path_identity(str(source.path)))
         if spec is None:
             raise ValueError(
-                f"{source.path.path.name} is no longer in Plex or Grimmory. Run Sync again."
+                f"{source.path.path.name} is no longer in Plex, Grimmory or BookOrbit. Run Sync again."
             )
         target = owned_target(spec.folder, spec.relative)
         with self._slots:
@@ -756,7 +894,7 @@ class ConnectedRemote:
         """Apply the cache setting; returns ``(files removed, bytes kept)``."""
 
         removed = kept_bytes = 0
-        for folder in (self.plex_folder, self.audiobooks_folder):
+        for folder in (self.plex_folder, self.audiobooks_folder, self.bookorbit_folder):
             if not folder.is_dir():
                 continue
             with self._lock:
@@ -900,4 +1038,20 @@ def _grimmory_fetch(
     return fetch
 
 
-__all__ = ["AUDIOBOOKS_FOLDER", "PLEX_FOLDER", "ConnectedRemote"]
+def _bookorbit_cover(client: BookOrbitClient, book_id: str) -> Callable[[Path], None]:
+    def fetch(destination: Path) -> None:
+        destination.write_bytes(client.cover(book_id))
+
+    return fetch
+
+
+def _bookorbit_fetch(
+    client: BookOrbitClient, manifest: BookOrbitManifest, index: int
+) -> Callable[[Path, Event], Path]:
+    def fetch(staging: Path, cancelled: Event) -> Path:
+        return fetch_asset(client, manifest, index, staging, cancelled)
+
+    return fetch
+
+
+__all__ = ["AUDIOBOOKS_FOLDER", "BOOKORBIT_FOLDER", "PLEX_FOLDER", "ConnectedRemote"]

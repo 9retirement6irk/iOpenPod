@@ -10,7 +10,7 @@
 This is a fork of [iOpenPod](https://github.com/TheRealSavi/iOpenPod), the free,
 open-source iPod manager for **Windows, macOS and Linux**. It keeps everything
 iOpenPod does and adds **Connected Sources**: your Plex music and video, Grimmory
-audiobooks, Immich photos, Memos notes, calendars and contacts all go onto your iPod
+and BookOrbit audiobooks, Immich photos, Memos notes, calendars and contacts all go onto your iPod
 in one **Sync with Host**, with nothing exported by hand.
 
 ![Sync with Host's media list with Plex albums beside the computer's music, and the CONNECTED section for Immich, Notes, Calendars and Contacts](docs/screenshots/fork/sync-plex-music.webp)
@@ -19,6 +19,7 @@ in one **Sync with Host**, with nothing exported by hand.
 * [One Sync for everything](#one-sync-for-everything)
 * [Plex: music, playlists, movies and TV](#plex-music-playlists-movies-and-tv)
 * [Grimmory: audiobooks and listening progress](#grimmory-audiobooks-and-listening-progress)
+* [BookOrbit: audiobooks and listening progress](#bookorbit-audiobooks-and-listening-progress)
 * [Immich: photos](#immich-photos)
 * [Notes, calendars and contacts](#notes-calendars-and-contacts)
 * [Downloads and the media cache](#downloads-and-the-media-cache)
@@ -34,6 +35,7 @@ in one **Sync with Host**, with nothing exported by hand.
 | ------ | ---------------------- | --------- |
 | [Plex](https://www.plex.tv/) | Music, playlists, movies, TV shows and music videos; plays and star ratings go back to Plex | Connected → Plex |
 | [Grimmory](https://github.com/grimmory-tools/grimmory) | Audiobooks, with listening progress kept in step both ways | Connected → Grimmory |
+| [BookOrbit](https://github.com/bookorbit/bookorbit) | Audiobooks, with listening progress kept in step both ways | Connected → BookOrbit |
 | [Immich](https://immich.app/) | Photos from Favorites, albums, people or single photos | Connected → Immich |
 | [Memos](https://usememos.com/) | Notes from the tags you choose, in Extras → Notes | Connected → Notes |
 | Calendars | `.ics` files and subscription links, in Extras → Calendars | Connected → Calendars |
@@ -131,6 +133,23 @@ Tested with Grimmory 3.5.
 | ------------- | ------------------ |
 | ![Grimmory page signed in, with SSO and listening progress options](docs/screenshots/fork/connected-grimmory.webp) | ![Sync's Audiobooks page with Grimmory books, one ticked](docs/screenshots/fork/sync-grimmory-audiobooks.webp) |
 
+## BookOrbit: audiobooks and listening progress
+
+In BookOrbit, create an API key (**Settings → API Keys**) with **write** access,
+then enter your BookOrbit address and the key on **Connected → BookOrbit**. The key
+is kept in your system keychain. A read-only key works for downloading, but
+listening progress can't be sent with it.
+
+All your BookOrbit audiobooks then appear on Sync's Audiobooks page, downloaded
+only when Sync copies them. A book made of several files arrives as one iPod track
+per file, in order. Listening progress works as it does for Grimmory: before each
+Sync, where you stopped on the iPod goes to BookOrbit, and **Sync Progress Now**
+also brings where you stopped in BookOrbit's web player or apps onto the iPod.
+Whichever side you listened on most recently wins.
+
+Built against BookOrbit's playback-state API as of November 2026 (its 3.x
+releases); older servers without it aren't supported.
+
 ## Immich: photos
 
 Connect with your server address and an API key (Immich → **Account Settings → API
@@ -162,7 +181,7 @@ These go into the iPod's **Extras** menu.
 
 ## Downloads and the media cache
 
-Plex and Grimmory downloads are kept in `~/Music/iOpenPod Connected`, up to a size
+Plex, Grimmory and BookOrbit downloads are kept in `~/Music/iOpenPod Connected`, up to a size
 limit you choose in **Settings → Sync** (20 GB to start). When the cache is full,
 the downloads synced least recently are removed first. Turn **Keep downloads
 between Syncs** off and each Sync removes its downloads when it finishes.
@@ -291,6 +310,6 @@ WebAssembly implementation, [dotm5](https://github.com/dotm5/Genius-Mix-Research
 for Genius research, and [Olsro](https://github.com/Olsro/ipodclickwheelgamespreservationproject)
 for preserving iPod click wheel games.
 
-Plex, Grimmory, Immich and Memos are independent projects; this fork isn't
+Plex, Grimmory, BookOrbit, Immich and Memos are independent projects; this fork isn't
 affiliated with or endorsed by them. Independent software, not affiliated with or
 endorsed by Apple Inc. iPod and iTunes are trademarks of Apple Inc.

@@ -1,4 +1,4 @@
-"""The Plex and Grimmory media cache within Settings → Sync."""
+"""The Plex, Grimmory and BookOrbit media cache within Settings → Sync."""
 
 from __future__ import annotations
 
@@ -69,12 +69,12 @@ class MediaCacheSettings(QWidget):
         open_desktop_url(QUrl.fromLocalFile(str(root)))
 
     def retranslate_ui(self) -> None:
-        self._title.setText(self.tr("Plex and Grimmory media"))
+        self._title.setText(self.tr("Plex and audiobook media"))
         self._keep.setText(self.tr("On"))
         self._keep_row.set_copy(
             self.tr("Keep downloads between Syncs"),
             self.tr(
-                "Plex songs and Grimmory audiobooks download when Sync copies them to the iPod. Kept downloads aren't fetched again for later Syncs; when this is off, each Sync downloads what it needs and removes it afterwards."
+                "Plex songs and Grimmory and BookOrbit audiobooks download when Sync copies them to the iPod. Kept downloads aren't fetched again for later Syncs; when this is off, each Sync downloads what it needs and removes it afterwards."
             ),
         )
         self._limit_row.set_copy(

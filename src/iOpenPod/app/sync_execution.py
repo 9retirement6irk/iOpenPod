@@ -228,7 +228,7 @@ class SyncExecutionRequest:
     podcasts: PodcastSyncRequest | None = None
     scrobble_accounts: tuple[Account, ...] = ()
     playlist_choices: tuple[PlaylistSyncChoice, ...] = ()
-    # Downloads Connected Source items (Plex, Grimmory) as Sync prepares them.
+    # Downloads Connected Source items (Plex, Grimmory, BookOrbit) as Sync prepares them.
     remote: RemoteMedia | None = None
     genius_analysis_skip: Event = field(
         default_factory=Event, compare=False, repr=False, kw_only=True
@@ -2103,7 +2103,7 @@ class SyncExecutor:
             if request.remote is None:
                 raise ValueError(
                     source_text(
-                        "{name} is in Plex or Grimmory, which isn't connected. Sign in again on its page.",
+                        "{name} is in Plex, Grimmory or BookOrbit, which isn't connected. Sign in again on its page.",
                         name=item.name,
                     )
                 )

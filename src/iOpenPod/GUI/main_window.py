@@ -31,6 +31,7 @@ from iOpenPod.app.backups import BackupProgress
 from iOpenPod.app.chaptered_conversion_controller import ChapteredConversionController
 from iOpenPod.app.connected.config import ConnectedConfigStore
 from iOpenPod.app.connected_controller import (
+    STREAMED_SOURCES,
     ConnectedController,
     ConnectedSource,
     ExtrasSent,
@@ -127,6 +128,7 @@ from iOpenPod.GUI.pages.backup_page import BackupPage
 from iOpenPod.GUI.pages.calendar_page import CalendarPage
 from iOpenPod.GUI.pages.collection_page import CollectionPage
 from iOpenPod.GUI.pages.connected_pages import (
+    BookOrbitPage,
     CalendarsPage,
     ContactsPage,
     GrimmoryPage,
@@ -634,6 +636,9 @@ class MainWindow(QMainWindow):
         self._grimmory_page = GrimmoryPage(
             self._connected, context.library_workspace, self._pages
         )
+        self._bookorbit_page = BookOrbitPage(
+            self._connected, context.library_workspace, self._pages
+        )
         self._notes_page = NotesPage(self._connected, self._pages)
         self._calendars_page = CalendarsPage(self._connected, self._pages)
         self._contacts_page = ContactsPage(self._connected, self._pages)
@@ -665,6 +670,7 @@ class MainWindow(QMainWindow):
             PageId.PLEX: self._plex_page,
             PageId.IMMICH: self._immich_page,
             PageId.GRIMMORY: self._grimmory_page,
+            PageId.BOOKORBIT: self._bookorbit_page,
             PageId.NOTES: self._notes_page,
             PageId.CALENDARS: self._calendars_page,
             PageId.CONTACTS: self._contacts_page,
@@ -713,6 +719,7 @@ class MainWindow(QMainWindow):
             self._plex_page,
             self._immich_page,
             self._grimmory_page,
+            self._bookorbit_page,
             self._notes_page,
             self._calendars_page,
             self._contacts_page,
@@ -2148,9 +2155,9 @@ class MainWindow(QMainWindow):
         self._refresh_connected_sources(folders)
 
     def _refresh_connected_sources(self, folders: tuple[HostMediaFolder, ...]) -> bool:
-        """Before scanning: update Immich picks and list Plex and Grimmory.
+        """Before scanning: update Immich picks and list Plex, Grimmory and BookOrbit.
 
-        Plex and Grimmory join Sync's media list from their catalogs, so their
+        They join Sync's media list from their catalogs, so their
         cache folders are never scanned as ordinary Host folders.
         """
 
@@ -2163,10 +2170,7 @@ class MainWindow(QMainWindow):
             same(folder, self._connected.folder(ConnectedSource.IMMICH))
             for folder in folders
         )
-        streamed = tuple(
-            self._connected.folder(source)
-            for source in (ConnectedSource.PLEX, ConnectedSource.GRIMMORY)
-        )
+        streamed = tuple(self._connected.folder(source) for source in STREAMED_SOURCES)
         folders = tuple(
             folder
             for folder in folders
@@ -2184,7 +2188,9 @@ class MainWindow(QMainWindow):
         self._pending_sync_folders = folders
         self._context.status.show(
             "connected.refresh",
-            source_text("Listing Plex and Grimmory, and updating Immich, before Sync…"),
+            source_text(
+                "Listing Plex, Grimmory and BookOrbit, and updating Immich, before Sync…"
+            ),
         )
         return True
 
@@ -2316,6 +2322,7 @@ class MainWindow(QMainWindow):
                 PageId.PLEX,
                 PageId.IMMICH,
                 PageId.GRIMMORY,
+                PageId.BOOKORBIT,
                 PageId.NOTES,
                 PageId.CALENDARS,
                 PageId.CONTACTS,

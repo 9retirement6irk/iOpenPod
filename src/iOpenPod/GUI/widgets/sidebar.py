@@ -77,6 +77,7 @@ _CONNECTED = (
     _NavigationDefinition(PageId.PLEX, "server"),
     _NavigationDefinition(PageId.IMMICH, "photo"),
     _NavigationDefinition(PageId.GRIMMORY, "book"),
+    _NavigationDefinition(PageId.BOOKORBIT, "book"),
     _NavigationDefinition(PageId.NOTES, "note"),
     _NavigationDefinition(PageId.CALENDARS, "calendar"),
     _NavigationDefinition(PageId.CONTACTS, "user"),
