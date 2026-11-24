@@ -11,7 +11,7 @@ def get_version() -> str:
         value = package_version("iopenpod")
     except Exception:
         logger.debug("Failed to read installed iopenpod version", exc_info=True)
-        value = "2.1.4.post1"
+        value = "2.1.4.post2"
     from iOpenPod.app.updates.releases import release_label
 
     try:
