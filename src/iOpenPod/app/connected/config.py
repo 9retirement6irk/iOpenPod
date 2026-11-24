@@ -133,6 +133,8 @@ class BookOrbitConfig:
     username: str = ""
     # Exchange audiobook listening progress with BookOrbit before each Sync.
     sync_progress: bool = True
+    # Put each book on the iPod as one chaptered M4B, not one Track per file.
+    combine: bool = True
     # Positions when the iPod and BookOrbit last agreed (``grimmory_ms`` holds
     # BookOrbit's position: the mark is shared with Grimmory's progress rules).
     marks: tuple[GrimmoryMark, ...] = ()

@@ -40,11 +40,34 @@ BookOrbit is a third streamed Connected Source, beside Plex and Grimmory.
   manifest. A revision conflict (409) or manifest change (412) is read again and
   retried once.
 
+### One M4B per book
+
+With **Combine each audiobook into one M4B with chapters** on (the default), a book
+of several files, or of an MP3, is one Remote Item. Its fetch downloads every file,
+checks each with FFprobe, and has FFmpeg concatenate them into one AAC M4B (64 kbps a
+channel, no more than the source, mono kept mono), following the chaptered Album
+conversion (ADR-0095). The chapters are the manifest's chapter list, or one per file
+when BookOrbit has none, at BookOrbit's file boundaries. The downloaded parts are
+deleted once the M4B is made. A book that is already a single M4B or M4A is copied
+unchanged.
+
+The M4B's link names no file and covers the whole book
+(`bookorbit:<book>:0:0:0:<book ms>`), so its bookmark is a position in the book.
+Saving progress places it in the BookOrbit file it falls in, by the manifest's file
+lengths; reading progress adds the start of BookOrbit's file to its position. The
+cache revision is the manifest revision, so changed files rebuild the M4B.
+
 ## Consequences
 
 - BookOrbit servers without the audiobook manifest and playback-state API (before
   its 3.x releases) aren't supported.
 - Progress marks reuse Grimmory's mark type; its `grimmory_ms` field holds
   BookOrbit's position for BookOrbit books.
+- Combining re-encodes MP3s to AAC (a small quality loss) and takes minutes per book
+  during Sync; it needs FFmpeg with its AAC encoder.
+- Progress inside a combined book is as exact as BookOrbit's file lengths: a file
+  BookOrbit couldn't measure moves positions after it.
+- Switching combining off or on changes the Remote Items, so Sync offers the other
+  form of each book.
 - Tested against a fake server written from BookOrbit's server code, not a running
   BookOrbit.

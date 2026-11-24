@@ -52,6 +52,12 @@ from .bookorbit import (
     manifest_from,
 )
 from .bookorbit import book_folder as bookorbit_folder
+from .bookorbit_combine import (
+    combined_link,
+    combined_name,
+    fetch_combined,
+    needs_combining,
+)
 from .config import PlexVideoUse
 from .grimmory import (
     AudiobookInfo,
@@ -222,6 +228,7 @@ class ConnectedRemote:
         plex_music_videos: bool = False,
         grimmory: GrimmoryClient | None = None,
         bookorbit: BookOrbitClient | None = None,
+        bookorbit_combine: bool = True,
     ) -> None:
         self.root = root
         self._memory_path = memory
@@ -234,6 +241,7 @@ class ConnectedRemote:
         self._plex_music_videos = plex_music_videos
         self._grimmory = grimmory
         self._bookorbit = bookorbit
+        self._bookorbit_combine = bookorbit_combine
         self._specs: dict[str, _Spec] = {}
         self._lock = threading.Lock()
         self._slots = threading.BoundedSemaphore(_DOWNLOADS_AT_ONCE)
@@ -759,6 +767,35 @@ class ConnectedRemote:
             directory = directories[book.book_id]
             several = len(manifest.assets) > 1
             title = book.title or manifest.title
+            author = book.author or manifest.authors
+            if self._bookorbit_combine and needs_combining(manifest):
+                # One chaptered M4B for the whole book (ADR-0906).
+                link = combined_link(manifest)
+                spec = _Spec(
+                    f"bookorbit:{book.book_id}:m4b",
+                    folder,
+                    relative_path(directory, combined_name(manifest, title)),
+                    f"bookorbit:{book.book_id}:m4b:{manifest.revision}",
+                    f"bookorbit-native:{book.book_id}",
+                    _bookorbit_combined(client, manifest, title, author),
+                )
+                items.append(
+                    self._item(
+                        spec,
+                        owned,
+                        sum(a.size_bytes for a in manifest.assets)
+                        or link.duration_ms * _BYTES_PER_MS,
+                        covers.get(directory),
+                        title=title,
+                        artist=author,
+                        album=title,
+                        album_artist=author,
+                        length_ms=link.duration_ms,
+                        media_type=MediaType.AUDIOBOOK,
+                        comment=link.comment,
+                    )
+                )
+                continue
             for index, asset in enumerate(manifest.assets):
                 link = manifest.link(index)
                 spec = _Spec(
@@ -1041,6 +1078,17 @@ def _grimmory_fetch(
 def _bookorbit_cover(client: BookOrbitClient, book_id: str) -> Callable[[Path], None]:
     def fetch(destination: Path) -> None:
         destination.write_bytes(client.cover(book_id))
+
+    return fetch
+
+
+def _bookorbit_combined(
+    client: BookOrbitClient, manifest: BookOrbitManifest, title: str, author: str
+) -> Callable[[Path, Event], Path]:
+    def fetch(staging: Path, cancelled: Event) -> Path:
+        return fetch_combined(
+            client, manifest, staging, cancelled, title=title, author=author
+        )
 
     return fetch
 

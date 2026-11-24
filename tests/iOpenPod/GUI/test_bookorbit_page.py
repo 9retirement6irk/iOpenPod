@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
-from PySide6.QtWidgets import QLabel, QLineEdit, QPushButton
+from PySide6.QtWidgets import QCheckBox, QLabel, QLineEdit, QPushButton
 from tests.iOpenPod.app.connected.test_bookorbit import (
     BASE,
     KEY,
@@ -44,6 +44,11 @@ def test_connecting_and_checking_progress(
         assert connect is not None and progress is not None
         assert key.echoMode() is QLineEdit.EchoMode.Password
         assert not progress.isEnabled()  # nothing to compare until connected
+        combine = page.findChild(QCheckBox, "bookorbitCombine")
+        assert combine is not None and combine.isChecked()  # on by default
+        combine.setChecked(False)
+        assert controller.config.bookorbit.combine is False
+        combine.setChecked(True)
 
         address.setText(BASE)
         key.setText(KEY)

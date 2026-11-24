@@ -9,10 +9,11 @@ read-only API key is refused for anything but reads.
 from __future__ import annotations
 
 import json
+import shutil
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from threading import Event
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 from tests.iOpenPod.app.connected.support import FakeTransport, reply
@@ -37,7 +38,7 @@ from iPodDB.library import MediaType, Track, TrackMetadata
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from pathlib import Path
+    from pathlib import Path, PurePath
 
     from iOpenPod.app.connected_controller import ConnectedController
 
@@ -91,6 +92,9 @@ class OrbitServer:
     )
     states: dict[int, dict[str, Any]] = field(default_factory=dict[int, dict[str, Any]])
     queries: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
+    chapters: dict[int, list[dict[str, Any]]] = field(
+        default_factory=dict[int, list[dict[str, Any]]]
+    )
 
     def transport(self) -> FakeTransport:
         transport = FakeTransport(
@@ -162,7 +166,7 @@ class OrbitServer:
                 "hasCover": book == 5,
             },
             "assets": assets,
-            "chapters": [],
+            "chapters": self.chapters.get(book, []),
             "totalDurationMs": sum(int(str(a["durationMs"])) for a in assets),
         }
 
@@ -282,6 +286,7 @@ def test_audiobooks_join_sync_and_download_tagged(tmp_path: Path) -> None:
         tmp_path / "Connected",
         tmp_path / "catalog.json",
         bookorbit=client(server, transport),
+        bookorbit_combine=False,
     )
     one, two, single = remote.catalog(Event()).items
     folder = tmp_path / "Connected" / "BookOrbit"
@@ -328,6 +333,7 @@ def test_audiobooks_join_sync_and_download_tagged(tmp_path: Path) -> None:
         tmp_path / "Connected",
         tmp_path / "catalog.json",
         bookorbit=client(server, transport),
+        bookorbit_combine=False,
     ).catalog(Event())
     assert manifests() == 2
     # A file replaced in BookOrbit is a new revision: the cached copy is stale.
@@ -346,6 +352,7 @@ def test_audiobooks_join_sync_and_download_tagged(tmp_path: Path) -> None:
         tmp_path / "Connected",
         tmp_path / "catalog.json",
         bookorbit=client(server, transport),
+        bookorbit_combine=False,
     ).catalog(Event())
     assert manifests() == 4
     assert not relisted.items[1].cached
@@ -357,7 +364,9 @@ def test_an_unreachable_server_shows_the_last_list(tmp_path: Path) -> None:
     args = (tmp_path / "Connected", tmp_path / "catalog.json")
     assert (
         len(
-            ConnectedRemote(*args, bookorbit=client(server, transport))
+            ConnectedRemote(
+                *args, bookorbit=client(server, transport), bookorbit_combine=False
+            )
             .catalog(Event())
             .items
         )
@@ -366,9 +375,9 @@ def test_an_unreachable_server_shows_the_last_list(tmp_path: Path) -> None:
     transport.routes[f"POST {BASE}/api/v1/books/query"] = ConnectedError(
         "HTTP 502", 502
     )
-    catalog = ConnectedRemote(*args, bookorbit=client(server, transport)).catalog(
-        Event()
-    )
+    catalog = ConnectedRemote(
+        *args, bookorbit=client(server, transport), bookorbit_combine=False
+    ).catalog(Event())
     assert len(catalog.items) == 3
     assert "Showing your audiobooks as last listed" in catalog.issues[0]
 
@@ -628,7 +637,11 @@ def test_before_sync_progress_is_sent_and_books_are_listed(
         assert operation == "prepare-sync"
         assert isinstance(value, SyncPreparation)
         assert value.progress_sent == 1
-        assert len(value.catalog.items) == 3
+        # Combining is on by default: the two MP3 parts are one M4B item.
+        assert [item.comment for item in value.catalog.items] == [
+            "bookorbit:5:0:0:0:120000",
+            "bookorbit:6:61:0:0:5000",
+        ]
         assert (server.states[5]["assetId"], server.states[5]["positionMs"]) == (
             ASSET_B,
             20_000,
@@ -645,3 +658,244 @@ def test_before_sync_progress_is_sent_and_books_are_listed(
         assert server.states == {}
     finally:
         made.shutdown()
+
+
+# --- one M4B per book ---------------------------------------------------------------------
+
+needs_ffmpeg = pytest.mark.skipif(
+    shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None,
+    reason="FFmpeg and FFprobe are needed to combine audiobooks",
+)
+
+
+def tone(path: Path, seconds: float, frequency: int, channels: int = 1) -> bytes:
+    import subprocess
+
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            f"sine=frequency={frequency}:duration={seconds}:sample_rate=44100",
+            "-ac",
+            str(channels),
+            "-c:a",
+            "libmp3lame",
+            "-b:a",
+            f"{48 * channels}k",
+            str(path),
+        ],
+        check=True,
+    )
+    return path.read_bytes()
+
+
+def probe(path: PurePath) -> dict[str, Any]:
+    import subprocess
+
+    out = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-print_format",
+            "json",
+            "-show_format",
+            "-show_streams",
+            "-show_chapters",
+            str(path),
+        ],
+        check=True,
+        capture_output=True,
+    ).stdout
+    return cast("dict[str, Any]", json.loads(out))
+
+
+def mp3_book(
+    tmp_path: Path, *, chapters: list[dict[str, Any]] | None = None
+) -> tuple[OrbitServer, FakeTransport]:
+    """Book 5 as three real MP3 parts of 3 s, 2 s and 4 s."""
+
+    lengths = (3_000, 2_000, 4_000)
+    server = OrbitServer()
+    server.assets = {
+        5: [
+            {
+                "assetId": f"aud_00000000-0000-4000-8000-00000000005{index}",
+                "fileId": 51 + index,
+                "sequence": index,
+                "format": "mp3",
+                "durationMs": length,
+                "sizeBytes": 0,
+                "etag": f"e{index}",
+            }
+            for index, length in enumerate(lengths)
+        ]
+    }
+    if chapters is not None:
+        server.chapters = {5: chapters}
+    transport = server.transport()
+    for index, length in enumerate(lengths):
+        data = tone(tmp_path / f"src{index}.mp3", length / 1000, 300 + 200 * index)
+        transport.files[
+            f"{BASE}/api/v1/audiobooks/5/assets/aud_00000000-0000-4000-8000-00000000005{index}/content"
+        ] = data
+    del transport.files[f"{BASE}/api/v1/audiobooks/5/assets/"]
+    return server, transport
+
+
+@needs_ffmpeg
+def test_mp3_parts_become_one_chaptered_m4b(tmp_path: Path) -> None:
+    from mutagen.mp4 import MP4
+
+    server, transport = mp3_book(tmp_path)
+    remote = ConnectedRemote(
+        tmp_path / "Connected",
+        tmp_path / "catalog.json",
+        bookorbit=client(server, transport),
+    )
+    (book,) = remote.catalog(Event()).items
+    assert (
+        book.path.path.relative_to(tmp_path / "Connected" / "BookOrbit").as_posix()
+        == "A. Writer - Two Parts/Two Parts.m4b"
+    )
+    assert (book.title, book.track_number, book.length_ms) == ("Two Parts", 0, 9_000)
+    assert book.comment == "bookorbit:5:0:0:0:9000"
+
+    got = remote.materialize(source(book), lambda: None, lambda _p: None)
+    assert got.path.path.suffix == ".m4b"
+    info = probe(got.path.path)
+    (audio,) = [s for s in info["streams"] if s["codec_type"] == "audio"]
+    assert (audio["codec_name"], audio["channels"], audio["sample_rate"]) == (
+        "aac",
+        1,
+        "44100",
+    )
+    assert abs(float(info["format"]["duration"]) - 9.0) < 0.2
+    # No chapters in BookOrbit: one per file, at BookOrbit's file boundaries.
+    assert [round(float(c["start_time"]), 1) for c in info["chapters"]] == [
+        0.0,
+        3.0,
+        5.0,
+    ]
+    assert [c["tags"]["title"] for c in info["chapters"]] == [
+        "Part 1",
+        "Part 2",
+        "Part 3",
+    ]
+    tags: Any = MP4(got.path.path)  # type: ignore[no-untyped-call]
+    assert tags["stik"] == [2]
+    assert tags["\xa9cmt"] == ["bookorbit:5:0:0:0:9000"]
+    assert (tags["\xa9nam"], tags["\xa9ART"], tags["\xa9gen"]) == (
+        ["Two Parts"],
+        ["A. Writer"],
+        ["Audiobook"],
+    )
+    # The parts aren't left behind next to the book.
+    assert not list((tmp_path / "Connected").rglob("part-*"))
+
+    # What Sync puts in the iPod Library: one audiobook with three chapters.
+    from pathlib import Path as RealPath
+
+    from tests.iOpenPod.app.services.test_library_resources import build_device
+
+    from iOpenPod.app.media.importing import MusicImporter
+    from iPodDB.library import MediaKind
+    from storage import HostPath
+
+    device = build_device(tmp_path / "ipod")
+    try:
+        song = MusicImporter().inspect(
+            HostPath(RealPath(str(got.path.path))),
+            device.active.profile,
+            checkpoint=lambda: None,
+        )
+    finally:
+        device.coordinator.close()
+    assert song.track.media_kind is MediaKind.AUDIOBOOK
+    assert [c.start_ms for c in song.track.metadata.chapters] == [0, 3_000, 5_000]
+    assert abs(song.track.length_ms - 9_000) < 200
+    assert song.track.metadata.comment == "bookorbit:5:0:0:0:9000"
+
+
+@needs_ffmpeg
+def test_bookorbits_own_chapters_are_used(tmp_path: Path) -> None:
+    server, transport = mp3_book(
+        tmp_path,
+        chapters=[
+            {"title": "Opening", "startMs": 0},
+            {"title": "The Middle", "startMs": 4_000},
+            {"title": "End", "startMs": 7_500},
+        ],
+    )
+    remote = ConnectedRemote(
+        tmp_path / "Connected",
+        tmp_path / "catalog.json",
+        bookorbit=client(server, transport),
+    )
+    (book,) = remote.catalog(Event()).items
+    info = probe(
+        remote.materialize(source(book), lambda: None, lambda _p: None).path.path
+    )
+    assert [
+        (c["tags"]["title"], round(float(c["start_time"]), 1)) for c in info["chapters"]
+    ] == [("Opening", 0.0), ("The Middle", 4.0), ("End", 7.5)]
+
+
+def test_single_m4b_books_are_not_converted(tmp_path: Path) -> None:
+    server = OrbitServer()
+    remote = ConnectedRemote(
+        tmp_path / "Connected", tmp_path / "catalog.json", bookorbit=client(server)
+    )
+    _combined, single = remote.catalog(Event()).items
+    assert single.comment == "bookorbit:6:61:0:0:5000"  # the original file
+
+
+def test_progress_in_a_combined_book_is_placed_in_bookorbits_files() -> None:
+    from iOpenPod.app.connected.bookorbit_combine import combined_link
+
+    server = OrbitServer()
+    orbit = client(server)
+    link = combined_link(orbit.manifest("5"))
+    assert link == GrimmoryLink("5", "0", 0, 0, 120_000, "bookorbit")
+    combined = Track(
+        1,
+        "Two Parts",
+        "A. Writer",
+        "Two Parts",
+        120_000,
+        metadata=TrackMetadata(
+            comment=link.comment,
+            bookmark_time_ms=75_000,  # 1:15 into the whole book
+            last_played=100,
+            remember_position=True,
+        ),
+    )
+    (book,) = ipod_books((combined,), "bookorbit")
+    plan = plan_progress((book,), {"5": orbit.progress("5")}, {})
+    (push,) = plan.to_grimmory
+    orbit.save_progress(
+        push.link, push.position_ms, push.track_index, push.track_position_ms
+    )
+    # BookOrbit hears "the second file, 15 s in".
+    assert (server.states[5]["assetId"], server.states[5]["positionMs"]) == (
+        ASSET_B,
+        15_000,
+    )
+
+    # BookOrbit's player moves to the first file at 0:40: the M4B bookmark follows.
+    server.states[5] = {
+        **server.states[5],
+        "assetId": ASSET_A,
+        "positionMs": 40_000,
+        "revision": 2,
+    }
+    plan = plan_progress((book,), {"5": orbit.progress("5")}, {"5": plan.marks[0]})
+    (pull,) = plan.to_ipod
+    (change,) = pull.changes
+    assert dict(change.edits)["metadata.bookmark_time_ms"] == 40_000

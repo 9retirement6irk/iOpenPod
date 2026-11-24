@@ -1221,11 +1221,26 @@ class BookOrbitPage(_ConnectedPage):
             self.tr("Show downloaded audiobooks"), books, ActionButtonKind.QUIET
         )
         open_folder.clicked.connect(lambda: self.open_folder(ConnectedSource.BOOKORBIT))
+        self._combine = QCheckBox(
+            self.tr("Combine each audiobook into one M4B with chapters"), books
+        )
+        self._combine.setObjectName("bookorbitCombine")
+        self._combine.setChecked(config.combine)
+        self._combine.toggled.connect(controller.set_bookorbit_combine)
         books_layout = QVBoxLayout(books)
         books_layout.addWidget(
             _description(
                 self.tr(
                     "All your BookOrbit audiobooks appear in Sync with Host's media list. Check what goes on the iPod there; they download only when Sync copies them, and are kept within the media cache limit in Settings → Sync."
+                ),
+                books,
+            )
+        )
+        books_layout.addWidget(self._combine)
+        books_layout.addWidget(
+            _description(
+                self.tr(
+                    "Books made of several files, or of MP3s, are converted to one AAC audiobook with BookOrbit's chapters, so the iPod shows one book with one bookmark. Converting takes a few minutes per book during Sync. Books that are already a single M4B are copied as they are. Turn this off to put each file on the iPod as its own Track."
                 ),
                 books,
             )

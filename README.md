@@ -141,8 +141,12 @@ is kept in your system keychain. A read-only key works for downloading, but
 listening progress can't be sent with it.
 
 All your BookOrbit audiobooks then appear on Sync's Audiobooks page, downloaded
-only when Sync copies them. A book made of several files arrives as one iPod track
-per file, in order. Listening progress works as it does for Grimmory: before each
+only when Sync copies them. A book made of several files, or of MP3s, is converted
+into **one M4B with chapters** (BookOrbit's own chapter list, or one per file), so
+the iPod shows one book with one bookmark; books that are already a single M4B are
+copied as they are. Converting needs FFmpeg and takes a few minutes per book. Turn
+**Combine each audiobook into one M4B with chapters** off on the BookOrbit page to get one iPod
+track per file instead. Listening progress works as it does for Grimmory: before each
 Sync, where you stopped on the iPod goes to BookOrbit, and **Sync Progress Now**
 also brings where you stopped in BookOrbit's web player or apps onto the iPod.
 Whichever side you listened on most recently wins.

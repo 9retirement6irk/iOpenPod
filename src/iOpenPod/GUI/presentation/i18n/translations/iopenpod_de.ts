@@ -1309,8 +1309,16 @@ iOpenPod kann den Timer über diese Verbindung weder auslesen noch ändern.</tra
         <translation>Geladene Hörbücher anzeigen</translation>
     </message>
     <message>
+        <source>Combine each audiobook into one M4B with chapters</source>
+        <translation>Jedes Hörbuch zu einer M4B-Datei mit Kapiteln zusammenfassen</translation>
+    </message>
+    <message>
         <source>All your BookOrbit audiobooks appear in Sync with Host&apos;s media list. Check what goes on the iPod there; they download only when Sync copies them, and are kept within the media cache limit in Settings → Sync.</source>
         <translation>Alle deine BookOrbit-Hörbücher erscheinen in der Medienliste von „Mit Computer synchronisieren“. Wähle dort aus, was auf den iPod kommt; sie werden erst geladen, wenn die Synchronisation sie kopiert, und im Rahmen des Medien-Cache-Limits unter Einstellungen → Synchronisieren behalten.</translation>
+    </message>
+    <message>
+        <source>Books made of several files, or of MP3s, are converted to one AAC audiobook with BookOrbit&apos;s chapters, so the iPod shows one book with one bookmark. Converting takes a few minutes per book during Sync. Books that are already a single M4B are copied as they are. Turn this off to put each file on the iPod as its own Track.</source>
+        <translation>Bücher aus mehreren Dateien oder aus MP3s werden in ein AAC-Hörbuch mit den Kapiteln aus BookOrbit umgewandelt, sodass der iPod ein Buch mit einem Lesezeichen zeigt. Die Umwandlung dauert während der Synchronisation einige Minuten pro Buch. Bücher, die bereits eine einzelne M4B-Datei sind, werden unverändert kopiert. Schalte dies aus, um jede Datei als eigenen Titel auf den iPod zu bringen.</translation>
     </message>
     <message>
         <source>Listening progress</source>

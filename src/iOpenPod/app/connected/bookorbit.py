@@ -129,6 +129,12 @@ class BookOrbitAsset:
 
 
 @dataclass(frozen=True, slots=True)
+class BookOrbitChapter:
+    title: str
+    start_ms: int  # on the book timeline
+
+
+@dataclass(frozen=True, slots=True)
 class BookOrbitManifest:
     book_id: str
     revision: str
@@ -138,6 +144,7 @@ class BookOrbitManifest:
     has_cover: bool
     assets: tuple[BookOrbitAsset, ...]  # in playing order
     total_ms: int
+    chapters: tuple[BookOrbitChapter, ...] = ()
 
     def starts(self) -> tuple[int, ...]:
         """Where each asset starts inside the whole book."""
@@ -211,6 +218,10 @@ def manifest_from(data: dict[str, object], book_id: str = "") -> BookOrbitManife
         bool(book.get("hasCover")),
         assets,
         _int(data.get("totalDurationMs")),
+        tuple(
+            BookOrbitChapter(_str(row.get("title")), _int(row.get("startMs")))
+            for row in _objects(data.get("chapters"))
+        ),
     )
 
 
@@ -538,6 +549,7 @@ __all__ = [
     "SOURCE",
     "BookOrbitAsset",
     "BookOrbitBook",
+    "BookOrbitChapter",
     "BookOrbitClient",
     "BookOrbitManifest",
     "BookOrbitPlayback",

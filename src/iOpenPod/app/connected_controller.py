@@ -793,6 +793,7 @@ class ConnectedController(QObject):
             plex_music_videos=self._config.plex.music_videos,
             grimmory=grimmory,
             bookorbit=bookorbit,
+            bookorbit_combine=self._config.bookorbit.combine,
         )
 
     def prepare_for_sync(self, *, immich: bool, tracks: tuple[Track, ...] = ()) -> bool:
@@ -1243,6 +1244,14 @@ class ConnectedController(QObject):
             self.message.emit(self.tr("Enter a BookOrbit API key."))
             return
         self._start("bookorbit-connect", work, then=then)
+
+    def set_bookorbit_combine(self, enabled: bool) -> None:
+        self.update_config(
+            replace(
+                self._config,
+                bookorbit=replace(self._config.bookorbit, combine=enabled),
+            )
+        )
 
     def set_bookorbit_sync_progress(self, enabled: bool) -> None:
         self.update_config(
