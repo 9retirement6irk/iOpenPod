@@ -1271,6 +1271,129 @@ iOpenPod no puede leer ni cambiar el temporizador a través de esta conexión.</
     </message>
 </context>
 <context>
+    <name>BookOrbitPage</name>
+    <message>
+        <source>BookOrbit Audiobooks</source>
+        <translation>Audiolibros de BookOrbit</translation>
+    </message>
+    <message>
+        <source>Server</source>
+        <translation>Servidor</translation>
+    </message>
+    <message>
+        <source>Connect</source>
+        <translation>Conectar</translation>
+    </message>
+    <message>
+        <source>Disconnect</source>
+        <translation>Desconectar</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>Dirección</translation>
+    </message>
+    <message>
+        <source>API key</source>
+        <translation>Clave de API</translation>
+    </message>
+    <message>
+        <source>Create a key in BookOrbit → Settings → API Keys. Give it write access so iOpenPod can send your listening position; a read-only key can still download. The key is kept in your system keychain.</source>
+        <translation>Crea una clave en BookOrbit → Ajustes → Claves de API. Dale acceso de escritura para que iOpenPod pueda enviar tu posición de escucha; una clave de solo lectura puede seguir descargando. La clave se guarda en el llavero del sistema.</translation>
+    </message>
+    <message>
+        <source>Audiobooks</source>
+        <translation>Audiolibros</translation>
+    </message>
+    <message>
+        <source>Show downloaded audiobooks</source>
+        <translation>Mostrar audiolibros descargados</translation>
+    </message>
+    <message>
+        <source>Combine each audiobook into one M4B with chapters</source>
+        <translation>Combinar cada audiolibro en un solo M4B con capítulos</translation>
+    </message>
+    <message>
+        <source>All your BookOrbit audiobooks appear in Sync with Host&apos;s media list. Check what goes on the iPod there; they download only when Sync copies them, and are kept within the media cache limit in Settings → Sync.</source>
+        <translation>Todos tus audiolibros de BookOrbit aparecen en la lista de medios de «Sincronizar con el equipo». Marca allí lo que va al iPod; se descargan solo cuando la sincronización los copia y se guardan dentro del límite de la caché de medios en Ajustes → Sincronizar.</translation>
+    </message>
+    <message>
+        <source>Books made of several files, or of MP3s, are converted to one AAC audiobook with BookOrbit&apos;s chapters, so the iPod shows one book with one bookmark. Converting takes a few minutes per book during Sync. Books that are already a single M4B are copied as they are. Turn this off to put each file on the iPod as its own Track.</source>
+        <translation>Los libros formados por varios archivos, o por MP3, se convierten en un solo audiolibro AAC con los capítulos de BookOrbit, así que el iPod muestra un libro con un marcador. La conversión tarda unos minutos por libro durante la sincronización. Los libros que ya son un único M4B se copian tal cual. Desactívalo para poner cada archivo en el iPod como su propia pista.</translation>
+    </message>
+    <message>
+        <source>Listening progress</source>
+        <translation>Progreso de escucha</translation>
+    </message>
+    <message>
+        <source>Sync Progress Now</source>
+        <translation>Sincronizar progreso ahora</translation>
+    </message>
+    <message>
+        <source>Send iPod progress to BookOrbit before each Sync</source>
+        <translation>Enviar el progreso del iPod a BookOrbit antes de cada sincronización</translation>
+    </message>
+    <message>
+        <source>Audiobooks downloaded here remember which BookOrbit book they belong to. Sync Progress compares where you are on the iPod with BookOrbit: the side you listened on most recently wins, so you can switch between the iPod and BookOrbit&apos;s web player or apps.</source>
+        <translation>Los audiolibros descargados aquí recuerdan a qué libro de BookOrbit pertenecen. «Sincronizar progreso» compara dónde vas en el iPod con BookOrbit: gana el lado en el que escuchaste más recientemente, así que puedes alternar entre el iPod y el reproductor web o las apps de BookOrbit.</translation>
+    </message>
+    <message>
+        <source>Reconnect</source>
+        <translation>Volver a conectar</translation>
+    </message>
+    <message>
+        <source>Connected as {name}</source>
+        <translation>Conectado como {name}</translation>
+    </message>
+    <message>
+        <source>Connecting to BookOrbit…</source>
+        <translation>Conectando con BookOrbit…</translation>
+    </message>
+    <message>
+        <source>Disconnected from BookOrbit.</source>
+        <translation>Desconectado de BookOrbit.</translation>
+    </message>
+    <message>
+        <source>Connected. {count} audiobooks appear in Sync with Host&apos;s media list.</source>
+        <translation>Conectado. {count} audiolibros aparecen en la lista de medios de «Sincronizar con el equipo».</translation>
+    </message>
+    <message>
+        <source>Sent {sent} positions to BookOrbit and moved {pulled} iPod bookmarks.</source>
+        <translation>Se enviaron {sent} posiciones a BookOrbit y se movieron {pulled} marcadores del iPod.</translation>
+    </message>
+    <message>
+        <source>Choose Review Changes in the sidebar to save the bookmarks to the iPod.</source>
+        <translation>Elige «Revisar cambios» en la barra lateral para guardar los marcadores en el iPod.</translation>
+    </message>
+    <message>
+        <source>Listening progress already matches for {count} audiobooks.</source>
+        <translation>El progreso de escucha ya coincide en {count} audiolibros.</translation>
+    </message>
+    <message>
+        <source>{title}: iPod {position} → BookOrbit</source>
+        <translation>{title}: iPod {position} → BookOrbit</translation>
+    </message>
+    <message>
+        <source>{title}: BookOrbit {position} → iPod</source>
+        <translation>{title}: BookOrbit {position} → iPod</translation>
+    </message>
+    <message>
+        <source>Sync listening progress?</source>
+        <translation>¿Sincronizar el progreso de escucha?</translation>
+    </message>
+    <message>
+        <source>{bookorbit} audiobooks get a new position in BookOrbit and {ipod} get a new bookmark on the iPod.</source>
+        <translation>{bookorbit} audiolibros reciben una nueva posición en BookOrbit y {ipod} un nuevo marcador en el iPod.</translation>
+    </message>
+    <message>
+        <source>iPod bookmarks are applied as Library changes; choose Review Changes in the sidebar to save them to the iPod.</source>
+        <translation>Los marcadores del iPod se aplican como cambios en la biblioteca; elige «Revisar cambios» en la barra lateral para guardarlos en el iPod.</translation>
+    </message>
+    <message>
+        <source>Listening progress was left as it is.</source>
+        <translation>El progreso de escucha se dejó como estaba.</translation>
+    </message>
+</context>
+<context>
     <name>CalendarEditor</name>
     <message>
         <source>Starts</source>
@@ -2647,6 +2770,22 @@ El calendario es de solo lectura porque no se ha podido confirmar la compatibili
     <message>
         <source>Reading listening progress from Grimmory…</source>
         <translation>Leyendo el progreso de escucha de Grimmory…</translation>
+    </message>
+    <message>
+        <source>Listing your BookOrbit audiobooks…</source>
+        <translation>Listando tus audiolibros de BookOrbit…</translation>
+    </message>
+    <message>
+        <source>Enter a BookOrbit API key.</source>
+        <translation>Introduce una clave de API de BookOrbit.</translation>
+    </message>
+    <message>
+        <source>No audiobooks from BookOrbit are on this iPod yet. Sync them first.</source>
+        <translation>Todavía no hay audiolibros de BookOrbit en este iPod. Sincronízalos primero.</translation>
+    </message>
+    <message>
+        <source>Reading listening progress from BookOrbit…</source>
+        <translation>Leyendo el progreso de escucha de BookOrbit…</translation>
     </message>
     <message>
         <source>That calendar link is already added.</source>
@@ -5219,7 +5358,7 @@ El calendario es de solo lectura porque no se ha podido confirmar la compatibili
     <name>MediaCacheSettings</name>
     <message>
         <source>Plex and Grimmory media</source>
-        <translation>Medios de Plex y Grimmory</translation>
+        <translation type="vanished">Medios de Plex y Grimmory</translation>
     </message>
     <message>
         <source>On</source>
@@ -5231,7 +5370,15 @@ El calendario es de solo lectura porque no se ha podido confirmar la compatibili
     </message>
     <message>
         <source>Plex songs and Grimmory audiobooks download when Sync copies them to the iPod. Kept downloads aren&apos;t fetched again for later Syncs; when this is off, each Sync downloads what it needs and removes it afterwards.</source>
-        <translation>Las canciones de Plex y los audiolibros de Grimmory se descargan cuando la sincronización los copia al iPod. Las descargas conservadas no se vuelven a descargar en sincronizaciones posteriores; si está desactivado, cada sincronización descarga lo que necesita y lo elimina después.</translation>
+        <translation type="vanished">Las canciones de Plex y los audiolibros de Grimmory se descargan cuando la sincronización los copia al iPod. Las descargas conservadas no se vuelven a descargar en sincronizaciones posteriores; si está desactivado, cada sincronización descarga lo que necesita y lo elimina después.</translation>
+    </message>
+    <message>
+        <source>Plex and audiobook media</source>
+        <translation>Medios de Plex y audiolibros</translation>
+    </message>
+    <message>
+        <source>Plex songs and Grimmory and BookOrbit audiobooks download when Sync copies them to the iPod. Kept downloads aren&apos;t fetched again for later Syncs; when this is off, each Sync downloads what it needs and removes it afterwards.</source>
+        <translation>Las canciones de Plex y los audiolibros de Grimmory y BookOrbit se descargan cuando la sincronización los copia al iPod. Las descargas conservadas no se vuelven a descargar en sincronizaciones posteriores; si está desactivado, cada sincronización descarga lo que necesita y lo elimina después.</translation>
     </message>
     <message>
         <source>Cache limit</source>
@@ -6234,6 +6381,10 @@ El calendario es de solo lectura porque no se ha podido confirmar la compatibili
     <message>
         <source>Grimmory</source>
         <translation>Grimmory</translation>
+    </message>
+    <message>
+        <source>BookOrbit</source>
+        <translation>BookOrbit</translation>
     </message>
     <message>
         <source>Notes</source>
@@ -14341,7 +14492,7 @@ Playlists: %3</translation>
     </message>
     <message>
         <source>Listing Plex and Grimmory, and updating Immich, before Sync…</source>
-        <translation>Listando Plex y Grimmory y actualizando Immich antes de sincronizar…</translation>
+        <translation type="vanished">Listando Plex y Grimmory y actualizando Immich antes de sincronizar…</translation>
     </message>
     <message>
         <source>Loading Demucs htdemucs_6s</source>
@@ -15884,6 +16035,10 @@ Playlists: %3</translation>
         <translation>Análisis acústico · librosa · CPU</translation>
     </message>
     <message>
+        <source>Listing Plex, Grimmory and BookOrbit, and updating Immich, before Sync…</source>
+        <translation>Listando Plex, Grimmory y BookOrbit y actualizando Immich antes de sincronizar…</translation>
+    </message>
+    <message>
         <source>Phase · {detail} · {completed}/{total} tracks</source>
         <translation>Phase · {detail} · {completed}/{total} pistas</translation>
     </message>
@@ -16218,6 +16373,10 @@ Playlists: %3</translation>
     <message>
         <source>lyrics verification requires an ID3v2.2, v2.3 or v2.4 tag.</source>
         <translation>la verificación de la letra requiere una etiqueta ID3v2.2, v2.3 o v2.4.</translation>
+    </message>
+    <message>
+        <source>{name} is in Plex, Grimmory or BookOrbit, which isn&apos;t connected. Sign in again on its page.</source>
+        <translation>{name} está en Plex, Grimmory o BookOrbit, que no está conectado. Vuelve a iniciar sesión en su página.</translation>
     </message>
     <message>
         <source>{value} (units unknown)</source>
@@ -17189,7 +17348,7 @@ Al continuar, se intentará usar el formato de autorización de {model}.</transl
     </message>
     <message>
         <source>{name} is in Plex or Grimmory, which isn&apos;t connected. Sign in again on its page.</source>
-        <translation>{name} está en Plex o Grimmory, que no está conectado. Vuelve a iniciar sesión en su página.</translation>
+        <translation type="vanished">{name} está en Plex o Grimmory, que no está conectado. Vuelve a iniciar sesión en su página.</translation>
     </message>
     <message>
         <source>{name} is not ready to load ({readiness}).</source>

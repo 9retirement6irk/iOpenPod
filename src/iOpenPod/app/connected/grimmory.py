@@ -46,7 +46,8 @@ _MAX_PAGES = 400
 AUDIO_EXTENSIONS = frozenset(
     {".m4b", ".m4a", ".mp3", ".aac", ".opus", ".ogg", ".flac", ".wav"}
 )
-_LINK = re.compile(r"grimmory:(\d+):(\d+):(\d+):(\d+):(\d+)")
+# BookOrbit audiobooks carry the same link under their own name.
+_LINK = re.compile(r"(grimmory|bookorbit):(\d+):(\d+):(\d+):(\d+):(\d+)")
 
 
 def _object(value: object) -> dict[str, object]:
@@ -141,28 +142,33 @@ class GrimmoryProgress:
 
 @dataclass(frozen=True, slots=True)
 class GrimmoryLink:
-    """Where one file sits inside a Grimmory audiobook."""
+    """Where one file sits inside a Grimmory (or BookOrbit) audiobook."""
 
     book_id: str
     book_file_id: str
     track_index: int
     start_ms: int
     duration_ms: int
+    source: str = "grimmory"  # or "bookorbit"
 
     @property
     def comment(self) -> str:
         return (
-            f"grimmory:{self.book_id}:{self.book_file_id}:{self.track_index}"
+            f"{self.source}:{self.book_id}:{self.book_file_id}:{self.track_index}"
             f":{self.start_ms}:{self.duration_ms}"
         )
 
 
-def parse_link(comment: str) -> GrimmoryLink | None:
-    match = _LINK.search(comment or "")
-    if match is None:
-        return None
-    book, file, index, start, duration = match.groups()
-    return GrimmoryLink(book, file, int(index), int(start), int(duration))
+def parse_link(comment: str, source: str = "grimmory") -> GrimmoryLink | None:
+    """The link a file of ``source`` carries in its comment, if any."""
+
+    for match in _LINK.finditer(comment or ""):
+        name, book, file, index, start, duration = match.groups()
+        if name == source:
+            return GrimmoryLink(
+                book, file, int(index), int(start), int(duration), source
+            )
+    return None
 
 
 class GrimmoryClient:

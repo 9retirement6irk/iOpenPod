@@ -1,4 +1,5 @@
-"""Connected Source pages: Plex, Immich, Grimmory audiobooks, Memos notes, calendars."""
+"""Connected Source pages: Plex, Immich, Grimmory and BookOrbit audiobooks, Memos notes,
+calendars."""
 
 from __future__ import annotations
 
@@ -1166,6 +1167,238 @@ class GrimmoryPage(_ConnectedPage):
         self.controller.grimmory_send_progress(plan, pulled=pulled)
 
 
+# --- BookOrbit audiobooks -------------------------------------------------------------------
+
+
+class BookOrbitPage(_ConnectedPage):
+    def __init__(
+        self,
+        controller: ConnectedController,
+        workspace: LibraryWorkspace,
+        parent: QWidget | None = None,
+    ) -> None:
+        self._workspace = workspace
+        super().__init__(controller, "BookOrbit", parent)
+        self.setObjectName("bookorbitPage")
+        self._header.set_title(self.tr("BookOrbit Audiobooks"))
+        config = controller.config.bookorbit
+        account = QGroupBox(self.tr("Server"), self)
+        self._url = QLineEdit(config.url, account)
+        self._url.setObjectName("bookorbitAddress")
+        self._url.setPlaceholderText("http://192.168.1.10:3000")
+        self._key = QLineEdit(account)
+        self._key.setObjectName("bookorbitKey")
+        self._key.setEchoMode(QLineEdit.EchoMode.Password)
+        self._key.setPlaceholderText("bok_…")
+        self._key.returnPressed.connect(self._connect_server)
+        self._connect = _button(self.tr("Connect"), account, ActionButtonKind.PRIMARY)
+        self._connect.setObjectName("bookorbitConnect")
+        self._connect.clicked.connect(self._connect_server)
+        self._disconnect = _button(
+            self.tr("Disconnect"), account, ActionButtonKind.QUIET
+        )
+        self._disconnect.clicked.connect(self._forget)
+        self._account = QLabel(account)
+        self._account.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        form = QFormLayout(account)
+        form.addRow(self.tr("Address"), self._url)
+        form.addRow(self.tr("API key"), self._key)
+        form.addRow(
+            "",
+            _description(
+                self.tr(
+                    "Create a key in BookOrbit → Settings → API Keys. Give it write access so iOpenPod can send your listening position; a read-only key can still download. The key is kept in your system keychain."
+                ),
+                account,
+            ),
+        )
+        form.addRow("", _row(self._connect, self._disconnect, self._account))
+
+        books = QGroupBox(self.tr("Audiobooks"), self)
+        open_folder = _button(
+            self.tr("Show downloaded audiobooks"), books, ActionButtonKind.QUIET
+        )
+        open_folder.clicked.connect(lambda: self.open_folder(ConnectedSource.BOOKORBIT))
+        self._combine = QCheckBox(
+            self.tr("Combine each audiobook into one M4B with chapters"), books
+        )
+        self._combine.setObjectName("bookorbitCombine")
+        self._combine.setChecked(config.combine)
+        self._combine.toggled.connect(controller.set_bookorbit_combine)
+        books_layout = QVBoxLayout(books)
+        books_layout.addWidget(
+            _description(
+                self.tr(
+                    "All your BookOrbit audiobooks appear in Sync with Host's media list. Check what goes on the iPod there; they download only when Sync copies them, and are kept within the media cache limit in Settings → Sync."
+                ),
+                books,
+            )
+        )
+        books_layout.addWidget(self._combine)
+        books_layout.addWidget(
+            _description(
+                self.tr(
+                    "Books made of several files, or of MP3s, are converted to one AAC audiobook with BookOrbit's chapters, so the iPod shows one book with one bookmark. Converting takes a few minutes per book during Sync. Books that are already a single M4B are copied as they are. Turn this off to put each file on the iPod as its own Track."
+                ),
+                books,
+            )
+        )
+        books_layout.addLayout(_row(open_folder))
+
+        progress = QGroupBox(self.tr("Listening progress"), self)
+        self._exchange = _button(self.tr("Sync Progress Now"), progress)
+        self._exchange.setObjectName("bookorbitSyncProgress")
+        self._exchange.clicked.connect(self._plan_progress)
+        self._auto = QCheckBox(
+            self.tr("Send iPod progress to BookOrbit before each Sync"), progress
+        )
+        self._auto.setChecked(config.sync_progress)
+        self._auto.toggled.connect(controller.set_bookorbit_sync_progress)
+        progress_layout = QVBoxLayout(progress)
+        progress_layout.addWidget(
+            _description(
+                self.tr(
+                    "Audiobooks downloaded here remember which BookOrbit book they belong to. Sync Progress compares where you are on the iPod with BookOrbit: the side you listened on most recently wins, so you can switch between the iPod and BookOrbit's web player or apps."
+                ),
+                progress,
+            )
+        )
+        progress_layout.addWidget(self._auto)
+        progress_layout.addLayout(_row(self._exchange))
+        self.body.addWidget(account)
+        self.body.addWidget(books)
+        self.body.addWidget(progress)
+        self.refresh()
+
+    def refresh(self) -> None:
+        if not hasattr(self, "_exchange"):
+            return
+        busy = self.controller.busy
+        config = self.controller.config.bookorbit
+        connected = bool(config.username)
+        self._connect.setEnabled(not busy)
+        self._connect.setText(self.tr("Reconnect") if connected else self.tr("Connect"))
+        self._disconnect.setVisible(connected)
+        self._account.setText(
+            self.tr("Connected as {name}").format(name=config.username)
+            if connected
+            else ""
+        )
+        self._exchange.setEnabled(not busy and connected)
+
+    def _connect_server(self) -> None:
+        if self.controller.busy:
+            return
+        self.start("bookorbit-connect")
+        self.say(self.tr("Connecting to BookOrbit…"))
+        self.controller.bookorbit_connect(self._url.text(), self._key.text())
+        self._key.clear()
+
+    def _forget(self) -> None:
+        self.controller.forget(SecretKey.BOOKORBIT)
+        self.say(self.tr("Disconnected from BookOrbit."))
+
+    def handle(self, operation: str, value: object) -> None:
+        if operation == "bookorbit-connect":
+            _username, count = cast("tuple[str, int]", value)
+            self.say(
+                self.tr(
+                    "Connected. {count} audiobooks appear in Sync with Host's media list."
+                ).format(count=count)
+            )
+        elif operation == "bookorbit-progress-plan":
+            self._review_progress(cast("ProgressPlan", value))
+        elif operation == "bookorbit-progress-send":
+            result = cast("ProgressSent", value)
+            lines = [
+                self.tr(
+                    "Sent {sent} positions to BookOrbit and moved {pulled} iPod bookmarks."
+                ).format(sent=result.sent, pulled=result.pulled)
+            ]
+            if result.pulled:
+                lines.append(
+                    self.tr(
+                        "Choose Review Changes in the sidebar to save the bookmarks to the iPod."
+                    )
+                )
+            lines.extend(result.failed[:5])
+            self.say("\n".join(lines))
+
+    def _plan_progress(self) -> None:
+        if self.controller.busy:
+            return
+        self.start("bookorbit-progress-plan")
+        self.controller.bookorbit_progress_plan(self._workspace.tracks)
+
+    def _review_progress(self, plan: ProgressPlan) -> None:
+        if not plan.to_grimmory and not plan.to_ipod:
+            self.say(
+                self.tr(
+                    "Listening progress already matches for {count} audiobooks."
+                ).format(count=plan.unchanged)
+            )
+            self.start("bookorbit-progress-send")
+            self.controller.bookorbit_send_progress(plan, pulled=True)
+            return
+        lines = [
+            self.tr("{title}: iPod {position} → BookOrbit").format(
+                title=push.title, position=_clock(push.position_ms)
+            )
+            for push in plan.to_grimmory
+        ] + [
+            self.tr("{title}: BookOrbit {position} → iPod").format(
+                title=pull.title, position=_clock(pull.position_ms)
+            )
+            for pull in plan.to_ipod
+        ]
+        box = QMessageBox(self)
+        box.setWindowTitle(self.tr("Sync listening progress?"))
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setText(
+            self.tr(
+                "{bookorbit} audiobooks get a new position in BookOrbit and {ipod} get a new bookmark on the iPod."
+            ).format(bookorbit=len(plan.to_grimmory), ipod=len(plan.to_ipod))
+        )
+        details = "\n".join(lines[:12]) + ("\n…" if len(lines) > 12 else "")
+        if plan.to_ipod:
+            details += "\n\n" + self.tr(
+                "iPod bookmarks are applied as Library changes; choose Review Changes in the sidebar to save them to the iPod."
+            )
+        box.setInformativeText(details)
+        box.setStandardButtons(
+            QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel
+        )
+        if box.exec() != QMessageBox.StandardButton.Ok:
+            self.say(self.tr("Listening progress was left as it is."))
+            return
+        pulled = True
+        if plan.to_ipod:
+            from iOpenPod.app.library_workspace import TrackUpdate
+
+            try:
+                self._workspace.apply_track_edits(
+                    tuple(
+                        TrackUpdate(
+                            change.track_id,
+                            tuple(
+                                TrackFieldEdit(field, value)
+                                for field, value in change.edits
+                            ),
+                        )
+                        for pull in plan.to_ipod
+                        for change in pull.changes
+                    ),
+                    self._workspace.edit_revision,
+                )
+            except ValueError as error:
+                self.say(str(error))
+                pulled = False
+        self.start("bookorbit-progress-send")
+        self.controller.bookorbit_send_progress(plan, pulled=pulled)
+
+
 # --- Memos → Notes -----------------------------------------------------------------------
 
 
@@ -1582,6 +1815,7 @@ class ContactsPage(_ConnectedPage):
 
 
 __all__ = [
+    "BookOrbitPage",
     "CalendarsPage",
     "ContactsPage",
     "GrimmoryPage",

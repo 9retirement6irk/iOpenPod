@@ -1,5 +1,8 @@
 """Exchange audiobook listening progress between iPod Tracks and Grimmory.
 
+BookOrbit uses the same rules: its files carry a link of the same shape, and its
+position is turned into a position in the whole book before it is compared.
+
 Each audiobook file iOpenPod downloads from Grimmory carries a Grimmory Link in its
 comment, so the iPod Track knows its book, track index and where the track starts
 inside the whole book. The iPod's position in a book is the bookmark of the track
@@ -101,11 +104,15 @@ class ProgressPlan:
     missing: int  # books on the iPod that Grimmory no longer has
 
 
-def ipod_books(tracks: Iterable[Track]) -> tuple[IPodBook, ...]:
+def ipod_books(
+    tracks: Iterable[Track], source: str = "grimmory"
+) -> tuple[IPodBook, ...]:
+    """Audiobooks on the iPod downloaded from ``source`` (Grimmory or BookOrbit)."""
+
     grouped: dict[str, list[BookTrack]] = {}
     titles: dict[str, str] = {}
     for track in tracks:
-        link = parse_link(track.metadata.comment)
+        link = parse_link(track.metadata.comment, source)
         if link is None:
             continue
         grouped.setdefault(link.book_id, []).append(
